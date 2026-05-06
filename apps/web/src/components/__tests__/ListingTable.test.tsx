@@ -1,0 +1,49 @@
+import React from "react";
+import { render, fireEvent } from "@testing-library/react-native";
+import { ListingTable } from "@/src/components/ListingTable";
+import type { NormalizedListing } from "@/src/api/types";
+
+jest.mock("expo-linking", () => ({ openURL: jest.fn().mockResolvedValue(undefined) }));
+
+const stub = (id: string, price: number, beds: number, title: string): NormalizedListing => ({
+  id, canonical_id: id, source: "craigslist",
+  source_url: `https://example.com/${id}`, source_listing_id: id,
+  title, address: null, address_normalized: null, lat: null, lon: null,
+  bedrooms: beds, bathrooms: null, price_cad: price,
+  pets_allowed: null, furnished: null, available_date: null,
+  posted_at: "2026-05-01T00:00:00Z", last_seen_at: "2026-05-06T00:00:00Z",
+  photos: [], description_snippet: null,
+  school_catchments: { elementary: null, middle: null, secondary: null },
+  nearest_transit: null, walkscore: null, raw_metadata: {},
+});
+
+const rows = [stub("a", 2000, 1, "A row"), stub("b", 3000, 2, "B row")];
+
+describe("ListingTable", () => {
+  it("renders one row per listing", () => {
+    const { getByText } = render(
+      <ListingTable listings={rows} sort="newest" onSortChange={jest.fn()} actions={{}} onAction={jest.fn()} />
+    );
+    expect(getByText("A row")).toBeTruthy();
+    expect(getByText("B row")).toBeTruthy();
+  });
+
+  it("fires onSortChange when a sortable header is pressed", () => {
+    const onSortChange = jest.fn();
+    const { getByText } = render(
+      <ListingTable listings={rows} sort="newest" onSortChange={onSortChange} actions={{}} onAction={jest.fn()} />
+    );
+    fireEvent.press(getByText("Price"));
+    expect(onSortChange).toHaveBeenCalledWith("price_asc");
+    fireEvent.press(getByText("Beds"));
+    expect(onSortChange).toHaveBeenCalledWith("bedrooms");
+  });
+
+  it("renders price formatted with thousands separator", () => {
+    const { getByText } = render(
+      <ListingTable listings={rows} sort="newest" onSortChange={jest.fn()} actions={{}} onAction={jest.fn()} />
+    );
+    expect(getByText("$2,000")).toBeTruthy();
+    expect(getByText("$3,000")).toBeTruthy();
+  });
+});
