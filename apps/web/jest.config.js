@@ -3,7 +3,7 @@ module.exports = {
   preset: "jest-expo",
   setupFilesAfterEnv: ["<rootDir>/jest.setup.ts"],
   transformIgnorePatterns: [
-    "node_modules/(?!((jest-)?react-native|@react-native(-community)?|expo(nent)?|@expo(nent)?/.*|@expo-google-fonts/.*|react-navigation|@react-navigation/.*|@unimodules/.*|unimodules|sentry-expo|native-base|react-native-svg|@react-native-async-storage)/.*)",
+    "node_modules/(?!((jest-)?react-native|@react-native(-community)?|expo(nent|-modules-core|-router|-linking|-constants|-status-bar)?|@expo(nent)?/.*|@expo-google-fonts/.*|react-navigation|@react-navigation/.*|@unimodules/.*|unimodules|sentry-expo|native-base|react-native-svg|@react-native-async-storage)/.*)",
   ],
   moduleNameMapper: {
     "^@/(.*)$": "<rootDir>/$1",
