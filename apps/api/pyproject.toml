@@ -38,7 +38,7 @@ target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W", "B", "UP", "RUF"]
-ignore = ["E501"]  # line length handled by formatter
+ignore = ["E501", "B008"]  # E501: line length handled by formatter; B008: FastAPI Depends() in defaults is intentional
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

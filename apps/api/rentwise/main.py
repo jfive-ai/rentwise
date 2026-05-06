@@ -57,20 +57,6 @@ def create_app() -> FastAPI:
             "fallback_model": client.fallback_model,
         }
 
-    @app.post("/search")
-    async def search(query: NormalizedQuery) -> dict:
-        """Run a search across all enabled adapters.
-
-        Phase 0: returns an empty result set. Real implementation in Phase 1.
-        """
-        log.info("search.received", query=query.model_dump(exclude_none=True))
-        return {
-            "query": query.model_dump(exclude_none=True),
-            "results": [],
-            "sources": {"queried": [], "errors": []},
-            "note": "Phase 0 stub — adapters arrive in Phase 1.",
-        }
-
     @app.post("/translate-query")
     async def translate_query(payload: dict) -> dict:
         """Translate natural-language input into a NormalizedQuery.
@@ -85,6 +71,10 @@ def create_app() -> FastAPI:
             "parsed": parsed or NormalizedQuery().model_dump(exclude_none=True),
             "note": "Phase 0 stub — LLM translation arrives in Phase 2.",
         }
+
+    from rentwise.http.search import build_router
+
+    app.include_router(build_router())
 
     return app
 
