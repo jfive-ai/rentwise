@@ -75,15 +75,16 @@ async def test_fetcher_serializes_protected_block():
     Regression: the previous acquire()/release-before-body design allowed
     overlapping outbound requests under latency.
     """
-    import asyncio
-
-    fetcher = RateLimitedFetcher(rate_per_sec=10.0, jitter_ms=(0, 0))
+    clock = _FakeClock()
+    fetcher = RateLimitedFetcher(rate_per_sec=1.0, clock=clock, jitter_ms=(0, 0))
     sequence: list[str] = []
 
     async def op(label: str) -> None:
         async with fetcher:
             sequence.append(f"{label}_in")
-            await asyncio.sleep(0.05)
+            # Real asyncio sleep yields to the event loop while the semaphore
+            # is held — proves the second op cannot enter until this exits.
+            await asyncio.sleep(0.02)
             sequence.append(f"{label}_out")
 
     await asyncio.gather(op("a"), op("b"))
