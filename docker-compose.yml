@@ -1,0 +1,35 @@
+services:
+  api:
+    build:
+      context: ./apps/api
+    container_name: rentwise-api
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./apps/api:/app
+      - api_data:/app/data
+    env_file:
+      - .env
+    environment:
+      - PYTHONUNBUFFERED=1
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ./apps/web
+    container_name: rentwise-web
+    ports:
+      - "8081:8081"
+      - "19000:19000"
+      - "19001:19001"
+    volumes:
+      - ./apps/web:/app
+      - /app/node_modules
+    environment:
+      - EXPO_PUBLIC_API_URL=http://localhost:8000
+    depends_on:
+      - api
+    restart: unless-stopped
+
+volumes:
+  api_data:
