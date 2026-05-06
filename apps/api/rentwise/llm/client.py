@@ -43,7 +43,8 @@ class LLMClient:
 
     def is_configured(self) -> bool:
         """True if at least one provider key is set for the chosen model."""
-        provider = self.primary_model.split("/", 1)[0]
+        # Model names can be "provider/model" or "provider/org/model" — always use first segment.
+        provider = self.primary_model.split("/")[0]
         match provider:
             case "openrouter":
                 return settings.openrouter_api_key is not None
@@ -56,4 +57,5 @@ class LLMClient:
             case "ollama":
                 return True  # local; no key needed
             case _:
+                log.warning("llm.is_configured.unknown_provider", provider=provider, model=self.primary_model)
                 return False
