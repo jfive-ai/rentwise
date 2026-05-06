@@ -57,11 +57,11 @@ class CraigslistAdapter:
     async def _get_feed(self, url: str) -> bytes:
         if not await self.robots.is_allowed(url):
             raise RobotsDisallowedError(f"robots.txt disallows {url}")
-        await self.fetcher.acquire()
-        async with httpx.AsyncClient(headers={"User-Agent": self.user_agent}) as client:
-            resp = await client.get(url, timeout=15)
-            resp.raise_for_status()
-            return resp.content
+        async with self.fetcher:
+            async with httpx.AsyncClient(headers={"User-Agent": self.user_agent}) as client:
+                resp = await client.get(url, timeout=15)
+                resp.raise_for_status()
+                return resp.content
 
     async def search(self, query: NormalizedQuery) -> AsyncIterator[RawListing]:
         urls = build_search_urls(query, region=self.region)
@@ -87,9 +87,9 @@ class CraigslistAdapter:
         try:
             if not await self.robots.is_allowed(url):
                 return AdapterHealth(name=self.name, status="blocked", last_error="robots.txt")
-            await self.fetcher.acquire()
-            async with httpx.AsyncClient(headers={"User-Agent": self.user_agent}) as client:
-                resp = await client.get(url, timeout=5)
+            async with self.fetcher:
+                async with httpx.AsyncClient(headers={"User-Agent": self.user_agent}) as client:
+                    resp = await client.get(url, timeout=5)
             if resp.status_code in (403, 429):
                 return AdapterHealth(
                     name=self.name,

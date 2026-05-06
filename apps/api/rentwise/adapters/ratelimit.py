@@ -36,15 +36,15 @@ class RateLimitedFetcher:
         clock: _Clock | None = None,
         jitter_ms: tuple[int, int] = (500, 1500),
     ) -> None:
-        if rate_per_sec <= 0 or rate_per_sec > 1.0:
-            raise ValueError("rate_per_sec must be in (0, 1.0]")
+        if rate_per_sec <= 0:
+            raise ValueError("rate_per_sec must be positive")
         self.min_interval = 1.0 / rate_per_sec
         self.jitter_ms = jitter_ms
         self.clock = clock or _RealClock()
         self._semaphore = asyncio.Semaphore(1)
         self._last_request_at: float | None = None
 
-    async def acquire(self) -> None:
+    async def __aenter__(self) -> RateLimitedFetcher:
         await self._semaphore.acquire()
         try:
             jitter_lo, jitter_hi = self.jitter_ms
@@ -58,5 +58,10 @@ class RateLimitedFetcher:
                     await self.clock.sleep(wait)
 
             self._last_request_at = self.clock.time()
-        finally:
+        except BaseException:
             self._semaphore.release()
+            raise
+        return self
+
+    async def __aexit__(self, exc_type: object, exc: object, tb: object) -> None:
+        self._semaphore.release()
