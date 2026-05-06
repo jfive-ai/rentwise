@@ -148,3 +148,37 @@ async def test_sort_price_asc(session):
     svc = AggregatorService(adapters=[adapter], session=session, cache_ttl_seconds=900)
     resp = await svc.search(SearchRequest(query=NormalizedQuery(), sort=SortOrder.PRICE_ASC))
     assert [x.price_cad for x in resp.listings] == [1500, 3000]
+
+
+@pytest.mark.asyncio
+async def test_all_adapters_failing_does_not_poison_cache(session):
+    """Regression: previously an all-fail run would write listing_ids=[] as fresh,
+    masking the outage for the full TTL on the next call."""
+    adapter = FakeAdapter(listings=[], should_raise=RuntimeError("network down"))
+    svc = AggregatorService(adapters=[adapter], session=session, cache_ttl_seconds=900)
+    await svc.search(SearchRequest(query=NormalizedQuery()))
+    await session.commit()
+
+    # If we hit /search again, the adapter must be called again — not served from a poisoned fresh cache.
+    adapter.calls = 0
+    resp = await svc.search(SearchRequest(query=NormalizedQuery()))
+    assert adapter.calls == 1, "second call must retry, not serve poisoned empty cache"
+    assert resp.cache_status == "miss"
+    assert resp.source_health["craigslist"].status == "degraded"
+
+
+@pytest.mark.asyncio
+async def test_all_adapters_failing_falls_back_to_stale_cache(session):
+    """If a previous successful search left a stale cache, an all-fail run returns the stale
+    listings tagged cache_status="stale" with degraded source_health — better than serving nothing."""
+    good_adapter = FakeAdapter(listings=[_raw(1)])
+    svc_ok = AggregatorService(adapters=[good_adapter], session=session, cache_ttl_seconds=0)  # immediately stale
+    await svc_ok.search(SearchRequest(query=NormalizedQuery()))
+    await session.commit()
+
+    bad_adapter = FakeAdapter(listings=[], should_raise=RuntimeError("network down"))
+    svc_bad = AggregatorService(adapters=[bad_adapter], session=session, cache_ttl_seconds=0)
+    resp = await svc_bad.search(SearchRequest(query=NormalizedQuery()))
+    assert resp.cache_status == "stale"
+    assert len(resp.listings) == 1
+    assert resp.source_health["craigslist"].status == "degraded"

@@ -74,6 +74,7 @@ class AggregatorService:
         all_listings: list[NormalizedListing] = []
         unsupported: set[str] = set()
         health: dict[str, AdapterHealth] = {}
+        any_succeeded = False
 
         for adapter in self.adapters:
             projected, dropped = project_query_to_capabilities(req.query, adapter.capabilities)
@@ -89,6 +90,7 @@ class AggregatorService:
                     all_listings.append(saved)
                 await self.health_repo.set(adapter.name, "ok", error=None)
                 health[adapter.name] = AdapterHealth(name=adapter.name, status="ok")
+                any_succeeded = True
             except Exception as exc:
                 log.warning("adapter.failed", adapter=adapter.name, error=str(exc))
                 await self.health_repo.set(adapter.name, "degraded", error=str(exc))
@@ -96,19 +98,41 @@ class AggregatorService:
                     name=adapter.name, status="degraded", last_error=str(exc)
                 )
 
-        await self.search_repo.upsert(
-            CachedSearch(
-                cache_key=key,
-                query_json=canonical_query_json(req.query),
-                listing_ids=[str(x.id) for x in all_listings],
-                total_count=len(all_listings),
+        if any_succeeded:
+            await self.search_repo.upsert(
+                CachedSearch(
+                    cache_key=key,
+                    query_json=canonical_query_json(req.query),
+                    listing_ids=[str(x.id) for x in all_listings],
+                    total_count=len(all_listings),
+                )
             )
-        )
-        await self.session.flush()
+            await self.session.flush()
+            return self._build_response(
+                listings=self._sorted_paginated(all_listings, req),
+                total=len(all_listings),
+                cache_status="miss",
+                unsupported=sorted(unsupported),
+                health=health,
+            )
 
+        # All adapters failed — do not poison the cache.
+        # If a stale cache row exists, serve it tagged "stale" with degraded health.
+        if cached is not None:
+            stale_ids = cached.listing_ids
+            stale_listings = await self.listing_repo.list_by_ids(stale_ids)
+            return self._build_response(
+                listings=self._sorted_paginated(stale_listings, req),
+                total=cached.total_count,
+                cache_status="stale",
+                unsupported=sorted(unsupported),
+                health=health,
+            )
+
+        # No stale cache either — return empty miss with degraded health.
         return self._build_response(
-            listings=self._sorted_paginated(all_listings, req),
-            total=len(all_listings),
+            listings=[],
+            total=0,
             cache_status="miss",
             unsupported=sorted(unsupported),
             health=health,
