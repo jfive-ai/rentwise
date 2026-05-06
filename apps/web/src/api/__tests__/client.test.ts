@@ -1,4 +1,4 @@
-import { searchClient, ApiError } from "@/src/api/client";
+import { searchClient } from "@/src/api/client";
 import { emptyQuery, type NormalizedQuery } from "@/src/api/types";
 
 describe("searchClient.search", () => {

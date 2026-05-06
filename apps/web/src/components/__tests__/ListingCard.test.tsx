@@ -1,10 +1,10 @@
 import React from "react";
 import { render, fireEvent } from "@testing-library/react-native";
+import * as Linking from "expo-linking";
 import { ListingCard } from "@/src/components/ListingCard";
 import type { NormalizedListing } from "@/src/api/types";
 
 jest.mock("expo-linking", () => ({ openURL: jest.fn().mockResolvedValue(undefined) }));
-import * as Linking from "expo-linking";
 
 const listing: NormalizedListing = {
   id: "id-1",
