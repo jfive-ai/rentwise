@@ -63,6 +63,18 @@ def test_search_empty_query_returns_200(client):
     assert body["listings"] == []
 
 
+def test_get_adapters_returns_singleton_instances():
+    """Regression: rate-limit state must be shared across requests, so the
+    adapter instance returned by the FastAPI dependency must be the same object
+    across calls (not a fresh one per request)."""
+    from rentwise.http.search import _build_adapters, get_adapters
+
+    _build_adapters.cache_clear()
+    a = get_adapters()
+    b = get_adapters()
+    assert a[0] is b[0], "adapter singleton: the same instance must be returned"
+
+
 def test_search_unsupported_filters_surfaced(client):
     """unsupported_filters key is present in the response."""
     r = client.post(

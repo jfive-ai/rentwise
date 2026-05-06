@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from functools import lru_cache
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -12,16 +14,22 @@ from rentwise.settings import settings
 from rentwise.storage.db import session_dep
 
 
-def get_adapters() -> list[SourceAdapter]:
-    """Override in tests via app.dependency_overrides[get_adapters]."""
+@lru_cache(maxsize=1)
+def _build_adapters() -> tuple[SourceAdapter, ...]:
+    """Build adapter instances once per process so rate-limit state is shared."""
     from rentwise.adapters.craigslist.adapter import CraigslistAdapter
 
-    return [
+    return (
         CraigslistAdapter(
             region=settings.craigslist_region,
             user_agent=settings.user_agent,
-        )
-    ]
+        ),
+    )
+
+
+def get_adapters() -> list[SourceAdapter]:
+    """Override in tests via app.dependency_overrides[get_adapters]."""
+    return list(_build_adapters())
 
 
 def build_router() -> APIRouter:
