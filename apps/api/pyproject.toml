@@ -28,6 +28,8 @@ dev = [
     "ruff>=0.7.0",
     "mypy>=1.13.0",
     "vcrpy>=6.0.2",
+    "respx>=0.21.1",
+    "hypothesis>=6.115.0",
 ]
 
 [tool.ruff]
@@ -42,6 +44,10 @@ ignore = ["E501"]  # line length handled by formatter
 asyncio_mode = "auto"
 testpaths = ["tests"]
 pythonpath = ["."]
+markers = [
+    "integration: end-to-end pipeline tests (use recorded fixtures, not live HTTP)",
+    "property: Hypothesis property-based tests",
+]
 
 [build-system]
 requires = ["setuptools>=68.0"]
