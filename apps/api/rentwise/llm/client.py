@@ -57,5 +57,9 @@ class LLMClient:
             case "ollama":
                 return True  # local; no key needed
             case _:
-                log.warning("llm.is_configured.unknown_provider", provider=provider, model=self.primary_model)
+                log.warning(
+                    "llm.is_configured.unknown_provider",
+                    provider=provider,
+                    model=self.primary_model,
+                )
                 return False
