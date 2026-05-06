@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from datetime import date, datetime
 from enum import StrEnum
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field, HttpUrl
@@ -95,6 +95,16 @@ class RawListing(BaseModel):
     raw_metadata: dict[str, Any] = Field(default_factory=dict)
 
 
+class SchoolCatchments(BaseModel):
+    """Per-level Vancouver school catchments. All optional —
+    not every area has a middle school (most VSB is K-7 / 8-12).
+    """
+
+    elementary: str | None = None
+    middle: str | None = None
+    secondary: str | None = None
+
+
 class NormalizedListing(BaseModel):
     """A listing after normalization, dedup, and enrichment.
 
@@ -127,7 +137,7 @@ class NormalizedListing(BaseModel):
     description_snippet: str | None
 
     # Enrichment
-    school_catchments: list[str] = Field(default_factory=list)
+    school_catchments: SchoolCatchments = Field(default_factory=SchoolCatchments)
     nearest_transit: TransitInfo | None = None
     walkscore: int | None = None
 
@@ -141,3 +151,26 @@ class AdapterHealth(BaseModel):
     status: str  # "ok" | "degraded" | "blocked"
     last_successful_fetch: datetime | None = None
     last_error: str | None = None
+
+
+class SortOrder(StrEnum):
+    NEWEST = "newest"
+    PRICE_ASC = "price_asc"
+    PRICE_DESC = "price_desc"
+    BEDROOMS = "bedrooms"
+
+
+class SearchRequest(BaseModel):
+    query: NormalizedQuery
+    force_refresh: bool = False
+    limit: int = Field(default=50, ge=1, le=200)
+    offset: int = Field(default=0, ge=0)
+    sort: SortOrder = SortOrder.NEWEST
+
+
+class SearchResponse(BaseModel):
+    listings: list[NormalizedListing]
+    total: int
+    cache_status: Literal["fresh", "stale", "miss"]
+    unsupported_filters: list[str]
+    source_health: dict[str, AdapterHealth]
