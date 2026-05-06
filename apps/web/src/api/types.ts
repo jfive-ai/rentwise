@@ -73,9 +73,11 @@ export interface NormalizedListing {
   raw_metadata: Record<string, unknown>;
 }
 
+export type AdapterHealthStatus = "ok" | "degraded" | "blocked";
+
 export interface AdapterHealth {
   name: string;
-  status: string; // "ok" | "degraded" | "blocked"
+  status: AdapterHealthStatus;
   last_successful_fetch: string | null;
   last_error: string | null;
 }
