@@ -172,7 +172,9 @@ async def test_all_adapters_failing_falls_back_to_stale_cache(session):
     """If a previous successful search left a stale cache, an all-fail run returns the stale
     listings tagged cache_status="stale" with degraded source_health — better than serving nothing."""
     good_adapter = FakeAdapter(listings=[_raw(1)])
-    svc_ok = AggregatorService(adapters=[good_adapter], session=session, cache_ttl_seconds=0)  # immediately stale
+    svc_ok = AggregatorService(
+        adapters=[good_adapter], session=session, cache_ttl_seconds=0
+    )  # immediately stale
     await svc_ok.search(SearchRequest(query=NormalizedQuery()))
     await session.commit()
 
