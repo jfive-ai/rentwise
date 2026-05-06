@@ -15,6 +15,7 @@ export function QueryProvider({ children }: { children: React.ReactNode }) {
   const [query, setQuery] = useState<NormalizedQuery>(() => emptyQuery());
 
   const set = useCallback((patch: Partial<NormalizedQuery>) => {
+    if (Object.keys(patch).length === 0) return;
     setQuery((prev) => ({ ...prev, ...patch }));
   }, []);
 
@@ -56,6 +57,6 @@ export function QueryProvider({ children }: { children: React.ReactNode }) {
 
 export function useQuery(): QueryContextValue {
   const ctx = useContext(QueryContext);
-  if (!ctx) throw new Error("useQuery must be used inside <QueryProvider>");
+  if (!ctx) throw new Error("useQuery() must be called inside a <QueryProvider>.");
   return ctx;
 }
