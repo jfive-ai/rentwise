@@ -14,6 +14,8 @@ RUN pip install --no-cache-dir -e ".[dev]"
 # App code
 COPY rentwise/ ./rentwise/
 COPY tests/ ./tests/
+COPY alembic.ini .
+COPY alembic/ ./alembic/
 
 EXPOSE 8000
 
