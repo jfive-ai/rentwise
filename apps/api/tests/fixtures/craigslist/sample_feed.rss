@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rdf:RDF xmlns="http://purl.org/rss/1.0/"
+         xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+         xmlns:dc="http://purl.org/dc/elements/1.1/"
+         xmlns:geo="http://www.w3.org/2003/01/geo/wgs84_pos#"
+         xmlns:syn="http://purl.org/rss/1.0/modules/syndication/">
+  <channel rdf:about="https://vancouver.craigslist.org/search/apa">
+    <title>craigslist | apartments / housing for rent in vancouver, BC</title>
+    <link>https://vancouver.craigslist.org/search/apa</link>
+    <description>recent listings</description>
+  </channel>
+  <item rdf:about="https://vancouver.craigslist.org/van/apa/d/vancouver-bright-2br-kits/7700000001.html">
+    <title>$2800 / 2br - 950ft² - Bright 2BR in Kitsilano (kitsilano)</title>
+    <link>https://vancouver.craigslist.org/van/apa/d/vancouver-bright-2br-kits/7700000001.html</link>
+    <description>South facing, hardwood floors, balcony. Steps to the beach.</description>
+    <dc:date>2026-05-05T10:30:00-07:00</dc:date>
+    <geo:lat>49.2734</geo:lat>
+    <geo:long>-123.1631</geo:long>
+  </item>
+  <item rdf:about="https://vancouver.craigslist.org/van/apa/d/vancouver-cozy-1br/7700000002.html">
+    <title>$1800 / 1br - cozy unit (east van)</title>
+    <link>https://vancouver.craigslist.org/van/apa/d/vancouver-cozy-1br/7700000002.html</link>
+    <description>This is a really long description that we will be truncating to two hundred characters total in order to comply with our fair-use policy from legal.md so we should make sure the snippet ends here and not somewhere later in this paragraph that keeps going.</description>
+    <dc:date>2026-05-05T09:00:00-07:00</dc:date>
+  </item>
+  <item rdf:about="https://vancouver.craigslist.org/van/apa/d/garage-sale/7700000003.html">
+    <title>spring cleaning sale</title>
+    <link>https://vancouver.craigslist.org/van/apa/d/garage-sale/7700000003.html</link>
+    <description>Couches and tables.</description>
+    <dc:date>2026-05-05T08:00:00-07:00</dc:date>
+  </item>
+</rdf:RDF>
