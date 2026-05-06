@@ -3,21 +3,19 @@
  */
 
 import { Platform } from "react-native";
-
-// Force the web branch so tests use window.localStorage (jsdom), not AsyncStorage.
-// Platform is a plain object in react-native, so direct mutation is safe here.
-// We do this before importing the module under test so the branch is resolved
-// with the correct value on first import.
-beforeAll(() => {
-  (Platform as { OS: string }).OS = "web";
-});
-
 import {
   loadActions,
   setAction,
   clearActions,
   ListingActionMap,
 } from "@/src/storage/listingActions";
+
+// Force the web branch so tests use window.localStorage (jsdom), not AsyncStorage.
+// `backend()` reads `Platform.OS` at call time, so this beforeAll fires
+// before the first call even though imports are already resolved.
+beforeAll(() => {
+  (Platform as { OS: string }).OS = "web";
+});
 
 describe("listingActions (web/jsdom path)", () => {
   beforeEach(() => {
