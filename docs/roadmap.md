@@ -20,11 +20,11 @@
 - [x] Define `RawListing`, `NormalizedListing`, and `NormalizedQuery` data models
 - [x] SQLite schema + migrations (Alembic)
 - [x] Aggregator that calls one adapter
-- [ ] **Frontend: filter-based search UI** (faceted controls, no NL yet)
-- [ ] **Frontend: results display with two views — card grid (default) + list/table**
-- [ ] **Frontend: per-card actions — save / hide / contacted / open original**
-- [ ] **Frontend: sort controls (newest, price asc/desc, bedrooms)**
-- [ ] **Milestone:** Search Craigslist Vancouver with structured filters, switch between card/list views
+- [x] **Frontend: filter-based search UI** (faceted controls, no NL yet)
+- [x] **Frontend: results display with two views — card grid (default) + list/table**
+- [x] **Frontend: per-card actions — save / hide / contacted / open original**
+- [x] **Frontend: sort controls (newest, price asc/desc, bedrooms)**
+- [x] **Milestone:** Search Craigslist Vancouver with structured filters, switch between card/list views
 
 ## Phase 2: Natural Language Layer (Week 4)
 **Goal:** Add NL search **on top of** the existing filter UI — bilingual (English + Korean) from day 1. Both modes coexist; users can switch at will.

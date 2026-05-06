@@ -97,8 +97,12 @@ uvicorn rentwise.main:app --reload
 ```bash
 cd apps/web
 npm install
-npm run web   # web at http://localhost:8081
-npm run ios   # iOS simulator (requires Xcode)
+npm run web         # web at http://localhost:8081
+npm run ios         # iOS simulator (requires Xcode)
+npm test            # Jest unit/component tests
+npm run typecheck   # tsc --noEmit
+npm run lint        # eslint
+npm run e2e         # Playwright web E2E (run `npm run e2e:install` once)
 ```
 
 ## Repo Structure
