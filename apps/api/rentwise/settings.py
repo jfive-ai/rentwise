@@ -24,6 +24,26 @@ class Settings(BaseSettings):
     # --- Database ---
     database_url: str = "sqlite+aiosqlite:///./data/rentwise.db"
 
+    # --- Search cache & paging ---
+    search_cache_ttl_seconds: int = Field(
+        default=900,
+        validation_alias="RENTWISE_SEARCH_CACHE_TTL_SECONDS",
+    )
+    search_page_default: int = Field(
+        default=50,
+        validation_alias="RENTWISE_SEARCH_PAGE_DEFAULT",
+    )
+    search_page_max: int = Field(
+        default=200,
+        validation_alias="RENTWISE_SEARCH_PAGE_MAX",
+    )
+
+    # --- Craigslist ---
+    craigslist_region: str = Field(
+        default="vancouver",
+        validation_alias="RENTWISE_CRAIGSLIST_REGION",
+    )
+
     # --- LLM (LiteLLM) ---
     # See docs/llm-providers.md for full options.
     rentwise_llm_model: str = "openrouter/qwen/qwen-2.5-72b-instruct:free"
