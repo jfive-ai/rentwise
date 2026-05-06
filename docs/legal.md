@@ -60,6 +60,14 @@ Public listings, no login required to view. Standard rules above apply. Check ea
 - ✅ RSS feeds are explicitly provided for syndication and are safe.
 - ❌ Do not scrape HTML pages.
 
+**As implemented (2026-05-06):**
+- We fetch only `https://vancouver.craigslist.org/search/apa?format=rss` (and the same with filter params). HTML pages are never fetched.
+- Rate: 1 req/sec with 500–1500ms jitter. `asyncio.Semaphore(1)` enforces serialization.
+- robots.txt is checked at adapter init and re-checked on each restart; a `Disallow` for `/search` aborts the search and surfaces `source_health="blocked"`.
+- We store: source URL, title, posted timestamp, lat/lon (when present), price (parsed from title), bedrooms (parsed from title), 200-char snippet of the description.
+- We do not store: full descriptions, photo bytes, contact info.
+- **Note:** Craigslist returns HTTP 403 to requests from many datacenter / cloud IP ranges regardless of User-Agent. The adapter handles this gracefully (`health_check()` reports `blocked`); end-to-end correctness is verified via a recorded RSS fixture in CI. Live runs require a residential connection.
+
 ### Facebook Marketplace
 **This is the riskiest source.** Facebook's TOS explicitly prohibits automated access.
 

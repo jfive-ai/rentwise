@@ -15,11 +15,11 @@
 **Goal:** Prove the end-to-end flow with the easiest, most TOS-friendly source.
 **Why Craigslist first?** Has RSS feeds, no scraping needed, lowest legal risk.
 
-- [ ] Define `SourceAdapter` Protocol
-- [ ] Implement `CraigslistAdapter` using the RSS feed
-- [ ] Define `RawListing`, `NormalizedListing`, and `NormalizedQuery` data models
-- [ ] SQLite schema + migrations (Alembic)
-- [ ] Aggregator that calls one adapter
+- [x] Define `SourceAdapter` Protocol
+- [x] Implement `CraigslistAdapter` using the RSS feed
+- [x] Define `RawListing`, `NormalizedListing`, and `NormalizedQuery` data models
+- [x] SQLite schema + migrations (Alembic)
+- [x] Aggregator that calls one adapter
 - [ ] **Frontend: filter-based search UI** (faceted controls, no NL yet)
 - [ ] **Frontend: results display with two views — card grid (default) + list/table**
 - [ ] **Frontend: per-card actions — save / hide / contacted / open original**

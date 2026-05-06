@@ -14,6 +14,18 @@
 
 🚧 **Pre-alpha — under active development.** Vancouver, BC only for the MVP.
 
+## Sources
+
+| Source | Status | Method | Notes |
+|---|---|---|---|
+| Craigslist Vancouver | ✅ Shipped (Phase 1) | RSS | RSS-only per [legal.md](docs/legal.md#craigslist) |
+| liv.rent | Planned (Phase 3) | Browser | |
+| PadMapper | Planned (Phase 3) | Browser | |
+| Zumper | Planned (Phase 3) | Browser | |
+| Rentals.ca | Planned (Phase 3) | Browser | |
+| REW.ca | Planned (Phase 3) | Browser | |
+| Facebook Marketplace | Planned (Phase 6) | Browser extension | |
+
 ## Why RentWise?
 
 Searching for a rental in Vancouver is exhausting:
