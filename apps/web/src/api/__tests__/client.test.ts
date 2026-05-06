@@ -1,17 +1,22 @@
 import { searchClient, ApiError } from "@/src/api/client";
+import { emptyQuery, type NormalizedQuery } from "@/src/api/types";
 
 describe("searchClient.search", () => {
   const baseUrl = "http://api.test";
-  const query = { bedrooms_min: 2, price_max: 3000 };
 
   beforeEach(() => {
-    (global as unknown as { fetch: jest.Mock }).fetch = jest.fn();
+    jest.spyOn(global, "fetch");
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
   });
 
   it("posts to /search with the provided query and pagination", async () => {
     (global.fetch as jest.Mock).mockResolvedValueOnce({
       ok: true,
       status: 200,
+      clone: () => ({ text: async () => "" }),
       json: async () => ({
         listings: [],
         total: 0,
@@ -21,8 +26,10 @@ describe("searchClient.search", () => {
       }),
     });
 
+    const query: NormalizedQuery = { ...emptyQuery(), bedrooms_min: 2, price_max: 3000 };
+
     await searchClient(baseUrl).search({
-      query: query as never,
+      query,
       limit: 25,
       offset: 0,
       sort: "newest",
@@ -34,7 +41,14 @@ describe("searchClient.search", () => {
     expect(call[1].method).toBe("POST");
     expect(call[1].headers["content-type"]).toBe("application/json");
     expect(JSON.parse(call[1].body)).toEqual({
-      query: { bedrooms_min: 2, price_max: 3000 },
+      query: {
+        bedrooms_min: 2,
+        price_max: 3000,
+        neighborhoods: [],
+        pets: "any",
+        furnished: "any",
+        free_text_keywords: [],
+      },
       limit: 25,
       offset: 0,
       sort: "newest",
@@ -46,19 +60,20 @@ describe("searchClient.search", () => {
     (global.fetch as jest.Mock).mockResolvedValueOnce({
       ok: false,
       status: 422,
+      clone: () => ({ text: async () => '{"detail":"bad"}' }),
       json: async () => ({ detail: "bad" }),
     });
 
     await expect(
-      searchClient(baseUrl).search({ query: {} as never })
-    ).rejects.toMatchObject({ name: "ApiError", status: 422 });
+      searchClient(baseUrl).search({ query: emptyQuery() })
+    ).rejects.toMatchObject({ name: "ApiError", status: 422, payload: { detail: "bad" } });
   });
 
   it("wraps fetch network errors as ApiError(status=0)", async () => {
     (global.fetch as jest.Mock).mockRejectedValueOnce(new TypeError("net"));
 
     await expect(
-      searchClient(baseUrl).search({ query: {} as never })
+      searchClient(baseUrl).search({ query: emptyQuery() })
     ).rejects.toMatchObject({ name: "ApiError", status: 0 });
   });
 });

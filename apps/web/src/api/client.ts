@@ -31,7 +31,12 @@ export function searchClient(baseUrl: string): SearchClient {
       }
       if (!res.ok) {
         let payload: unknown;
-        try { payload = await res.json(); } catch { /* ignore */ }
+        const cloned = res.clone();
+        try {
+          payload = await res.json();
+        } catch {
+          try { payload = await cloned.text(); } catch { /* truly unreadable */ }
+        }
         throw new ApiError(res.status, `HTTP ${res.status}`, payload);
       }
       return (await res.json()) as SearchResponse;
