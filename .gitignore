@@ -65,3 +65,6 @@ apps/api/playwright/.auth/
 # Playwright artifacts
 apps/web/playwright-report/
 apps/web/test-results/
+
+# Jest coverage
+apps/web/coverage/
