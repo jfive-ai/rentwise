@@ -10,33 +10,41 @@ __pycache__/
 *.pyd
 .Python
 *.egg-info/
+.eggs/
 dist/
 build/
 .venv/
 venv/
+env/
 .mypy_cache/
 .ruff_cache/
 .pytest_cache/
+.tox/
 .coverage
+.coverage.*
 htmlcov/
 
 # Database
 apps/api/data/
 *.db
+*.db-journal
 *.sqlite
 *.sqlite3
 
 # Node / Expo
 node_modules/
 .expo/
+.expo-shared/
 dist/
 web-build/
+.next/
 *.tsbuildinfo
 
 # macOS
 .DS_Store
 .AppleDouble
 .LSOverride
+Thumbs.db
 
 # IDE
 .vscode/

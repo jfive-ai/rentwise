@@ -28,6 +28,8 @@ dev = [
     "ruff>=0.7.0",
     "mypy>=1.13.0",
     "vcrpy>=6.0.2",
+    "respx>=0.21.1",
+    "hypothesis>=6.115.0",
 ]
 
 [tool.ruff]
@@ -36,12 +38,27 @@ target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W", "B", "UP", "RUF"]
-ignore = ["E501"]  # line length handled by formatter
+ignore = ["E501", "B008"]  # E501: line length handled by formatter; B008: FastAPI Depends() in defaults is intentional
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
 pythonpath = ["."]
+markers = [
+    "integration: end-to-end pipeline tests (use recorded fixtures, not live HTTP)",
+    "property: Hypothesis property-based tests",
+]
+
+[tool.mypy]
+python_version = "3.12"
+strict = false
+warn_return_any = true
+warn_unused_ignores = true
+disallow_untyped_defs = true
+
+[[tool.mypy.overrides]]
+module = ["feedparser", "respx", "alembic.*"]
+ignore_missing_imports = true
 
 [build-system]
 requires = ["setuptools>=68.0"]

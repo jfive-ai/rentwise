@@ -14,8 +14,11 @@ RUN pip install --no-cache-dir -e ".[dev]"
 # App code
 COPY rentwise/ ./rentwise/
 COPY tests/ ./tests/
+COPY alembic.ini .
+COPY alembic/ ./alembic/
 
 EXPOSE 8000
 
-# Use --reload in dev (overridden in docker-compose.yml for prod)
-CMD ["uvicorn", "rentwise.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+COPY Dockerfile.entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
+ENTRYPOINT ["/app/entrypoint.sh"]

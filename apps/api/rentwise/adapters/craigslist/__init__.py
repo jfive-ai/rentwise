@@ -1,0 +1,1 @@
+"""Craigslist Vancouver RSS adapter."""
