@@ -7,8 +7,12 @@
     "web": "expo start --web",
     "ios": "expo start --ios",
     "android": "expo start --android",
-    "lint": "expo lint",
-    "test": "jest"
+    "lint": "eslint 'src/**/*.{ts,tsx}' 'app/**/*.{ts,tsx}'",
+    "typecheck": "tsc --noEmit",
+    "test": "jest",
+    "test:coverage": "jest --coverage",
+    "e2e": "playwright test",
+    "e2e:install": "playwright install --with-deps chromium"
   },
   "dependencies": {
     "expo": "~52.0.0",
@@ -21,11 +25,25 @@
     "react-native": "0.76.0",
     "react-native-web": "~0.19.13",
     "react-native-safe-area-context": "4.12.0",
-    "react-native-screens": "~4.1.0"
+    "react-native-screens": "~4.1.0",
+    "@react-native-async-storage/async-storage": "1.23.1"
   },
   "devDependencies": {
     "@babel/core": "^7.25.0",
+    "@playwright/test": "^1.48.0",
+    "@testing-library/jest-native": "^5.4.3",
+    "@testing-library/react-native": "^12.7.0",
+    "@types/jest": "^29.5.12",
     "@types/react": "~18.3.12",
+    "@typescript-eslint/eslint-plugin": "^7.18.0",
+    "@typescript-eslint/parser": "^7.18.0",
+    "eslint": "^8.57.0",
+    "eslint-config-expo": "^7.1.2",
+    "eslint-plugin-react-hooks": "^4.6.2",
+    "jest": "^29.7.0",
+    "jest-expo": "~52.0.0",
+    "msw": "^2.6.0",
+    "react-test-renderer": "18.3.1",
     "typescript": "^5.6.3"
   },
   "private": true
