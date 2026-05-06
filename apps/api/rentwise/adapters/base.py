@@ -38,7 +38,7 @@ class AdapterCapabilities(TypedDict):
     supported_filters: set[SupportedFilter]
 
 
-_FIELD_DEFAULTS = {
+_FIELD_DEFAULTS: dict[str, object] = {
     "bedrooms_min": None,
     "bedrooms_max": None,
     "price_min": None,
@@ -94,7 +94,7 @@ class SourceAdapter(Protocol):
     capabilities: AdapterCapabilities
     """Declares which NormalizedQuery fields this adapter can filter on."""
 
-    async def search(self, query: NormalizedQuery) -> AsyncIterator[RawListing]:
+    def search(self, query: NormalizedQuery) -> AsyncIterator[RawListing]:
         """Yield matching listings as they are found.
 
         Implementations MUST:

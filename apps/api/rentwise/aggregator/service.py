@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, Literal
 from uuid import uuid4
 
 import structlog
@@ -119,7 +119,7 @@ class AggregatorService:
         *,
         listings: list[NormalizedListing],
         total: int,
-        cache_status: str,
+        cache_status: Literal["fresh", "stale", "miss"],
         unsupported: list[str],
         health: dict[str, AdapterHealth] | None = None,
     ) -> SearchResponse:

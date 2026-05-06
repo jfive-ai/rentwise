@@ -49,6 +49,17 @@ markers = [
     "property: Hypothesis property-based tests",
 ]
 
+[tool.mypy]
+python_version = "3.12"
+strict = false
+warn_return_any = true
+warn_unused_ignores = true
+disallow_untyped_defs = true
+
+[[tool.mypy.overrides]]
+module = ["feedparser", "respx", "alembic.*"]
+ignore_missing_imports = true
+
 [build-system]
 requires = ["setuptools>=68.0"]
 build-backend = "setuptools.build_meta"

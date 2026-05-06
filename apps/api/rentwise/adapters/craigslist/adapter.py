@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
-from typing import ClassVar
+from typing import ClassVar, Literal
 
 import feedparser
 import httpx
@@ -25,9 +25,9 @@ log = structlog.get_logger(__name__)
 
 class CraigslistAdapter:
     name = "craigslist"
-    method: str = "rss"
+    method: Literal["api", "rss", "browser"] = "rss"
     rate_limit_per_second: float = 1.0
-    capabilities: ClassVar[AdapterCapabilities] = {
+    _capabilities: ClassVar[AdapterCapabilities] = {
         "supported_filters": {
             "bedrooms_min",
             "bedrooms_max",
@@ -48,6 +48,7 @@ class CraigslistAdapter:
         self.region = region
         self.base_url = f"https://{region}.craigslist.org"
         self.user_agent = user_agent
+        self.capabilities: AdapterCapabilities = self._capabilities
         self.robots = RobotsCache(user_agent=user_agent)
         self.fetcher = RateLimitedFetcher(
             rate_per_sec=self.rate_limit_per_second, jitter_ms=jitter_ms
