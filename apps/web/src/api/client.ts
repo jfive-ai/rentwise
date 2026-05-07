@@ -1,4 +1,5 @@
 import type {
+  CapturePairResponse,
   LLMConnectionTestRequest,
   LLMConnectionTestResult,
   LLMSettingsPublic,
@@ -26,6 +27,8 @@ export interface ApiClient {
   getSettings(): Promise<LLMSettingsPublic | null>;
   putSettings(body: LLMSettingsUpdate): Promise<LLMSettingsPublic>;
   testConnection(body: LLMConnectionTestRequest): Promise<LLMConnectionTestResult>;
+  getCapturePair(): Promise<CapturePairResponse>;
+  rotateCapturePair(): Promise<CapturePairResponse>;
 }
 
 type HttpMethod = "GET" | "POST" | "PUT";
@@ -85,6 +88,12 @@ export function searchClient(baseUrl: string): ApiClient {
     },
     testConnection(body) {
       return request<LLMConnectionTestResult>("POST", "/settings/llm/test", body);
+    },
+    getCapturePair() {
+      return request<CapturePairResponse>("GET", "/capture/pair");
+    },
+    rotateCapturePair() {
+      return request<CapturePairResponse>("POST", "/capture/pair/rotate");
     },
   };
 }

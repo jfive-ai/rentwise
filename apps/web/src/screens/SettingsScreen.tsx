@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { searchClient } from "@/src/api/client";
+import { ExtensionPairingCard } from "@/src/launcher/ExtensionPairingCard";
 import {
   PROVIDERS,
   type ModelOption,
@@ -264,6 +265,9 @@ export function SettingsScreen({ apiBaseUrl }: Props) {
           Save failed: {save.message}
         </Text>
       ) : null}
+
+      <View style={{ height: 8 }} />
+      <ExtensionPairingCard apiBaseUrl={apiBaseUrl} client={client} />
     </ScrollView>
   );
 }

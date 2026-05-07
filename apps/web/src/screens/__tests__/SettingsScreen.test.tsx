@@ -37,11 +37,57 @@ const existingSettings = {
   timeout_seconds: 30,
 };
 
+const stubCapturePair = {
+  token: "abcdef0123456789abcdef0123456789",
+  server_url: "http://api.test",
+};
+
+/**
+ * URL-dispatching fetch mock. SettingsScreen now also mounts
+ * ExtensionPairingCard, which fires its own GET /capture/pair on
+ * mount; so a strict `mockResolvedValueOnce` chain by call order
+ * gets brittle. The dispatcher answers /capture/pair with a stub and
+ * lets each test inject overrides for the specific endpoint(s) it
+ * cares about.
+ */
+function setupFetchMock(
+  overrides: Partial<{
+    settings: unknown;
+    putSettings: unknown;
+    test: unknown;
+  }> = {},
+): jest.Mock {
+  const mock = jest.fn(async (input: string, init?: { method?: string }) => {
+    const url = String(input);
+    const method = init?.method ?? "GET";
+    if (url.endsWith("/capture/pair") && method === "GET") {
+      return mockResponse(stubCapturePair);
+    }
+    if (url.endsWith("/settings/llm") && method === "GET") {
+      return mockResponse(overrides.settings ?? existingSettings);
+    }
+    if (url.endsWith("/settings/llm") && method === "PUT") {
+      return mockResponse(overrides.putSettings ?? existingSettings);
+    }
+    if (url.endsWith("/settings/llm/test") && method === "POST") {
+      return mockResponse(
+        overrides.test ?? {
+          ok: true,
+          error: null,
+          latency_ms: 42,
+          model_used: "m",
+        },
+      );
+    }
+    throw new Error(`unmocked fetch: ${method} ${url}`);
+  });
+  jest.spyOn(global, "fetch").mockImplementation(mock as never);
+  return mock;
+}
+
 describe("SettingsScreen", () => {
   it("loads existing settings on mount and shows the masked key", async () => {
-    jest
-      .spyOn(global, "fetch")
-      .mockResolvedValueOnce(mockResponse(existingSettings));
+    setupFetchMock();
 
     const { getByText } = render(<SettingsScreen apiBaseUrl="http://api.test" />);
 
@@ -51,10 +97,7 @@ describe("SettingsScreen", () => {
 
   it("replace flow: typing a new key and Save sends it in the PUT body", async () => {
     const updated = { ...existingSettings, primary_api_key_masked: "sk-or-...new1" };
-    jest
-      .spyOn(global, "fetch")
-      .mockResolvedValueOnce(mockResponse(existingSettings))
-      .mockResolvedValueOnce(mockResponse(updated));
+    const mock = setupFetchMock({ putSettings: updated });
 
     const { getByText, getByLabelText } = render(
       <SettingsScreen apiBaseUrl="http://api.test" />
@@ -67,15 +110,13 @@ describe("SettingsScreen", () => {
     fireEvent.press(getByText("Save"));
 
     await waitFor(() => {
-      const calls = (global.fetch as jest.Mock).mock.calls;
-      const putCall = calls.find(
+      const putCall = mock.mock.calls.find(
         (c) => (c[1] as { method: string }).method === "PUT"
       );
       expect(putCall).toBeTruthy();
     });
 
-    const calls = (global.fetch as jest.Mock).mock.calls;
-    const putCall = calls.find(
+    const putCall = mock.mock.calls.find(
       (c) => (c[1] as { method: string }).method === "PUT"
     )!;
     expect(JSON.parse((putCall[1] as { body: string }).body)).toMatchObject({
@@ -85,12 +126,7 @@ describe("SettingsScreen", () => {
   });
 
   it("test connection shows ok latency", async () => {
-    jest
-      .spyOn(global, "fetch")
-      .mockResolvedValueOnce(mockResponse(existingSettings))
-      .mockResolvedValueOnce(
-        mockResponse({ ok: true, error: null, latency_ms: 42, model_used: "m" })
-      );
+    setupFetchMock();
 
     const { getByText } = render(<SettingsScreen apiBaseUrl="http://api.test" />);
 

@@ -134,3 +134,8 @@ export interface LLMConnectionTestResult {
   latency_ms: number;
   model_used: string;
 }
+
+export interface CapturePairResponse {
+  token: string;
+  server_url: string;
+}

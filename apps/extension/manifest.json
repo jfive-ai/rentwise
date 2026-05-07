@@ -7,6 +7,10 @@
   "host_permissions": [
     "https://rentals.ca/*",
     "https://www.padmapper.com/*",
+    "https://www.zumper.com/*",
+    "https://www.rew.ca/*",
+    "https://liv.rent/*",
+    "https://www.facebook.com/marketplace/*",
     "http://127.0.0.1/*",
     "http://localhost/*"
   ],
@@ -23,6 +27,26 @@
     {
       "matches": ["https://www.padmapper.com/*"],
       "js": ["src/content/sites/padmapper.ts"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://www.zumper.com/*"],
+      "js": ["src/content/sites/zumper.ts"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://www.rew.ca/*"],
+      "js": ["src/content/sites/rew_ca.ts"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://liv.rent/*"],
+      "js": ["src/content/sites/liv_rent.ts"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://www.facebook.com/marketplace/*"],
+      "js": ["src/content/sites/facebook_marketplace.ts"],
       "run_at": "document_idle"
     }
   ],
