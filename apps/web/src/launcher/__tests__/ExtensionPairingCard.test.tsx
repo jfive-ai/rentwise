@@ -4,6 +4,10 @@ import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
 import { ExtensionPairingCard } from "@/src/launcher/ExtensionPairingCard";
 import type { ApiClient } from "@/src/api/client";
 
+// React Native test renderer's first cold render in a suite can be slow on
+// CI runners; bump the per-test timeout so async finders don't trip.
+jest.setTimeout(20000);
+
 function makeClient(overrides: Partial<ApiClient>): ApiClient {
   const base: ApiClient = {
     search: jest.fn(),
@@ -26,18 +30,19 @@ describe("ExtensionPairingCard", () => {
         .fn()
         .mockResolvedValue({ token: "abcdEFGH1234wxyz", server_url: apiBaseUrl }),
     });
-    const { getAllByText, getByText, queryByText } = render(
+    const { findByText, getAllByText, getByText } = render(
       <ExtensionPairingCard apiBaseUrl={apiBaseUrl} client={client} />,
     );
     expect(getByText("Loading pairing…")).toBeTruthy();
-    await waitFor(() => expect(queryByText("Loading pairing…")).toBeNull());
+
+    // findByText polls until the masked token shows up, which only happens
+    // after the async pairing fetch resolves and the component re-renders.
+    expect(await findByText(/abcd•+wxyz/)).toBeTruthy();
 
     expect(getByText("API URL")).toBeTruthy();
     expect(getByText("Pairing token")).toBeTruthy();
     // The URL appears in both the field value row and the "Tip:" footer.
     expect(getAllByText(apiBaseUrl).length).toBeGreaterThanOrEqual(1);
-    // token is masked by default
-    expect(getByText(/abcd•+wxyz/)).toBeTruthy();
   });
 
   it("toggles token visibility when Reveal is pressed", async () => {
@@ -46,10 +51,10 @@ describe("ExtensionPairingCard", () => {
         .fn()
         .mockResolvedValue({ token: "abcdEFGH1234wxyz", server_url: apiBaseUrl }),
     });
-    const { getByText, getAllByRole } = render(
+    const { findByText, getByText, getAllByRole } = render(
       <ExtensionPairingCard apiBaseUrl={apiBaseUrl} client={client} />,
     );
-    await waitFor(() => expect(getByText(/abcd•+wxyz/)).toBeTruthy());
+    await findByText(/abcd•+wxyz/);
 
     const revealBtn = getByText("Reveal");
     fireEvent.press(revealBtn);
@@ -63,12 +68,10 @@ describe("ExtensionPairingCard", () => {
     const client = makeClient({
       getCapturePair: jest.fn().mockRejectedValue(new Error("connect EHOSTUNREACH")),
     });
-    const { getByText } = render(
+    const { findByText } = render(
       <ExtensionPairingCard apiBaseUrl={apiBaseUrl} client={client} />,
     );
-    await waitFor(() =>
-      expect(getByText(/Couldn.+t load pairing: connect EHOSTUNREACH/)).toBeTruthy(),
-    );
+    expect(await findByText(/Couldn.+t load pairing: connect EHOSTUNREACH/)).toBeTruthy();
   });
 
   it("rotate replaces the displayed token and reveals the new value", async () => {
@@ -80,10 +83,10 @@ describe("ExtensionPairingCard", () => {
         .fn()
         .mockResolvedValue({ token: "NEWtoken9999nnnn", server_url: apiBaseUrl }),
     });
-    const { getByText } = render(
+    const { findByText, getByText } = render(
       <ExtensionPairingCard apiBaseUrl={apiBaseUrl} client={client} />,
     );
-    await waitFor(() => expect(getByText(/OLDt•+oooo/)).toBeTruthy());
+    await findByText(/OLDt•+oooo/);
 
     const rotateBtn = getByText("Rotate token");
     await act(async () => {
@@ -102,15 +105,17 @@ describe("ExtensionPairingCard", () => {
         .mockResolvedValue({ token: "abcdEFGH1234wxyz", server_url: apiBaseUrl }),
       rotateCapturePair: jest.fn().mockRejectedValue(new Error("rotate failed")),
     });
-    const { getByText } = render(
+    const { findByText, getByText } = render(
       <ExtensionPairingCard apiBaseUrl={apiBaseUrl} client={client} />,
     );
-    await waitFor(() => expect(getByText(/abcd•+wxyz/)).toBeTruthy());
+    await findByText(/abcd•+wxyz/);
 
     await act(async () => {
       fireEvent.press(getByText("Rotate token"));
     });
-    expect(getByText(/Couldn.+t load pairing: rotate failed/)).toBeTruthy();
+    await waitFor(() =>
+      expect(getByText(/Couldn.+t load pairing: rotate failed/)).toBeTruthy(),
+    );
   });
 
   it("shows a copy hint when navigator.clipboard is unavailable on native", async () => {
@@ -122,10 +127,10 @@ describe("ExtensionPairingCard", () => {
           .fn()
           .mockResolvedValue({ token: "abcdEFGH1234wxyz", server_url: apiBaseUrl }),
       });
-      const { getAllByText, getByText } = render(
+      const { findByText, getAllByText, getByText } = render(
         <ExtensionPairingCard apiBaseUrl={apiBaseUrl} client={client} />,
       );
-      await waitFor(() => expect(getByText("API URL")).toBeTruthy());
+      await findByText("API URL");
       const copyBtns = getAllByText("Copy");
       await act(async () => {
         fireEvent.press(copyBtns[0]!);

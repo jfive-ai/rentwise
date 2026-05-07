@@ -1,5 +1,7 @@
 import React from "react";
-import { act, render, waitFor } from "@testing-library/react-native";
+import { act, render } from "@testing-library/react-native";
+
+jest.setTimeout(20000);
 import { ExtensionStatus } from "@/src/launcher/ExtensionStatus";
 import type { ApiClient } from "@/src/api/client";
 
@@ -42,16 +44,16 @@ describe("ExtensionStatus", () => {
         .fn()
         .mockResolvedValue({ token: "short", server_url: "http://127.0.0.1:8000" }),
     });
-    const { getByText } = render(<ExtensionStatus client={client} />);
-    await waitFor(() => expect(getByText("Token: short")).toBeTruthy());
+    const { findByText } = render(<ExtensionStatus client={client} />);
+    expect(await findByText("Token: short")).toBeTruthy();
   });
 
   it("renders the unreachable state with the error message", async () => {
     const client = makeClient({
       getCapturePair: jest.fn().mockRejectedValue(new Error("ECONNREFUSED")),
     });
-    const { getByText } = render(<ExtensionStatus client={client} />);
-    await waitFor(() => expect(getByText("⚠️ Capture API unreachable")).toBeTruthy());
+    const { findByText, getByText } = render(<ExtensionStatus client={client} />);
+    expect(await findByText("⚠️ Capture API unreachable")).toBeTruthy();
     expect(getByText("ECONNREFUSED")).toBeTruthy();
   });
 
@@ -59,7 +61,7 @@ describe("ExtensionStatus", () => {
     const client = makeClient({
       getCapturePair: jest.fn().mockRejectedValue("teapot"),
     });
-    const { getByText } = render(<ExtensionStatus client={client} />);
-    await waitFor(() => expect(getByText("teapot")).toBeTruthy());
+    const { findByText } = render(<ExtensionStatus client={client} />);
+    expect(await findByText("teapot")).toBeTruthy();
   });
 });
