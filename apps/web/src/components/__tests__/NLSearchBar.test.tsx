@@ -2,7 +2,7 @@
  * @jest-environment jsdom
  */
 import React from "react";
-import { Platform } from "react-native";
+import { Platform, Text } from "react-native";
 import { fireEvent, render, waitFor } from "@testing-library/react-native";
 import { NLSearchBar } from "@/src/components/NLSearchBar";
 import { QueryProvider, useQuery } from "@/src/state/QueryProvider";
@@ -22,32 +22,31 @@ afterEach(() => {
   jest.restoreAllMocks();
 });
 
-function Probe(props: {
-  onReady: (q: ReturnType<typeof useQuery>) => void;
-  initialMode?: "nl" | "filters";
-}) {
+// Rendered probe — writes provider state into the DOM so waitFor() can poll
+// the rendered tree directly instead of relying on a JS variable updated by
+// a useEffect (which CI's React/jest-expo combo did not reliably surface).
+function Probe(props: { initialMode?: "nl" | "filters" }) {
   const q = useQuery();
   const initialModeApplied = React.useRef(false);
   React.useEffect(() => {
-    // Apply the requested initial mode exactly once so the fallback path
-    // can flip back to "filters" without the probe immediately re-flipping
-    // it to "nl" again.
     if (props.initialMode && !initialModeApplied.current) {
       initialModeApplied.current = true;
       if (q.mode !== props.initialMode) q.setMode(props.initialMode);
     }
-    props.onReady(q);
-  }, [q, props]);
-  return null;
+  }, [props.initialMode, q]);
+  return (
+    <>
+      <Text testID="probe-mode">{q.mode}</Text>
+      <Text testID="probe-bedrooms-min">{q.query.bedrooms_min ?? ""}</Text>
+      <Text testID="probe-neighborhoods">{q.query.neighborhoods.join(",")}</Text>
+    </>
+  );
 }
 
-function renderBar(
-  probe?: (q: ReturnType<typeof useQuery>) => void,
-  initialMode?: "nl" | "filters"
-) {
+function renderBar(initialMode?: "nl" | "filters") {
   return render(
     <QueryProvider>
-      {probe ? <Probe onReady={probe} initialMode={initialMode} /> : null}
+      <Probe initialMode={initialMode} />
       <NLSearchBar apiBaseUrl="http://api.test" />
     </QueryProvider>
   );
@@ -64,7 +63,6 @@ const mockTranslate = (body: unknown, ok = true, status = 200) => {
 
 describe("NLSearchBar", () => {
   it("submits text to /translate-query and updates the query", async () => {
-    let captured: ReturnType<typeof useQuery> | null = null;
     mockTranslate({
       query: {
         neighborhoods: ["Kitsilano"],
@@ -78,44 +76,31 @@ describe("NLSearchBar", () => {
       lang_detected: "en",
       model_used: "m",
     });
-    const { getByLabelText, getByText } = renderBar((q) => {
-      captured = q;
-    });
+    const { getByLabelText, getByText, getByTestId } = renderBar();
     fireEvent.changeText(getByLabelText("Search input"), "2br Kits under 3000");
     fireEvent.press(getByText("Parse"));
-    await waitFor(() => expect(captured!.query.bedrooms_min).toBe(2));
-    expect(captured!.query.neighborhoods).toEqual(["Kitsilano"]);
+    await waitFor(() =>
+      expect(getByTestId("probe-bedrooms-min").props.children).toBe(2)
+    );
+    expect(getByTestId("probe-neighborhoods").props.children).toBe("Kitsilano");
   });
 
   it("falls back to filter mode on 5xx", async () => {
-    let captured: ReturnType<typeof useQuery> | null = null;
     mockTranslate({ detail: { error: "llm_transport_error" } }, false, 502);
-    // Start in NL mode (one-shot) so the fallback can flip back to filters.
-    const { getByLabelText, getByText, findByText } = renderBar(
-      (q) => {
-        captured = q;
-      },
-      "nl"
-    );
+    const { getByLabelText, getByText, getByTestId, findByText } = renderBar("nl");
     fireEvent.changeText(getByLabelText("Search input"), "anything");
     fireEvent.press(getByText("Parse"));
     await findByText(/LLM unavailable/i);
-    await waitFor(() => expect(captured!.mode).toBe("filters"));
+    await waitFor(() => expect(getByTestId("probe-mode").props.children).toBe("filters"));
   });
 
   it("falls back on network error", async () => {
-    let captured: ReturnType<typeof useQuery> | null = null;
     jest.spyOn(global, "fetch").mockRejectedValue(new TypeError("Network down"));
-    const { getByLabelText, getByText, findByText } = renderBar(
-      (q) => {
-        captured = q;
-      },
-      "nl"
-    );
+    const { getByLabelText, getByText, getByTestId, findByText } = renderBar("nl");
     fireEvent.changeText(getByLabelText("Search input"), "anything");
     fireEvent.press(getByText("Parse"));
     await findByText(/LLM unavailable/i);
-    await waitFor(() => expect(captured!.mode).toBe("filters"));
+    await waitFor(() => expect(getByTestId("probe-mode").props.children).toBe("filters"));
   });
 
   it("disables Parse while a request is in flight", async () => {
