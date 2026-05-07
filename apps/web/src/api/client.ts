@@ -1,4 +1,8 @@
 import type {
+  LLMConnectionTestRequest,
+  LLMConnectionTestResult,
+  LLMSettingsPublic,
+  LLMSettingsUpdate,
   SearchRequest,
   SearchResponse,
   TranslateQueryRequest,
@@ -19,21 +23,28 @@ export class ApiError extends Error {
 export interface ApiClient {
   search(req: SearchRequest): Promise<SearchResponse>;
   translateQuery(req: TranslateQueryRequest): Promise<TranslateQueryResult>;
+  getSettings(): Promise<LLMSettingsPublic | null>;
+  putSettings(body: LLMSettingsUpdate): Promise<LLMSettingsPublic>;
+  testConnection(body: LLMConnectionTestRequest): Promise<LLMConnectionTestResult>;
 }
+
+type HttpMethod = "GET" | "POST" | "PUT";
 
 // Keep `searchClient` exported for backwards compatibility with existing
 // imports, but it now returns the broader `ApiClient`.
 export function searchClient(baseUrl: string): ApiClient {
-  const base = baseUrl.replace(/\/$/, "");
+  const root = baseUrl.replace(/\/$/, "");
 
-  async function call<T>(path: string, body: unknown): Promise<T> {
+  async function request<T>(method: HttpMethod, path: string, body?: unknown): Promise<T> {
+    const url = `${root}${path}`;
+    const init: RequestInit = { method };
+    if (body !== undefined) {
+      init.headers = { "content-type": "application/json" };
+      init.body = JSON.stringify(body);
+    }
     let res: Response;
     try {
-      res = await fetch(`${base}${path}`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(body),
-      });
+      res = await fetch(url, init);
     } catch (e) {
       throw new ApiError(0, e instanceof Error ? e.message : String(e));
     }
@@ -56,10 +67,24 @@ export function searchClient(baseUrl: string): ApiClient {
 
   return {
     search(req) {
-      return call<SearchResponse>("/search", req);
+      return request<SearchResponse>("POST", "/search", req);
     },
     translateQuery(req) {
-      return call<TranslateQueryResult>("/translate-query", req);
+      return request<TranslateQueryResult>("POST", "/translate-query", req);
+    },
+    async getSettings() {
+      try {
+        return await request<LLMSettingsPublic>("GET", "/settings/llm");
+      } catch (e) {
+        if (e instanceof ApiError && e.status === 404) return null;
+        throw e;
+      }
+    },
+    putSettings(body) {
+      return request<LLMSettingsPublic>("PUT", "/settings/llm", body);
+    },
+    testConnection(body) {
+      return request<LLMConnectionTestResult>("POST", "/settings/llm/test", body);
     },
   };
 }
