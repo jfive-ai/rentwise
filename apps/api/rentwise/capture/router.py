@@ -10,6 +10,7 @@ from rentwise.capture.auth import verify_capture_token, verify_local_origin
 from rentwise.capture.pairing import CapturePairingRepo
 from rentwise.capture.schemas import (
     CaptureHealthPayload,
+    CaptureItemError,
     CapturePairResponse,
     CapturePayload,
     CaptureResponse,
@@ -61,7 +62,7 @@ def build_router(api_base_url: str = "http://127.0.0.1:8000") -> APIRouter:
 
         repo = ListingRepo(session)
         accepted = 0
-        errors: list[dict] = []
+        errors: list[CaptureItemError] = []
         for idx, item in enumerate(payload.listings):
             try:
                 await repo.upsert_by_source_url(
@@ -91,7 +92,7 @@ def build_router(api_base_url: str = "http://127.0.0.1:8000") -> APIRouter:
                     source_listing_id=item.source_listing_id,
                     error=str(exc),
                 )
-                errors.append({"index": idx, "message": str(exc)})
+                errors.append(CaptureItemError(index=idx, message=str(exc)))
 
         try:
             await session.commit()
