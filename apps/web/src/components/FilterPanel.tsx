@@ -9,6 +9,7 @@ import {
 } from "react-native";
 import { useQuery } from "@/src/state/QueryProvider";
 import { DisabledControl } from "@/src/components/DisabledControl";
+import { LauncherButton } from "@/src/launcher/LauncherButton";
 import { useTheme } from "@/src/theme";
 
 const BEDROOM_CHIPS = [
@@ -30,9 +31,11 @@ export const NEIGHBORHOODS = [
 
 interface Props {
   onSearch: () => void;
+  /** Optional callback fired after the user clicks "Search across sources". */
+  onLauncherFired?: () => void;
 }
 
-export function FilterPanel({ onSearch }: Props) {
+export function FilterPanel({ onSearch, onLauncherFired }: Props) {
   const { query, set, reset, toggleNeighborhood, toggleKeyword } = useQuery();
   const t = useTheme();
   const [kw, setKw] = useState("");
@@ -164,6 +167,10 @@ export function FilterPanel({ onSearch }: Props) {
           <Text style={{ color: t.text }}>Reset</Text>
         </Pressable>
       </View>
+
+      <View style={styles.launcher}>
+        <LauncherButton query={query} onLaunched={onLauncherFired} />
+      </View>
     </ScrollView>
   );
 }
@@ -202,4 +209,5 @@ const styles = StyleSheet.create({
   primary: { paddingHorizontal: 18, paddingVertical: 12, borderRadius: 8 },
   primaryText: { color: "#fff", fontWeight: "600" },
   secondary: { paddingHorizontal: 18, paddingVertical: 12, borderRadius: 8, borderWidth: 1 },
+  launcher: { marginTop: 16, paddingTop: 16, borderTopWidth: 1, borderColor: "#e5e5e5" },
 });

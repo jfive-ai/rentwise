@@ -16,10 +16,15 @@ const SOURCE_LABELS: Record<SourceId, string> = {
   facebook_marketplace: "Facebook Marketplace",
 };
 
-// Sites that have a content script in this PR. Others are listed
-// disabled with a "coming in PR-C" hint so the user understands the
-// scaffold's current scope.
-const SHIPPED: SourceId[] = ["rentals_ca", "padmapper"];
+// All six sources have shipped content scripts.
+const SHIPPED: SourceId[] = [
+  "rentals_ca",
+  "padmapper",
+  "zumper",
+  "rew_ca",
+  "liv_rent",
+  "facebook_marketplace",
+];
 
 export function Popup() {
   const [state, setState] = useState<StorageShape | null>(null);
@@ -76,10 +81,9 @@ export function Popup() {
               <div style={{ flex: 1 }}>
                 <div>{SOURCE_LABELS[id]}</div>
                 <div style={{ color: "#888", fontSize: 11 }}>
-                  {!shipped && "Coming in PR-C"}
-                  {shipped && health?.status === "degraded" && "⚠️ Selectors broken"}
-                  {shipped && health?.status === "ok" && `Schema ${health.schemaVersion}`}
-                  {shipped && !health && "No captures yet"}
+                  {health?.status === "degraded" && "⚠️ Selectors broken"}
+                  {health?.status === "ok" && `Schema ${health.schemaVersion}`}
+                  {!health && "No captures yet"}
                 </div>
               </div>
               <div style={{ color: "#666" }}>{count}</div>

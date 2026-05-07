@@ -100,6 +100,29 @@ export function SearchScreen({ apiBaseUrl }: Props) {
     [runSearch, lastCall]
   );
 
+  // After the launcher fires, the extension may post captures over the next
+  // few seconds. Re-poll /search every 2s for 30s so freshly-captured rows
+  // appear without the user clicking Search again.
+  const launcherPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const onLauncherFired = useCallback(() => {
+    if (launcherPollRef.current !== null) clearInterval(launcherPollRef.current);
+    let elapsed = 0;
+    const interval = setInterval(() => {
+      elapsed += 2000;
+      void runSearch(0, false);
+      if (elapsed >= 30_000) {
+        clearInterval(interval);
+        if (launcherPollRef.current === interval) launcherPollRef.current = null;
+      }
+    }, 2000);
+    launcherPollRef.current = interval;
+  }, [runSearch]);
+  useEffect(() => {
+    return () => {
+      if (launcherPollRef.current !== null) clearInterval(launcherPollRef.current);
+    };
+  }, []);
+
   // Sort is a server-side parameter — re-run the search whenever it changes,
   // but skip the initial mount (no implicit fetch before the user asks).
   useEffect(() => {
@@ -136,7 +159,7 @@ export function SearchScreen({ apiBaseUrl }: Props) {
             </Pressable>
           </View>
         ) : (
-          <FilterPanel onSearch={onSearch} />
+          <FilterPanel onSearch={onSearch} onLauncherFired={onLauncherFired} />
         )}
       </View>
 

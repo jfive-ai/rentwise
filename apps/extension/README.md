@@ -9,13 +9,18 @@ the browser to load.
 See `docs/superpowers/specs/2026-05-07-phase-3-launcher-extension-design.md`
 for the full design and `docs/legal.md` for the legal posture.
 
-## Sites covered (PR-B)
+## Sites covered
 
 - Rentals.ca
 - PadMapper
+- Zumper
+- REW.ca
+- liv.rent
+- Facebook Marketplace
 
-PR-C adds Zumper, REW.ca, liv.rent, and Facebook Marketplace, plus the
-launcher button in the RentWise web app.
+The "Search across sources" launcher button lives in the RentWise web
+app's filter panel — it opens one tab per enabled source and the
+content scripts capture as the user lets each tab finish loading.
 
 ## Build
 

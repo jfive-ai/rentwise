@@ -68,10 +68,11 @@
 - [x] Browser extension scaffold (Chrome MV3; Firefox where the same MV3 manifest works)
 - [x] Content scripts that activate **only** on listing pages the user navigated to themselves (no background fetch of pages the user did not request) — Rentals.ca + PadMapper shipped in PR-B; remaining four sites in PR-C
 - [x] Local capture endpoint on the FastAPI backend with shared-secret auth bound to localhost
-- [ ] Per-site capture for the five blocked sources + Facebook Marketplace (was Phase 6) — 2/6 in PR-B (Rentals.ca, PadMapper); 4 remaining in PR-C
+- [x] Per-site capture for the five blocked sources + Facebook Marketplace (was Phase 6)
 - [x] Extension UI: "Save to RentWise" affordance with a clear "captured" toast; per-site enable toggle; clear off-state so the extension is dormant outside listing pages
 - [x] Document the legal posture in `docs/legal.md` — captured pages must be ones the user requested
-- [ ] **Milestone:** User browses any of the six sources normally; matching listings appear in RentWise
+- [x] Launcher in the web app — one click opens N tabs in the user's browser; results re-poll for 30s
+- [x] **Milestone:** User browses any of the six sources normally; matching listings appear in RentWise
 
 ### Parallel track (slow, low certainty)
 
