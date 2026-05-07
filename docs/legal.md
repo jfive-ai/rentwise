@@ -54,6 +54,22 @@ Public listings, no login required to view. Standard rules above apply. Check ea
 1. Skip that source, OR
 2. Implement a "user-driven" mode where the user opens their browser, RentWise watches the page they're on, and extracts info only from pages the user visited (this is closer to a personal browsing assistant than scraping).
 
+### PadMapper (verified 2026-05-07)
+
+**Operator:** PadMapper Inc. (owned by Zumper Inc. since 2017).
+
+**robots.txt:** Disallows `/api`, `/backlinks`, `/external`, `/padmapper-account`, `/static`, `/buildings/*/cost-calculator`, `/rentals/*/cost-calculator`, and any URL with `box=` query params. The public `/rentals/...` and `/buildings/...` listing pages are not disallowed for the wildcard user-agent. Several known crawlers are blocked by name (`ccbot`, `Yandex`, `MJ12bot`, `DataForSeoBot`, `Neevabot`, `archive.org_bot`, etc.).
+
+**Terms of Service:** https://www.padmapper.com/tos (effective 2021-05-27)
+
+**Decision: PROHIBITED.** Section 8.4 forbids scraping verbatim:
+
+> **8.4** Not harvest or otherwise collect any data, information or Site Content from the Website, including by using manual or automated software, devices, or other processes to "crawl", "scrape" or "spider" any page of the Website or Services to copy, obtain, propagate, distribute or misappropriate any User Data or Site Content
+
+Section 5 limits user license to "reasonable limited quantities for your personal, non-commercial use" and forbids redistribution. Section 8.5 prohibits any conduct that interferes with the service.
+
+Permissive listing-page paths in `robots.txt` do **not** override the TOS prohibition. **No PadMapper adapter** is implemented. Because PadMapper is owned by Zumper, the Zumper TOS likely contains the same clause; verify before any Zumper work.
+
 ### Rentals.ca (verified 2026-05-06)
 
 **robots.txt:** Permissive. `Allow: /` with disallows only on `*-feed.json`, `*-feed.xml`, and pages with `bbox=`, `amenities=`, `types=` query params. No `Crawl-delay`.
