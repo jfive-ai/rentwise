@@ -8,6 +8,12 @@ import { NLSearchBar } from "@/src/components/NLSearchBar";
 import { ParsedQueryChips } from "@/src/components/ParsedQueryChips";
 import { QueryProvider, useQuery } from "@/src/state/QueryProvider";
 
+// CI's GitHub Actions Linux runners can take 6-9s for the happy-path async
+// flow (changeText → re-render → press → fetch microtask → state update →
+// chip render); the default 5s Jest timeout flakes. Local macOS finishes in
+// ~200 ms. Bumping per-test timeout for this file specifically.
+jest.setTimeout(20000);
+
 beforeAll(() => {
   (Platform as { OS: string }).OS = "web";
   // Force jest.fn() unconditionally — modern jsdom ships native (undici) fetch
