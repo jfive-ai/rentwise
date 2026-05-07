@@ -8,43 +8,86 @@ See docs/llm-providers.md for the strategy.
 
 from __future__ import annotations
 
-import structlog
+import json
+from datetime import UTC, datetime
+from typing import Any
 
+import structlog
+from litellm import acompletion
+from pydantic import ValidationError
+
+from rentwise.llm.errors import LLMMalformedResponse, LLMTransportError
+from rentwise.llm.prompts import QUERY_TOOL_SCHEMA, detect_language, render_system_prompt
+from rentwise.llm.result import TranslateQueryResult
+from rentwise.models import NormalizedQuery
 from rentwise.settings import settings
 
 log = structlog.get_logger(__name__)
 
 
 class LLMClient:
-    """Thin wrapper over LiteLLM with retry + fallback logic.
+    """Thin wrapper over LiteLLM with a single fallback retry."""
 
-    Phase 0: structure only — `translate_query` is a stub. The real implementation
-    arrives in Phase 2 (Natural Language Layer).
-    """
+    async def translate_query(self, user_input: str) -> TranslateQueryResult:
+        """Translate natural-language input into a TranslateQueryResult.
 
-    def __init__(self) -> None:
-        self.primary_model = settings.rentwise_llm_model
-        self.fallback_model = settings.rentwise_llm_fallback_model
-        self.timeout = settings.rentwise_llm_timeout_seconds
-        self.max_retries = settings.rentwise_llm_max_retries
-
-    async def translate_query(self, user_input: str) -> dict:
-        """Translate natural-language input into a NormalizedQuery dict.
-
-        Returns an empty dict for now — wire up in Phase 2.
+        Tries primary model first; on transport failure (any exception from
+        LiteLLM), retries once with the fallback model if configured. Malformed
+        responses (no tool call, bad JSON, fields outside the schema) raise
+        immediately — they indicate a model or prompt regression, not a flake.
         """
-        log.info(
-            "llm.translate_query.stub",
-            model=self.primary_model,
-            input_length=len(user_input),
-        )
-        # TODO Phase 2: call litellm.acompletion with tool-use schema.
-        return {}
+        lang = detect_language(user_input)
+        today = datetime.now(UTC).date()
+        system_prompt = render_system_prompt(lang, today)
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_input},
+        ]
+
+        # Read settings live each call so a settings UI / monkeypatch takes
+        # effect immediately, without depending on construction order.
+        primary = settings.rentwise_llm_model
+        fallback = settings.rentwise_llm_fallback_model
+        timeout = settings.rentwise_llm_timeout_seconds
+
+        models_to_try: list[str] = [primary]
+        if fallback:
+            models_to_try.append(fallback)
+
+        last_transport_error: Exception | None = None
+        for model in models_to_try:
+            credentials = _resolve_credentials(model)
+            try:
+                response = await acompletion(
+                    model=model,
+                    messages=messages,
+                    tools=[QUERY_TOOL_SCHEMA],
+                    tool_choice={"type": "function", "function": {"name": "submit_query"}},
+                    timeout=timeout,
+                    **credentials,
+                )
+            except Exception as exc:  # LiteLLM raises many exception types; treat all as transport
+                log.warning("llm.translate_query.transport_error", model=model, exc_info=exc)
+                last_transport_error = exc
+                continue
+
+            query = _parse_tool_call(response)
+            return TranslateQueryResult(
+                query=query,
+                unsupported_filters=[],  # populated server-side by FilterPanel hints in a later issue
+                lang_detected=lang,
+                model_used=model,
+            )
+
+        raise LLMTransportError(
+            f"All LLM providers failed; last error: {last_transport_error!r}"
+        ) from last_transport_error
 
     def is_configured(self) -> bool:
         """True if at least one provider key is set for the chosen model."""
         # Model names can be "provider/model" or "provider/org/model" — always use first segment.
-        provider = self.primary_model.split("/")[0]
+        primary_model = settings.rentwise_llm_model
+        provider = primary_model.split("/")[0]
         match provider:
             case "openrouter":
                 return settings.openrouter_api_key is not None
@@ -60,6 +103,57 @@ class LLMClient:
                 log.warning(
                     "llm.is_configured.unknown_provider",
                     provider=provider,
-                    model=self.primary_model,
+                    model=primary_model,
                 )
                 return False
+
+
+def _resolve_credentials(model: str) -> dict[str, str]:
+    """Return kwargs (api_key, api_base) to pass to acompletion for the given model.
+
+    Reads from `settings` so a settings-UI change takes effect immediately.
+    Empty/None values are omitted so LiteLLM's own resolution still applies.
+    """
+    provider = model.split("/")[0]
+    out: dict[str, str] = {}
+    match provider:
+        case "openrouter" if settings.openrouter_api_key:
+            out["api_key"] = settings.openrouter_api_key
+        case "anthropic" if settings.anthropic_api_key:
+            out["api_key"] = settings.anthropic_api_key
+        case "openai" if settings.openai_api_key:
+            out["api_key"] = settings.openai_api_key
+        case "google" | "gemini" if settings.google_api_key:
+            out["api_key"] = settings.google_api_key
+        case "ollama":
+            out["api_base"] = settings.ollama_base_url
+    return out
+
+
+def _parse_tool_call(response: Any) -> NormalizedQuery:
+    try:
+        choice = response.choices[0]
+        tool_calls = getattr(choice.message, "tool_calls", None) or []
+        if not tool_calls:
+            raise LLMMalformedResponse("LLM returned no tool call")
+        fn = tool_calls[0].function
+        if fn.name != "submit_query":
+            raise LLMMalformedResponse(f"Unexpected tool call: {fn.name}")
+        try:
+            args: dict[str, Any] = json.loads(fn.arguments)
+        except (TypeError, ValueError) as exc:
+            raise LLMMalformedResponse(f"Tool arguments not valid JSON: {exc}") from exc
+    except LLMMalformedResponse:
+        raise
+    except Exception as exc:  # response shape we didn't expect
+        raise LLMMalformedResponse(f"Unparseable LLM response: {exc!r}") from exc
+
+    # Strict: any extra field means the model violated the schema.
+    extra = set(args.keys()) - set(NormalizedQuery.model_fields.keys())
+    if extra:
+        raise LLMMalformedResponse(f"LLM returned unknown fields: {sorted(extra)}")
+
+    try:
+        return NormalizedQuery.model_validate(args)
+    except ValidationError as exc:
+        raise LLMMalformedResponse(f"Tool arguments failed validation: {exc.errors()}") from exc

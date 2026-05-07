@@ -11,9 +11,11 @@ import structlog
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from litellm import acompletion
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from rentwise.llm import LLMClient
+from rentwise.llm.errors import LLMError, LLMMalformedResponse, LLMTransportError
 from rentwise.llm.settings_models import (
     LLMConnectionTestRequest,
     LLMConnectionTestResult,
@@ -21,12 +23,23 @@ from rentwise.llm.settings_models import (
     LLMSettingsPublic,
     LLMSettingsUpdate,
 )
-from rentwise.models import NormalizedQuery
 from rentwise.settings import ensure_data_dir, settings
 from rentwise.storage.db import session_dep
 from rentwise.storage.llm_settings_repo import LLMSettingsRepo
 
 log = structlog.get_logger(__name__)
+
+
+class TranslateQueryRequest(BaseModel):
+    text: str = Field(min_length=1, max_length=1000)
+
+    @field_validator("text")
+    @classmethod
+    def _strip_and_check(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("text must not be empty after stripping whitespace")
+        return v
 
 
 def create_app() -> FastAPI:
@@ -66,24 +79,33 @@ def create_app() -> FastAPI:
         client = LLMClient()
         return {
             "configured": client.is_configured(),
-            "primary_model": client.primary_model,
-            "fallback_model": client.fallback_model,
+            "primary_model": settings.rentwise_llm_model,
+            "fallback_model": settings.rentwise_llm_fallback_model,
         }
 
     @app.post("/translate-query")
-    async def translate_query(payload: dict) -> dict:
-        """Translate natural-language input into a NormalizedQuery.
-
-        Phase 0: returns an empty NormalizedQuery. Real implementation in Phase 2.
-        """
-        text = payload.get("text", "")
+    async def translate_query(payload: TranslateQueryRequest) -> dict:
+        """Translate natural-language input into a NormalizedQuery."""
         client = LLMClient()
-        parsed = await client.translate_query(text)
-        return {
-            "input": text,
-            "parsed": parsed or NormalizedQuery().model_dump(exclude_none=True),
-            "note": "Phase 0 stub — LLM translation arrives in Phase 2.",
-        }
+        try:
+            result = await client.translate_query(payload.text)
+        except LLMMalformedResponse as exc:
+            raise HTTPException(
+                status_code=502,
+                detail={"error": "llm_malformed_response", "message": str(exc)},
+            ) from exc
+        except LLMTransportError as exc:
+            raise HTTPException(
+                status_code=502,
+                detail={"error": "llm_transport_error", "message": str(exc)},
+            ) from exc
+        except LLMError as exc:
+            raise HTTPException(
+                status_code=502,
+                detail={"error": "llm_error", "message": str(exc)},
+            ) from exc
+
+        return result.model_dump(mode="json")
 
     @app.get("/settings/llm", response_model=LLMSettingsPublic)
     async def get_llm_settings(

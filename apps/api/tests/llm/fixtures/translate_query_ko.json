@@ -1,0 +1,42 @@
+[
+  {
+    "input": "키츠에 2베드 3000불 이하",
+    "expected": {"bedrooms_min": 2, "price_max": 3000, "neighborhoods": ["Kitsilano"]}
+  },
+  {
+    "input": "다운타운 스튜디오",
+    "expected": {"bedrooms_min": 0.5, "neighborhoods": ["Downtown"]}
+  },
+  {
+    "input": "마운트 플레전트 3베드 반려동물 가능",
+    "expected": {"bedrooms_min": 3, "neighborhoods": ["Mount Pleasant"], "pets": "required"}
+  },
+  {
+    "input": "이스트밴 1베드 2000~2500불",
+    "expected": {"bedrooms_min": 1, "price_min": 2000, "price_max": 2500, "neighborhoods": ["East Vancouver"]}
+  },
+  {
+    "input": "얄레타운 2베드 가구 포함",
+    "expected": {"bedrooms_min": 2, "neighborhoods": ["Yaletown"], "furnished": "yes"}
+  },
+  {
+    "input": "반려동물 불가, 1베드, 2200불 이하, 커리스데일 또는 던바",
+    "expected": {"bedrooms_min": 1, "price_max": 2200, "neighborhoods": ["Kerrisdale", "Dunbar"], "pets": "no"}
+  },
+  {
+    "input": "Lord Byng 학군 2베드 3500불 이하",
+    "expected": {"bedrooms_min": 2, "price_max": 3500, "school_catchment": "Lord Byng"}
+  },
+  {
+    "input": "세탁기 있고 발코니 있는 1베드 2400불 이하",
+    "expected": {"bedrooms_min": 1, "price_max": 2400, "free_text_keywords": ["세탁기 있음", "발코니"]}
+  },
+  {
+    "input": "스카이트레인 도보 10분, 1~2베드",
+    "expected": {"bedrooms_min": 1, "bedrooms_max": 2, "transit_max_walk_minutes": 10}
+  },
+  {
+    "input": "6월 1일 입주, 2베드, 마운트 플레전트, 3000불",
+    "expected": {"bedrooms_min": 2, "price_max": 3000, "neighborhoods": ["Mount Pleasant"], "available_after": "2026-06-01"}
+  }
+]
