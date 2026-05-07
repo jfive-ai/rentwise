@@ -18,8 +18,9 @@ test("filter search renders results, switches view, saves a card", async ({ page
   // Set price_max to 3000
   await page.getByPlaceholder("Max").fill("3000");
 
-  // Search
-  await page.getByRole("button", { name: "Search" }).click();
+  // Search — use exact: true so PR-C's "Search across sources (6 sites)"
+  // launcher button doesn't also match this selector.
+  await page.getByRole("button", { name: "Search", exact: true }).click();
 
   await expect(page.getByText("5 listings")).toBeVisible();
 
