@@ -9,17 +9,15 @@ import { QueryProvider, useQuery } from "@/src/state/QueryProvider";
 
 beforeAll(() => {
   (Platform as { OS: string }).OS = "web";
-  if (!("fetch" in global)) {
-    (global as { fetch: unknown }).fetch = jest.fn();
-  }
+  // Force jest.fn() unconditionally — modern jsdom ships native (undici) fetch
+  // as a non-configurable property, so jest.spyOn(global, "fetch") fails to
+  // intercept it and real network calls leak (CI: hung tests; local: same).
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (global as any).fetch = jest.fn();
 });
 
 beforeEach(() => {
-  (global.fetch as jest.Mock).mockClear?.();
-});
-
-afterEach(() => {
-  jest.restoreAllMocks();
+  (global.fetch as jest.Mock).mockReset();
 });
 
 // Rendered probe — writes provider state into the DOM so waitFor() can poll
@@ -53,12 +51,12 @@ function renderBar(initialMode?: "nl" | "filters") {
 }
 
 const mockTranslate = (body: unknown, ok = true, status = 200) => {
-  jest.spyOn(global, "fetch").mockResolvedValue({
+  (global.fetch as jest.Mock).mockResolvedValue({
     ok,
     status,
     json: async () => body,
     clone: () => ({ text: async () => JSON.stringify(body) }),
-  } as never);
+  });
 };
 
 describe("NLSearchBar", () => {
@@ -95,7 +93,7 @@ describe("NLSearchBar", () => {
   });
 
   it("falls back on network error", async () => {
-    jest.spyOn(global, "fetch").mockRejectedValue(new TypeError("Network down"));
+    (global.fetch as jest.Mock).mockRejectedValue(new TypeError("Network down"));
     const { getByLabelText, getByText, getByTestId, findByText } = renderBar("nl");
     fireEvent.changeText(getByLabelText("Search input"), "anything");
     fireEvent.press(getByText("Parse"));
@@ -108,7 +106,7 @@ describe("NLSearchBar", () => {
     const pending = new Promise((r) => {
       resolveFetch = r;
     });
-    jest.spyOn(global, "fetch").mockImplementation(() => pending as never);
+    (global.fetch as jest.Mock).mockImplementation(() => pending);
     const { getByLabelText, getByText } = renderBar();
     fireEvent.changeText(getByLabelText("Search input"), "1br anywhere");
     fireEvent.press(getByText("Parse"));
