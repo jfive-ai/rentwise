@@ -4,7 +4,13 @@ from __future__ import annotations
 
 import pytest
 
-from rentwise.llm.prompts import QUERY_TOOL_SCHEMA
+from rentwise.llm.prompts import (
+    QUERY_TOOL_SCHEMA,
+    SYSTEM_PROMPT_EN,
+    SYSTEM_PROMPT_KO,
+    detect_language,
+    pick_prompt,
+)
 from rentwise.models import NormalizedQuery
 
 
@@ -52,3 +58,41 @@ def test_build_query_tool_schema_raises_on_unhandled_ref(monkeypatch) -> None:
     monkeypatch.setattr(NormalizedQuery, "model_json_schema", fake_schema)
     with pytest.raises(RuntimeError, match="new_enum_field"):
         prompts_mod._build_query_tool_schema()
+
+
+def test_system_prompts_mention_vancouver_and_tool() -> None:
+    for prompt in (SYSTEM_PROMPT_EN, SYSTEM_PROMPT_KO):
+        assert "Vancouver" in prompt or "밴쿠버" in prompt
+        assert "submit_query" in prompt
+
+
+def test_system_prompt_en_lists_known_neighborhoods() -> None:
+    for hood in ["Kitsilano", "Mount Pleasant", "Yaletown", "East Vancouver"]:
+        assert hood in SYSTEM_PROMPT_EN
+
+
+def test_system_prompt_ko_includes_korean_transliterations() -> None:
+    # Common Korean spellings users actually type.
+    for token in ["키츠", "이스트밴", "밴쿠버"]:
+        assert token in SYSTEM_PROMPT_KO
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("2br Kitsilano under 3000", "en"),
+        ("키츠 2베드 3000불 이하", "ko"),
+        ("Studio downtown 한 달 1500", "ko"),  # mixed → KO when any Hangul present
+        ("", "en"),  # empty defaults to English
+        ("    ", "en"),
+    ],
+)
+def test_detect_language(text: str, expected: str) -> None:
+    assert detect_language(text) == expected
+
+
+def test_pick_prompt_returns_correct_language() -> None:
+    assert pick_prompt("en") is SYSTEM_PROMPT_EN
+    assert pick_prompt("ko") is SYSTEM_PROMPT_KO
+    # Unknown lang code falls back to English.
+    assert pick_prompt("zz") is SYSTEM_PROMPT_EN
