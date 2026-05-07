@@ -45,7 +45,7 @@
 ## Phase 3: More Sources (Week 5-6)
 **Goal:** Add browser-based adapters with rate limiting and robots.txt respect.
 
-- [ ] Playwright adapter base class
+- [x] Playwright adapter base class
 - [ ] `robots.txt` parser & cache
 - [ ] Rate limiter (token bucket per source)
 - [ ] Implement adapters in this order (easiest to hardest):

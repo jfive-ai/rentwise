@@ -49,10 +49,26 @@ The MVP is **single-user, self-hosted, personal use only**. If/when we host Rent
 
 ## Per-Platform Notes
 
-### liv.rent, PadMapper, Zumper, Rentals.ca, REW.ca
+### liv.rent, PadMapper, Zumper, REW.ca
 Public listings, no login required to view. Standard rules above apply. Check each site's Terms of Service before adding the adapter — TOS may explicitly prohibit scraping. If it does, we either:
 1. Skip that source, OR
 2. Implement a "user-driven" mode where the user opens their browser, RentWise watches the page they're on, and extracts info only from pages the user visited (this is closer to a personal browsing assistant than scraping).
+
+### Rentals.ca (verified 2026-05-06)
+
+**robots.txt:** Permissive. `Allow: /` with disallows only on `*-feed.json`, `*-feed.xml`, and pages with `bbox=`, `amenities=`, `types=` query params. No `Crawl-delay`.
+
+**Terms of Use:** https://rentals.ca/terms
+
+**Decision: PROHIBITED.** The TOS explicitly forbids automated/AI extraction. Verbatim, from Section 3:
+
+> **3.16 Automated Data Extraction.** Using computer bots, scripts, or automated tools to extract data or overload the computer systems, unless explicitly authorized by us in writing.
+>
+> **3.17 Use of Content for AI Algorithms.** Using images and other content from the Website to train artificial intelligence algorithms or to generate new images or content via such algorithms.
+
+Section 4.1 reserves the right to suspend access without notice on detection. Section 7.8 commits to "vigorously enforce" IP rights via injunctive relief.
+
+Permissive robots.txt does **not** override an explicit TOS prohibition. **No Rentals.ca adapter** is implemented. If a future user-driven mode (browser extension watching pages the user visits in their own browser) is built, that may sit outside the TOS prohibition because the user — not RentWise — is the one fetching the page; revisit then.
 
 ### Craigslist
 - Has RSS feeds — **always prefer RSS over HTML scraping**.
