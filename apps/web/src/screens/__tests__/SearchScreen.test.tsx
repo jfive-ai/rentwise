@@ -202,6 +202,48 @@ describe("SearchScreen", () => {
     await waitFor(() => expect(getAllByText(/Sunny 2br/).length).toBe(3));
   });
 
+  it("NL mode → typing + Parse → chips appear → Search uses parsed query", async () => {
+    const fetchSpy = global.fetch as jest.Mock;
+    // First fetch is /translate-query (returns the parsed query).
+    fetchSpy.mockImplementationOnce(() =>
+      Promise.resolve({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          query: {
+            neighborhoods: ["Kitsilano"],
+            pets: "any",
+            furnished: "any",
+            free_text_keywords: [],
+            bedrooms_min: 2,
+          },
+          unsupported_filters: [],
+          lang_detected: "en",
+          model_used: "m",
+        }),
+        clone: () => ({ text: async () => "{}" }),
+      } as never)
+    );
+    // Subsequent calls (the /search) fall through to the default beforeEach mock.
+
+    const { getByText, getByLabelText, findByLabelText } = renderScreen();
+    fireEvent.press(getByLabelText("Natural language"));
+    fireEvent.changeText(getByLabelText("Search input"), "2br Kits");
+    fireEvent.press(getByText("Parse"));
+    // Chip rendered for the parsed neighborhood
+    await findByLabelText("Remove Kitsilano");
+
+    fireEvent.press(getByText("Search"));
+    await waitFor(() => expect(getByText("5 listings")).toBeTruthy());
+    const lastSearch = (global.fetch as jest.Mock).mock.calls.find((c) =>
+      (c[0] as string).endsWith("/search")
+    );
+    expect(lastSearch).toBeTruthy();
+    expect(JSON.parse(lastSearch![1].body).query.neighborhoods).toEqual([
+      "Kitsilano",
+    ]);
+  });
+
   it("rapid Search clicks: only the latest response wins", async () => {
     // First call: slow, returns total=99 (stale)
     let resolveFirst: ((v: unknown) => void) | undefined;
