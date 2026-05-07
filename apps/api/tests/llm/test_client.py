@@ -10,6 +10,7 @@ import pytest
 
 from rentwise.llm import LLMClient, LLMMalformedResponse, LLMTransportError
 from rentwise.models import NormalizedQuery, PetPolicy
+from rentwise.settings import settings
 
 
 def _tool_call_response(
@@ -71,10 +72,10 @@ async def test_translate_query_en_happy_path(patch_acompletion) -> None:
         bedrooms_min=2, price_max=3000, neighborhoods=["Kitsilano"], pets=PetPolicy.OK
     )
     assert result.lang_detected == "en"
-    assert result.model_used == client.primary_model
+    assert result.model_used == settings.rentwise_llm_model
     assert mock.await_count == 1
     _, kwargs = mock.call_args
-    assert kwargs["model"] == client.primary_model
+    assert kwargs["model"] == settings.rentwise_llm_model
     assert kwargs["tool_choice"]["function"]["name"] == "submit_query"
 
 
@@ -170,6 +171,47 @@ async def test_translate_query_raises_malformed_on_unknown_field(patch_acompleti
     # NormalizedQuery has no `garage` field; this would silently get dropped on .model_validate
     # if we used model_validate without strict=True. Strict validation is part of the contract.
     patch_acompletion(_tool_call_response({"garage": True}))
+    client = LLMClient()
+    with pytest.raises(LLMMalformedResponse):
+        await client.translate_query("anything")
+
+
+async def test_translate_query_raises_malformed_on_wrong_tool_name(patch_acompletion) -> None:
+    class _BadName:
+        function = type("F", (), {"name": "not_submit_query", "arguments": '{"bedrooms_min": 1}'})()
+
+    class _Resp:
+        model: ClassVar[str] = "x"
+        choices: ClassVar[list[Any]] = [
+            type("C", (), {"message": type("M", (), {"tool_calls": [_BadName()]})()})()
+        ]
+
+    patch_acompletion(_Resp())
+    client = LLMClient()
+    with pytest.raises(LLMMalformedResponse, match="not_submit_query"):
+        await client.translate_query("anything")
+
+
+async def test_translate_query_raises_malformed_on_validation_error(patch_acompletion) -> None:
+    # bedrooms_min must be a number; passing a string triggers Pydantic ValidationError
+    # AFTER the unknown-field check passes (the field name is valid).
+    bad_args = {"bedrooms_min": "not a number"}
+
+    class _Fn:
+        name = "submit_query"
+        arguments = __import__("json").dumps(bad_args)
+
+    class _Resp:
+        model: ClassVar[str] = "x"
+        choices: ClassVar[list[Any]] = [
+            type(
+                "C",
+                (),
+                {"message": type("M", (), {"tool_calls": [type("T", (), {"function": _Fn})()]})()},
+            )()
+        ]
+
+    patch_acompletion(_Resp())
     client = LLMClient()
     with pytest.raises(LLMMalformedResponse):
         await client.translate_query("anything")

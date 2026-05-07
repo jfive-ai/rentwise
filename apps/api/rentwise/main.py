@@ -53,8 +53,8 @@ def create_app() -> FastAPI:
         client = LLMClient()
         return {
             "configured": client.is_configured(),
-            "primary_model": client.primary_model,
-            "fallback_model": client.fallback_model,
+            "primary_model": settings.rentwise_llm_model,
+            "fallback_model": settings.rentwise_llm_fallback_model,
         }
 
     @app.post("/translate-query")
