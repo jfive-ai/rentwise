@@ -47,6 +47,7 @@ pythonpath = ["."]
 markers = [
     "integration: end-to-end pipeline tests (use recorded fixtures, not live HTTP)",
     "property: Hypothesis property-based tests",
+    "live: hits real external LLM provider; opt-in via RUN_LIVE_LLM_TESTS=1",
 ]
 
 [tool.mypy]
