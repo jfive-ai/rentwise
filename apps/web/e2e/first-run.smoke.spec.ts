@@ -53,8 +53,9 @@ test("first-run wizard: 404 → wizard → save → search reachable", async ({ 
   await expect(page.getByText(/Connection ok/i)).toBeVisible();
   await page.getByRole("button", { name: "Finish" }).click();
 
-  // Now on the normal app
-  await expect(page.getByRole("button", { name: "Search" })).toBeVisible({
-    timeout: 10000,
-  });
+  // Now on the normal app — match exactly to disambiguate from the
+  // PR-C "Search across sources" launcher button.
+  await expect(
+    page.getByRole("button", { name: "Search", exact: true }),
+  ).toBeVisible({ timeout: 10000 });
 });
