@@ -62,6 +62,20 @@ const mockTranslate = (body: unknown, ok = true, status = 200) => {
   } as never);
 };
 
+// Helper: wait for changeText's state update to flush before pressing Parse,
+// since Parse is disabled when nlText is empty and React's batching may not
+// flush the input value before the next fireEvent (CI is slower than local).
+type Renderable = { props: { value?: string } };
+async function typeAndParse(
+  helpers: { getByLabelText: (q: string) => Renderable; getByText: (q: string) => Renderable },
+  text: string
+) {
+  const input = helpers.getByLabelText("Search input");
+  fireEvent.changeText(input, text);
+  await waitFor(() => expect((input as { props: { value: string } }).props.value).toBe(text));
+  fireEvent.press(helpers.getByText("Parse"));
+}
+
 describe("NLSearchBar", () => {
   it("submits text to /translate-query and updates the query", async () => {
     let captured: ReturnType<typeof useQuery> | null = null;
@@ -78,11 +92,10 @@ describe("NLSearchBar", () => {
       lang_detected: "en",
       model_used: "m",
     });
-    const { getByLabelText, getByText } = renderBar((q) => {
+    const helpers = renderBar((q) => {
       captured = q;
     });
-    fireEvent.changeText(getByLabelText("Search input"), "2br Kits under 3000");
-    fireEvent.press(getByText("Parse"));
+    await typeAndParse(helpers, "2br Kits under 3000");
     await waitFor(() => expect(captured!.query.bedrooms_min).toBe(2));
     expect(captured!.query.neighborhoods).toEqual(["Kitsilano"]);
   });
@@ -91,30 +104,28 @@ describe("NLSearchBar", () => {
     let captured: ReturnType<typeof useQuery> | null = null;
     mockTranslate({ detail: { error: "llm_transport_error" } }, false, 502);
     // Start in NL mode (one-shot) so the fallback can flip back to filters.
-    const { getByLabelText, getByText, findByText } = renderBar(
+    const helpers = renderBar(
       (q) => {
         captured = q;
       },
       "nl"
     );
-    fireEvent.changeText(getByLabelText("Search input"), "anything");
-    fireEvent.press(getByText("Parse"));
-    await findByText(/LLM unavailable/i);
+    await typeAndParse(helpers, "anything");
+    await helpers.findByText(/LLM unavailable/i);
     await waitFor(() => expect(captured!.mode).toBe("filters"));
   });
 
   it("falls back on network error", async () => {
     let captured: ReturnType<typeof useQuery> | null = null;
     jest.spyOn(global, "fetch").mockRejectedValue(new TypeError("Network down"));
-    const { getByLabelText, getByText, findByText } = renderBar(
+    const helpers = renderBar(
       (q) => {
         captured = q;
       },
       "nl"
     );
-    fireEvent.changeText(getByLabelText("Search input"), "anything");
-    fireEvent.press(getByText("Parse"));
-    await findByText(/LLM unavailable/i);
+    await typeAndParse(helpers, "anything");
+    await helpers.findByText(/LLM unavailable/i);
     await waitFor(() => expect(captured!.mode).toBe("filters"));
   });
 
@@ -124,9 +135,9 @@ describe("NLSearchBar", () => {
       resolveFetch = r;
     });
     jest.spyOn(global, "fetch").mockImplementation(() => pending as never);
-    const { getByLabelText, getByText } = renderBar();
-    fireEvent.changeText(getByLabelText("Search input"), "1br anywhere");
-    fireEvent.press(getByText("Parse"));
+    const helpers = renderBar();
+    const { getByText } = helpers;
+    await typeAndParse(helpers, "1br anywhere");
     expect(getByText(/Parsing/i)).toBeTruthy();
     resolveFetch!({
       ok: true,
