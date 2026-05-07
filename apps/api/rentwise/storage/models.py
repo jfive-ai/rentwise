@@ -43,6 +43,8 @@ class Listing(Base):
     available_date: Mapped[str | None] = mapped_column(String, nullable=True)
     posted_at: Mapped[str] = mapped_column(String, nullable=False)
     last_seen_at: Mapped[str] = mapped_column(String, nullable=False)
+    first_seen_at: Mapped[str] = mapped_column(String, nullable=False)
+    capture_method: Mapped[str] = mapped_column(String, nullable=False, default="server")
     catchment_elementary: Mapped[str | None] = mapped_column(String, nullable=True)
     catchment_middle: Mapped[str | None] = mapped_column(String, nullable=True)
     catchment_secondary: Mapped[str | None] = mapped_column(String, nullable=True)
@@ -89,6 +91,20 @@ class SourceHealthRow(Base):
     last_error_message: Mapped[str | None] = mapped_column(String, nullable=True)
     consecutive_failures: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     updated_at: Mapped[str] = mapped_column(String, nullable=False)
+
+
+class CapturePairingRow(Base):
+    """Singleton row holding the shared secret paired with the browser extension.
+
+    The id column is constrained to 1 by the application layer + DB CHECK.
+    """
+
+    __tablename__ = "capture_pairing"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    token: Mapped[str] = mapped_column(String, nullable=False)
+    created_at: Mapped[str] = mapped_column(String, nullable=False)
+    rotated_at: Mapped[str | None] = mapped_column(String, nullable=True)
 
 
 class LLMSettingsRow(Base):

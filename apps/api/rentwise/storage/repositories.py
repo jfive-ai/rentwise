@@ -104,6 +104,8 @@ class ListingRepo:
                 else None,
                 posted_at=listing.posted_at.isoformat(),
                 last_seen_at=listing.last_seen_at.isoformat(),
+                first_seen_at=listing.posted_at.isoformat(),
+                capture_method="server",
                 catchment_elementary=listing.school_catchments.elementary,
                 catchment_middle=listing.school_catchments.middle,
                 catchment_secondary=listing.school_catchments.secondary,
