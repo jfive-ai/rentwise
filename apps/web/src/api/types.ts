@@ -89,3 +89,37 @@ export interface SearchResponse {
   unsupported_filters: string[];
   source_health: Record<string, AdapterHealth>;
 }
+
+export interface LLMSettingsPublic {
+  primary_model: string;
+  primary_api_key_masked: string | null;
+  fallback_model: string | null;
+  fallback_api_key_masked: string | null;
+  custom_base_url: string | null;
+  timeout_seconds: number;
+}
+
+export interface LLMSettingsUpdate {
+  primary_model: string;
+  primary_api_key?: string | null;
+  primary_api_key_clear?: boolean;
+  fallback_model?: string | null;
+  fallback_api_key?: string | null;
+  fallback_api_key_clear?: boolean;
+  custom_base_url?: string | null;
+  timeout_seconds?: number;
+}
+
+export interface LLMConnectionTestRequest {
+  primary_model: string;
+  primary_api_key?: string | null;
+  custom_base_url?: string | null;
+  timeout_seconds?: number;
+}
+
+export interface LLMConnectionTestResult {
+  ok: boolean;
+  error: string | null;
+  latency_ms: number;
+  model_used: string;
+}
