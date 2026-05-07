@@ -29,27 +29,27 @@
 ## Phase 2: Natural Language Layer (Week 4)
 **Goal:** Add NL search **on top of** the existing filter UI — bilingual (English + Korean) from day 1. Both modes coexist; users can switch at will.
 
-- [ ] LiteLLM integration with provider-agnostic config
-- [ ] First-run setup wizard (LLM provider + API key)
-- [ ] Settings UI for switching LLM at runtime
-- [ ] Tool-use schema for query translation (works across Anthropic/OpenAI/Google/OpenRouter)
-- [ ] Bilingual system prompt (Korean + English) with Vancouver-specific neighborhoods, schools, SkyTrain
-- [ ] **Frontend: NL search bar above the filter UI** + parsed-query preview with editable chips
-- [ ] **Frontend: mode toggle** — "Natural language" ⇄ "Filters" — sharing the same NormalizedQuery state
-- [ ] **Frontend: graceful fallback** — if LLM fails, show filter UI with friendly message
-- [ ] Test against free OpenRouter models (Qwen 2.5, Llama 3.3) for both languages
-- [ ] **Milestone:** "Find me a 2 bedroom in East Van under $2500" works
-- [ ] **Milestone:** "이스트 밴 2베드 2500불 이하" works equally well
-- [ ] **Milestone:** Switching from NL to filter view preserves the parsed query
+- [x] LiteLLM integration with provider-agnostic config
+- [x] First-run setup wizard (LLM provider + API key)
+- [x] Settings UI for switching LLM at runtime
+- [x] Tool-use schema for query translation (works across Anthropic/OpenAI/Google/OpenRouter)
+- [x] Bilingual system prompt (Korean + English) with Vancouver-specific neighborhoods, schools, SkyTrain
+- [x] **Frontend: NL search bar above the filter UI** + parsed-query preview with editable chips
+- [x] **Frontend: mode toggle** — "Natural language" ⇄ "Filters" — sharing the same NormalizedQuery state
+- [x] **Frontend: graceful fallback** — if LLM fails, show filter UI with friendly message
+- [x] Test against free OpenRouter models (Qwen 2.5, Llama 3.3) for both languages
+- [x] **Milestone:** "Find me a 2 bedroom in East Van under $2500" works
+- [x] **Milestone:** "이스트 밴 2베드 2500불 이하" works equally well
+- [x] **Milestone:** Switching from NL to filter view preserves the parsed query
 
 ## Phase 3: More Sources (Week 5-6)
 **Goal:** Add browser-based adapters with rate limiting and robots.txt respect.
 
 - [x] Playwright adapter base class
-- [ ] `robots.txt` parser & cache
-- [ ] Rate limiter (token bucket per source)
+- [x] `robots.txt` parser & cache (shipped in Phase 1, reused by Playwright base)
+- [x] Rate limiter (token bucket per source) (shipped in Phase 1, reused by Playwright base)
 - [ ] Implement adapters in this order (easiest to hardest):
-  1. [ ] Rentals.ca
+  1. [~] ~~Rentals.ca~~ — **blocked: TOS § 3.16 prohibits automated extraction** (see `docs/legal.md`); rerouted to user-driven mode in #14
   2. [ ] PadMapper
   3. [ ] REW.ca
   4. [ ] Zumper
