@@ -28,6 +28,29 @@ def _build_query_tool_schema() -> dict[str, Any]:
         "description": "User preference for furnished. Default 'any' if not stated.",
     }
 
+    # Guard: any future enum field added to NormalizedQuery will leak a $ref
+    # unless it's explicitly flattened above. Fail loudly so the next maintainer
+    # sees the issue at import time, not at LLM-call time.
+    #
+    # Pydantic emits $ref for enum fields and `anyOf: [{$ref: ...}, {type: null}]`
+    # for nullable enum fields. Plain `Optional[int|str|...]` also uses anyOf but
+    # without any nested $ref, so we only flag combinators that contain a $ref.
+    def _contains_ref(node: Any) -> bool:
+        if isinstance(node, dict):
+            if "$ref" in node:
+                return True
+            return any(_contains_ref(v) for v in node.values())
+        if isinstance(node, list):
+            return any(_contains_ref(v) for v in node)
+        return False
+
+    for name, prop in properties.items():
+        if isinstance(prop, dict) and _contains_ref(prop):
+            raise RuntimeError(
+                f"Unhandled enum/ref in NormalizedQuery field {name!r}; "
+                "flatten it inline like pets/furnished."
+            )
+
     return {
         "type": "function",
         "function": {
