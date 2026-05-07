@@ -1,6 +1,6 @@
-import { Stack } from "expo-router";
+import { Link, Stack } from "expo-router";
 import React, { useEffect, useState } from "react";
-import { ActivityIndicator, Platform, View } from "react-native";
+import { ActivityIndicator, Platform, Text, View } from "react-native";
 import Constants from "expo-constants";
 import { QueryProvider } from "@/src/state/QueryProvider";
 import { FirstRunWizard } from "@/src/screens/FirstRunWizard";
@@ -88,7 +88,19 @@ export default function RootLayout() {
           headerTitleStyle: { fontWeight: "600" },
         }}
       >
-        <Stack.Screen name="index" options={{ title: "RentWise" }} />
+        <Stack.Screen
+          name="index"
+          options={{
+            title: "RentWise",
+            headerRight: () => (
+              <Link href="/settings" accessibilityLabel="Open settings">
+                <Text style={{ color: "#f8fafc", fontSize: 18, paddingHorizontal: 12 }}>
+                  ⚙
+                </Text>
+              </Link>
+            ),
+          }}
+        />
         <Stack.Screen name="settings" options={{ title: "Settings" }} />
       </Stack>
     </QueryProvider>
