@@ -27,11 +27,6 @@ log = structlog.get_logger(__name__)
 class LLMClient:
     """Thin wrapper over LiteLLM with a single fallback retry."""
 
-    def __init__(self) -> None:
-        self.primary_model = settings.rentwise_llm_model
-        self.fallback_model = settings.rentwise_llm_fallback_model
-        self.timeout = settings.rentwise_llm_timeout_seconds
-
     async def translate_query(self, user_input: str) -> TranslateQueryResult:
         """Translate natural-language input into a TranslateQueryResult.
 
@@ -47,9 +42,15 @@ class LLMClient:
             {"role": "user", "content": user_input},
         ]
 
-        models_to_try: list[str] = [self.primary_model]
-        if settings.rentwise_llm_fallback_model:
-            models_to_try.append(settings.rentwise_llm_fallback_model)
+        # Read settings live each call so a settings UI / monkeypatch takes
+        # effect immediately, without depending on construction order.
+        primary = settings.rentwise_llm_model
+        fallback = settings.rentwise_llm_fallback_model
+        timeout = settings.rentwise_llm_timeout_seconds
+
+        models_to_try: list[str] = [primary]
+        if fallback:
+            models_to_try.append(fallback)
 
         last_transport_error: Exception | None = None
         for model in models_to_try:
@@ -59,10 +60,10 @@ class LLMClient:
                     messages=messages,
                     tools=[QUERY_TOOL_SCHEMA],
                     tool_choice={"type": "function", "function": {"name": "submit_query"}},
-                    timeout=self.timeout,
+                    timeout=timeout,
                 )
             except Exception as exc:  # LiteLLM raises many exception types; treat all as transport
-                log.warning("llm.translate_query.transport_error", model=model, error=str(exc))
+                log.warning("llm.translate_query.transport_error", model=model, exc_info=exc)
                 last_transport_error = exc
                 continue
 
@@ -81,7 +82,8 @@ class LLMClient:
     def is_configured(self) -> bool:
         """True if at least one provider key is set for the chosen model."""
         # Model names can be "provider/model" or "provider/org/model" — always use first segment.
-        provider = self.primary_model.split("/")[0]
+        primary_model = settings.rentwise_llm_model
+        provider = primary_model.split("/")[0]
         match provider:
             case "openrouter":
                 return settings.openrouter_api_key is not None
@@ -97,7 +99,7 @@ class LLMClient:
                 log.warning(
                     "llm.is_configured.unknown_provider",
                     provider=provider,
-                    model=self.primary_model,
+                    model=primary_model,
                 )
                 return False
 
