@@ -77,3 +77,52 @@ describe("searchClient.search", () => {
     ).rejects.toMatchObject({ name: "ApiError", status: 0 });
   });
 });
+
+describe("translateQuery", () => {
+  it("POSTs to /translate-query and returns the parsed result", async () => {
+    const fixture = {
+      query: {
+        neighborhoods: ["Kitsilano"],
+        pets: "any",
+        furnished: "any",
+        free_text_keywords: [],
+        bedrooms_min: 2,
+        price_max: 3000,
+      },
+      unsupported_filters: [],
+      lang_detected: "en",
+      model_used: "openrouter/qwen/qwen-2.5-72b-instruct:free",
+    };
+    const fetchMock = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => fixture,
+      clone: () => ({ text: async () => JSON.stringify(fixture) }),
+    });
+    (global as { fetch: unknown }).fetch = fetchMock;
+
+    const client = searchClient("http://api.test/");
+    const result = await client.translateQuery({ text: "2br Kits under 3000" });
+    expect(result.lang_detected).toBe("en");
+    expect(result.query.bedrooms_min).toBe(2);
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("http://api.test/translate-query");
+    expect(init.method).toBe("POST");
+    expect(JSON.parse(init.body)).toEqual({ text: "2br Kits under 3000" });
+  });
+
+  it("throws ApiError on 5xx", async () => {
+    const fetchMock = jest.fn().mockResolvedValue({
+      ok: false,
+      status: 502,
+      json: async () => ({ detail: { error: "llm_transport_error", message: "down" } }),
+      clone: () => ({ text: async () => '{"detail":{"error":"llm_transport_error"}}' }),
+    });
+    (global as { fetch: unknown }).fetch = fetchMock;
+
+    await expect(
+      searchClient("http://api.test").translateQuery({ text: "anything" })
+    ).rejects.toMatchObject({ name: "ApiError", status: 502 });
+  });
+});

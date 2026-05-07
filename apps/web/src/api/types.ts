@@ -89,3 +89,14 @@ export interface SearchResponse {
   unsupported_filters: string[];
   source_health: Record<string, AdapterHealth>;
 }
+
+export interface TranslateQueryRequest {
+  text: string;
+}
+
+export interface TranslateQueryResult {
+  query: NormalizedQuery;
+  unsupported_filters: string[];
+  lang_detected: "en" | "ko";
+  model_used: string;
+}
