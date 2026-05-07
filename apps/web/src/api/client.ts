@@ -5,6 +5,8 @@ import type {
   LLMSettingsUpdate,
   SearchRequest,
   SearchResponse,
+  TranslateQueryRequest,
+  TranslateQueryResult,
 } from "./types";
 
 export class ApiError extends Error {
@@ -18,8 +20,9 @@ export class ApiError extends Error {
   }
 }
 
-export interface SearchClient {
+export interface ApiClient {
   search(req: SearchRequest): Promise<SearchResponse>;
+  translateQuery(req: TranslateQueryRequest): Promise<TranslateQueryResult>;
   getSettings(): Promise<LLMSettingsPublic | null>;
   putSettings(body: LLMSettingsUpdate): Promise<LLMSettingsPublic>;
   testConnection(body: LLMConnectionTestRequest): Promise<LLMConnectionTestResult>;
@@ -27,7 +30,9 @@ export interface SearchClient {
 
 type HttpMethod = "GET" | "POST" | "PUT";
 
-export function searchClient(baseUrl: string): SearchClient {
+// Keep `searchClient` exported for backwards compatibility with existing
+// imports, but it now returns the broader `ApiClient`.
+export function searchClient(baseUrl: string): ApiClient {
   const root = baseUrl.replace(/\/$/, "");
 
   async function request<T>(method: HttpMethod, path: string, body?: unknown): Promise<T> {
@@ -64,6 +69,9 @@ export function searchClient(baseUrl: string): SearchClient {
     search(req) {
       return request<SearchResponse>("POST", "/search", req);
     },
+    translateQuery(req) {
+      return request<TranslateQueryResult>("POST", "/translate-query", req);
+    },
     async getSettings() {
       try {
         return await request<LLMSettingsPublic>("GET", "/settings/llm");
@@ -80,3 +88,6 @@ export function searchClient(baseUrl: string): SearchClient {
     },
   };
 }
+
+// Alias to encourage the new name in fresh code.
+export const apiClient = searchClient;

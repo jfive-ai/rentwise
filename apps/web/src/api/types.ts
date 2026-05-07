@@ -90,6 +90,17 @@ export interface SearchResponse {
   source_health: Record<string, AdapterHealth>;
 }
 
+export interface TranslateQueryRequest {
+  text: string;
+}
+
+export interface TranslateQueryResult {
+  query: NormalizedQuery;
+  unsupported_filters: string[];
+  lang_detected: "en" | "ko";
+  model_used: string;
+}
+
 export interface LLMSettingsPublic {
   primary_model: string;
   primary_api_key_masked: string | null;
