@@ -50,7 +50,7 @@
 - [x] Rate limiter (token bucket per source) (shipped in Phase 1, reused by Playwright base)
 - [ ] Implement adapters in this order (easiest to hardest):
   1. [~] ~~Rentals.ca~~ — **blocked: TOS § 3.16 prohibits automated extraction** (see `docs/legal.md`); rerouted to user-driven mode in #14
-  2. [ ] PadMapper
+  2. [~] ~~PadMapper~~ — **blocked: TOS § 8.4 prohibits scraping** (see `docs/legal.md`); Zumper-owned, so Zumper likely also blocked
   3. [ ] REW.ca
   4. [ ] Zumper
   5. [ ] liv.rent
