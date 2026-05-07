@@ -35,9 +35,7 @@ def client(monkeypatch, tmp_sqlite_url):
 
 
 def _pair(client) -> str:
-    return client.get(
-        "/capture/pair", headers={"Origin": "http://localhost:8081"}
-    ).json()["token"]
+    return client.get("/capture/pair", headers={"Origin": "http://localhost:8081"}).json()["token"]
 
 
 def test_health_requires_token(client):

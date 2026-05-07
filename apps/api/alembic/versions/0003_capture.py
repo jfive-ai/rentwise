@@ -22,8 +22,7 @@ def upgrade() -> None:
         "CHECK (capture_method IN ('server', 'extension'))"
     )
     op.execute(
-        "ALTER TABLE listings ADD COLUMN first_seen_at TEXT "
-        "NOT NULL DEFAULT CURRENT_TIMESTAMP"
+        "ALTER TABLE listings ADD COLUMN first_seen_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP"
     )
     op.execute("CREATE INDEX idx_listings_capture_method ON listings(capture_method)")
 

@@ -84,7 +84,7 @@ def build_router(api_base_url: str = "http://127.0.0.1:8000") -> APIRouter:
                     captured_at=payload.captured_at,
                 )
                 accepted += 1
-            except Exception as exc:  # noqa: BLE001 — surface per-row error to client
+            except Exception as exc:
                 log.warning(
                     "capture_row_failed",
                     source=payload.source,
