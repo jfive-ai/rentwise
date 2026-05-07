@@ -1,0 +1,42 @@
+{
+  "manifest_version": 3,
+  "name": "RentWise Capture",
+  "version": "0.1.0",
+  "description": "Captures rental listings from pages you already visit in your own browser. Local-only; sends to your RentWise instance.",
+  "permissions": ["storage"],
+  "host_permissions": [
+    "https://rentals.ca/*",
+    "https://www.padmapper.com/*",
+    "http://127.0.0.1/*",
+    "http://localhost/*"
+  ],
+  "background": {
+    "service_worker": "src/background/service-worker.ts",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://rentals.ca/*"],
+      "js": ["src/content/sites/rentals_ca.ts"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://www.padmapper.com/*"],
+      "js": ["src/content/sites/padmapper.ts"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_popup": "src/popup/index.html",
+    "default_title": "RentWise Capture"
+  },
+  "options_ui": {
+    "page": "src/options/index.html",
+    "open_in_tab": true
+  },
+  "icons": {
+    "16": "icons/icon-16.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  }
+}

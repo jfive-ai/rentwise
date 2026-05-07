@@ -1,0 +1,40 @@
+<!--
+  Synthetic fixture for the Rentals.ca search-results selector schema.
+
+  This is hand-authored to match the shape the content script expects;
+  it is NOT a verbatim capture of a real page. To verify against
+  production, save a real rendered page to this directory and refresh
+  the selector schema if the structure has changed.
+  See apps/extension/README.md § Fixture refresh.
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Apartments for rent — Vancouver</title></head>
+<body>
+  <main>
+    <div data-cy="listings-grid" class="listings-grid">
+      <a data-cy="listing-card" class="listing-card" href="/vancouver/listing/1234-cambie-st-1234">
+        <img src="/images/cambie-thumb.jpg" alt="thumb">
+        <div data-cy="listing-card-title" class="listing-card__title">Bright 2BR near Skytrain</div>
+        <div data-cy="listing-card-price" class="listing-card__price">$2,750 / mo</div>
+        <div data-cy="listing-card-beds" class="listing-card__beds">2 Beds</div>
+        <div data-cy="listing-card-neighborhood" class="listing-card__neighborhood">Mount Pleasant</div>
+      </a>
+      <a data-cy="listing-card" class="listing-card" href="https://rentals.ca/vancouver/listing/4567-w-broadway">
+        <img src="https://cdn.rentals.ca/images/broadway-thumb.jpg" alt="thumb">
+        <div data-cy="listing-card-title" class="listing-card__title">Studio at Granville</div>
+        <div data-cy="listing-card-price" class="listing-card__price">$1,850</div>
+        <div data-cy="listing-card-beds" class="listing-card__beds">Studio</div>
+        <div data-cy="listing-card-neighborhood" class="listing-card__neighborhood">Kitsilano</div>
+      </a>
+      <a data-cy="listing-card" class="listing-card" href="/vancouver/listing/9999-w-41st">
+        <img src="/images/w41-thumb.jpg" alt="thumb">
+        <div data-cy="listing-card-title" class="listing-card__title">3BR house with yard</div>
+        <div data-cy="listing-card-price" class="listing-card__price">$4,200/mo</div>
+        <div data-cy="listing-card-beds" class="listing-card__beds">3 Bed</div>
+        <div data-cy="listing-card-neighborhood" class="listing-card__neighborhood">Kerrisdale</div>
+      </a>
+    </div>
+  </main>
+</body>
+</html>
