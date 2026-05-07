@@ -43,7 +43,12 @@ export function NLSearchBar({ apiBaseUrl }: Props) {
     }
   }, [client, nlText, reset, set, setMode]);
 
-  const disabled = busy || nlText.trim().length === 0;
+  // Only block on in-flight requests. The empty-text guard lives in onParse
+  // (so a press with empty input is a silent no-op). Coupling `disabled` to
+  // `nlText` length raced with React's batching in CI: a press dispatched
+  // between fireEvent.changeText and the next reconcile saw `disabled=true`
+  // and was silently dropped.
+  const disabled = busy;
 
   return (
     <View
