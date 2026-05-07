@@ -9,6 +9,7 @@ See docs/llm-providers.md for the strategy.
 from __future__ import annotations
 
 import json
+from datetime import UTC, datetime
 from typing import Any
 
 import structlog
@@ -16,7 +17,7 @@ from litellm import acompletion
 from pydantic import ValidationError
 
 from rentwise.llm.errors import LLMMalformedResponse, LLMTransportError
-from rentwise.llm.prompts import QUERY_TOOL_SCHEMA, detect_language, pick_prompt
+from rentwise.llm.prompts import QUERY_TOOL_SCHEMA, detect_language, render_system_prompt
 from rentwise.llm.result import TranslateQueryResult
 from rentwise.models import NormalizedQuery
 from rentwise.settings import settings
@@ -36,7 +37,8 @@ class LLMClient:
         immediately — they indicate a model or prompt regression, not a flake.
         """
         lang = detect_language(user_input)
-        system_prompt = pick_prompt(lang)
+        today = datetime.now(UTC).date()
+        system_prompt = render_system_prompt(lang, today)
         messages = [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_input},
@@ -54,6 +56,7 @@ class LLMClient:
 
         last_transport_error: Exception | None = None
         for model in models_to_try:
+            credentials = _resolve_credentials(model)
             try:
                 response = await acompletion(
                     model=model,
@@ -61,6 +64,7 @@ class LLMClient:
                     tools=[QUERY_TOOL_SCHEMA],
                     tool_choice={"type": "function", "function": {"name": "submit_query"}},
                     timeout=timeout,
+                    **credentials,
                 )
             except Exception as exc:  # LiteLLM raises many exception types; treat all as transport
                 log.warning("llm.translate_query.transport_error", model=model, exc_info=exc)
@@ -102,6 +106,28 @@ class LLMClient:
                     model=primary_model,
                 )
                 return False
+
+
+def _resolve_credentials(model: str) -> dict[str, str]:
+    """Return kwargs (api_key, api_base) to pass to acompletion for the given model.
+
+    Reads from `settings` so a settings-UI change takes effect immediately.
+    Empty/None values are omitted so LiteLLM's own resolution still applies.
+    """
+    provider = model.split("/")[0]
+    out: dict[str, str] = {}
+    match provider:
+        case "openrouter" if settings.openrouter_api_key:
+            out["api_key"] = settings.openrouter_api_key
+        case "anthropic" if settings.anthropic_api_key:
+            out["api_key"] = settings.anthropic_api_key
+        case "openai" if settings.openai_api_key:
+            out["api_key"] = settings.openai_api_key
+        case "google" | "gemini" if settings.google_api_key:
+            out["api_key"] = settings.google_api_key
+        case "ollama":
+            out["api_base"] = settings.ollama_base_url
+    return out
 
 
 def _parse_tool_call(response: Any) -> NormalizedQuery:
