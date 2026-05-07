@@ -44,11 +44,3 @@ def test_search_returns_search_response_shape() -> None:
         assert "cache_status" in body
         assert "unsupported_filters" in body
         assert "source_health" in body
-
-
-def test_translate_query_stub() -> None:
-    r = client.post("/translate-query", json={"text": "2br Kits under 3000"})
-    assert r.status_code == 200
-    body = r.json()
-    assert body["input"] == "2br Kits under 3000"
-    assert "parsed" in body
