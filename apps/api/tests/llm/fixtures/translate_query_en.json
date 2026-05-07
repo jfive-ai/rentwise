@@ -1,0 +1,42 @@
+[
+  {
+    "input": "2 bedroom apartment in Kitsilano under $3000",
+    "expected": {"bedrooms_min": 2, "price_max": 3000, "neighborhoods": ["Kitsilano"]}
+  },
+  {
+    "input": "studio downtown",
+    "expected": {"bedrooms_min": 0.5, "neighborhoods": ["Downtown"]}
+  },
+  {
+    "input": "3br house in Mount Pleasant pet friendly",
+    "expected": {"bedrooms_min": 3, "neighborhoods": ["Mount Pleasant"], "pets": "required"}
+  },
+  {
+    "input": "1 bedroom $2000 to $2500 East Vancouver",
+    "expected": {"bedrooms_min": 1, "price_min": 2000, "price_max": 2500, "neighborhoods": ["East Vancouver"]}
+  },
+  {
+    "input": "furnished 2br Yaletown",
+    "expected": {"bedrooms_min": 2, "neighborhoods": ["Yaletown"], "furnished": "yes"}
+  },
+  {
+    "input": "no pets, 1br, under 2200, Kerrisdale or Dunbar",
+    "expected": {"bedrooms_min": 1, "price_max": 2200, "neighborhoods": ["Kerrisdale", "Dunbar"], "pets": "no"}
+  },
+  {
+    "input": "2 bedroom in Lord Byng catchment under 3500",
+    "expected": {"bedrooms_min": 2, "price_max": 3500, "school_catchment": "Lord Byng"}
+  },
+  {
+    "input": "anywhere with in-unit laundry and balcony, 1br, under 2400",
+    "expected": {"bedrooms_min": 1, "price_max": 2400, "free_text_keywords": ["in-unit laundry", "balcony"]}
+  },
+  {
+    "input": "10 min walk to skytrain, 1 or 2 bedroom",
+    "expected": {"bedrooms_min": 1, "bedrooms_max": 2, "transit_max_walk_minutes": 10}
+  },
+  {
+    "input": "available June 1, 2br, Mount Pleasant, $3000 max",
+    "expected": {"bedrooms_min": 2, "price_max": 3000, "neighborhoods": ["Mount Pleasant"], "available_after": "2026-06-01"}
+  }
+]
