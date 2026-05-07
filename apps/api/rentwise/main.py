@@ -8,12 +8,25 @@ from __future__ import annotations
 import structlog
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel, Field, field_validator
 
 from rentwise.llm import LLMClient
-from rentwise.models import NormalizedQuery
+from rentwise.llm.errors import LLMError, LLMMalformedResponse, LLMTransportError
 from rentwise.settings import ensure_data_dir, settings
 
 log = structlog.get_logger(__name__)
+
+
+class TranslateQueryRequest(BaseModel):
+    text: str = Field(min_length=1, max_length=1000)
+
+    @field_validator("text")
+    @classmethod
+    def _strip_and_check(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("text must not be empty after stripping whitespace")
+        return v
 
 
 def create_app() -> FastAPI:
@@ -58,19 +71,30 @@ def create_app() -> FastAPI:
         }
 
     @app.post("/translate-query")
-    async def translate_query(payload: dict) -> dict:
-        """Translate natural-language input into a NormalizedQuery.
+    async def translate_query(payload: TranslateQueryRequest) -> dict:
+        """Translate natural-language input into a NormalizedQuery."""
+        from fastapi import HTTPException
 
-        Phase 0: returns an empty NormalizedQuery. Real implementation in Phase 2.
-        """
-        text = payload.get("text", "")
         client = LLMClient()
-        parsed = await client.translate_query(text)
-        return {
-            "input": text,
-            "parsed": parsed or NormalizedQuery().model_dump(exclude_none=True),
-            "note": "Phase 0 stub — LLM translation arrives in Phase 2.",
-        }
+        try:
+            result = await client.translate_query(payload.text)
+        except LLMMalformedResponse as exc:
+            raise HTTPException(
+                status_code=502,
+                detail={"error": "llm_malformed_response", "message": str(exc)},
+            ) from exc
+        except LLMTransportError as exc:
+            raise HTTPException(
+                status_code=502,
+                detail={"error": "llm_transport_error", "message": str(exc)},
+            ) from exc
+        except LLMError as exc:
+            raise HTTPException(
+                status_code=502,
+                detail={"error": "llm_error", "message": str(exc)},
+            ) from exc
+
+        return result.model_dump(mode="json")
 
     from rentwise.http.search import build_router
 
