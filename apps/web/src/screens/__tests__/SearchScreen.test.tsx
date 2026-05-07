@@ -27,6 +27,11 @@ const okResponse = () => ({
 
 describe("SearchScreen", () => {
   beforeEach(() => {
+    // Clear call history on the underlying jest.fn() (set in beforeAll). Jest's
+    // restoreAllMocks resets implementations from spyOn but doesn't clear the
+    // call history of a pre-existing jest.fn(); without this, mock.calls leaks
+    // across tests in this suite.
+    (global.fetch as jest.Mock).mockClear?.();
     jest.spyOn(global, "fetch").mockImplementation(() =>
       Promise.resolve(okResponse() as never)
     );
@@ -108,22 +113,123 @@ describe("SearchScreen", () => {
     // First call returns total=10 so "Load more" appears
     (global.fetch as jest.Mock).mockResolvedValueOnce({
       ok: true, status: 200,
-      json: async () => ({ ...fixture, total: 10 }),
-      clone: () => ({ text: async () => JSON.stringify({ ...fixture, total: 10 }) }),
+      json: async () => ({ ...fixture, total: 20 }),
+      clone: () => ({ text: async () => JSON.stringify({ ...fixture, total: 20 }) }),
     });
     const { getByText } = renderScreen();
     fireEvent.press(getByText("Search"));
-    await waitFor(() => expect(getByText("10 listings")).toBeTruthy());
+    await waitFor(() => expect(getByText("20 listings")).toBeTruthy());
     // Second call (Load more)
     (global.fetch as jest.Mock).mockResolvedValueOnce({
       ok: true, status: 200,
-      json: async () => ({ ...fixture, total: 10 }),
-      clone: () => ({ text: async () => JSON.stringify({ ...fixture, total: 10 }) }),
+      json: async () => ({ ...fixture, total: 20 }),
+      clone: () => ({ text: async () => JSON.stringify({ ...fixture, total: 20 }) }),
     });
     fireEvent.press(getByText("Load more"));
     await waitFor(() => {
       const lastCall = (global.fetch as jest.Mock).mock.calls.at(-1)!;
       expect(JSON.parse(lastCall[1].body).offset).toBe(50);
     });
+  });
+
+  it("changing sort triggers a refetch with the new sort", async () => {
+    const { getByText, getByLabelText } = renderScreen();
+    fireEvent.press(getByText("Search"));
+    await waitFor(() => expect(getByText("5 listings")).toBeTruthy());
+    const callsBefore = (global.fetch as jest.Mock).mock.calls.length;
+
+    fireEvent.press(getByLabelText("Sort by")); // newest -> price_asc
+
+    await waitFor(() => {
+      const calls = (global.fetch as jest.Mock).mock.calls;
+      expect(calls.length).toBe(callsBefore + 1);
+      expect(JSON.parse(calls.at(-1)![1].body).sort).toBe("price_asc");
+      expect(JSON.parse(calls.at(-1)![1].body).offset).toBe(0);
+    });
+  });
+
+  it("does not fetch on sort change before any search has been run", () => {
+    const { getByLabelText } = renderScreen();
+    fireEvent.press(getByLabelText("Sort by")); // would normally refetch
+    expect((global.fetch as jest.Mock).mock.calls).toHaveLength(0);
+  });
+
+  it("Retry after a failed Load more replays append=true and preserves earlier pages", async () => {
+    // Initial Search: total=10, 5 listings returned (page 1)
+    (global.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: true, status: 200,
+      json: async () => ({ ...fixture, total: 20 }),
+      clone: () => ({ text: async () => JSON.stringify({ ...fixture, total: 20 }) }),
+    });
+    const { getByText, getAllByText } = renderScreen();
+    fireEvent.press(getByText("Search"));
+    await waitFor(() => expect(getByText("20 listings")).toBeTruthy());
+    // "Sunny 2br" appears only in the first listing's title (not in any
+    // FilterPanel chip), so it's a clean uniqueness probe.
+    expect(getAllByText(/Sunny 2br/).length).toBe(1);
+
+    // Successful Load more: append 5 more (10 total in DOM)
+    (global.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: true, status: 200,
+      json: async () => ({ ...fixture, total: 20 }),
+      clone: () => ({ text: async () => JSON.stringify({ ...fixture, total: 20 }) }),
+    });
+    fireEvent.press(getByText("Load more"));
+    await waitFor(() => expect(getAllByText(/Sunny 2br/).length).toBe(2)); // duplicated by append
+
+    // Next Load more FAILS at offset=100
+    (global.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: false, status: 500,
+      json: async () => ({ error: "boom" }),
+      clone: () => ({ text: async () => '{"error":"boom"}' }),
+    });
+    fireEvent.press(getByText("Load more"));
+    await waitFor(() => expect(getByText("Retry")).toBeTruthy());
+
+    // Retry succeeds — should replay append=true at offset=100, NOT replace existing 10 listings
+    (global.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: true, status: 200,
+      json: async () => ({ ...fixture, total: 20 }),
+      clone: () => ({ text: async () => JSON.stringify({ ...fixture, total: 20 }) }),
+    });
+    fireEvent.press(getByText("Retry"));
+    await waitFor(() => {
+      const lastCall = (global.fetch as jest.Mock).mock.calls.at(-1)!;
+      const body = JSON.parse(lastCall[1].body);
+      expect(body.offset).toBe(100); // replay the failed offset
+    });
+    // Earlier pages should still be in the DOM (15 total now: 10 prior + 5 new)
+    await waitFor(() => expect(getAllByText(/Sunny 2br/).length).toBe(3));
+  });
+
+  it("rapid Search clicks: only the latest response wins", async () => {
+    // First call: slow, returns total=99 (stale)
+    let resolveFirst: ((v: unknown) => void) | undefined;
+    const firstPromise = new Promise((resolve) => { resolveFirst = resolve; });
+    const fetchSpy = global.fetch as jest.Mock;
+    fetchSpy.mockReset();
+    fetchSpy.mockImplementationOnce(() => firstPromise as never);
+    // Second call: fast, returns total=5 (fresh, from default fixture)
+    fetchSpy.mockImplementationOnce(() =>
+      Promise.resolve(okResponse() as never)
+    );
+
+    const { getByText, queryByText } = renderScreen();
+    fireEvent.press(getByText("Search"));
+    fireEvent.press(getByText("Search")); // overlapping click
+
+    // Resolve the first (stale) one AFTER the second
+    await waitFor(() => expect(getByText("5 listings")).toBeTruthy());
+    resolveFirst!({
+      ok: true, status: 200,
+      json: async () => ({ ...fixture, total: 99 }),
+      clone: () => ({ text: async () => JSON.stringify({ ...fixture, total: 99 }) }),
+    });
+    // Allow the now-superseded handler to run
+    await new Promise((r) => setTimeout(r, 0));
+
+    // The stale "99 listings" must NOT appear; the fresh "5 listings" stays
+    expect(queryByText("99 listings")).toBeNull();
+    expect(getByText("5 listings")).toBeTruthy();
   });
 });

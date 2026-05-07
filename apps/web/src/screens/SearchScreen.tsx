@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { searchClient } from "@/src/api/client";
 import type { NormalizedListing, SearchResponse, SortOrder } from "@/src/api/types";
@@ -41,6 +41,18 @@ export function SearchScreen({ apiBaseUrl }: Props) {
   const [status, setStatus] = useState<"idle" | "loading" | "error" | "ok">("idle");
   const [errMsg, setErrMsg] = useState<string>("");
   const [offset, setOffset] = useState<number>(0);
+  const [lastCall, setLastCall] = useState<{ offset: number; append: boolean }>({
+    offset: 0,
+    append: false,
+  });
+
+  // Generation counter: each runSearch claims an id and only commits state if
+  // it's still the latest. Prevents stale responses from overwriting newer ones
+  // when calls overlap (e.g. rapid Search clicks, Search during Load more).
+  const reqIdRef = useRef(0);
+  // True after the user has triggered at least one search. Gates the sort-effect
+  // so changing sort doesn't fetch on initial mount.
+  const hasSearchedRef = useRef(false);
 
   useEffect(() => {
     void loadActions().then(setActions);
@@ -48,6 +60,9 @@ export function SearchScreen({ apiBaseUrl }: Props) {
 
   const runSearch = useCallback(
     async (nextOffset: number, append: boolean): Promise<void> => {
+      const myId = ++reqIdRef.current;
+      hasSearchedRef.current = true;
+      setLastCall({ offset: nextOffset, append });
       setStatus("loading");
       setErrMsg("");
       try {
@@ -58,12 +73,14 @@ export function SearchScreen({ apiBaseUrl }: Props) {
           sort,
           force_refresh: false,
         });
+        if (myId !== reqIdRef.current) return; // superseded by a newer call
         setListings((prev) => (append ? [...prev, ...res.listings] : res.listings));
         setTotal(res.total);
         setUnsupported(res.unsupported_filters);
         setOffset(nextOffset);
         setStatus("ok");
       } catch (e) {
+        if (myId !== reqIdRef.current) return; // superseded
         setStatus("error");
         setErrMsg(e instanceof Error ? e.message : String(e));
       }
@@ -73,7 +90,22 @@ export function SearchScreen({ apiBaseUrl }: Props) {
 
   const onSearch = useCallback(() => { void runSearch(0, false); }, [runSearch]);
   const onLoadMore = useCallback(() => { void runSearch(offset + PAGE_SIZE, true); }, [runSearch, offset]);
-  const onRetry = useCallback(() => { void runSearch(offset, false); }, [runSearch, offset]);
+  // Retry replays the exact (offset, append) of the failed call so a Load-more
+  // failure doesn't drop earlier pages.
+  const onRetry = useCallback(
+    () => { void runSearch(lastCall.offset, lastCall.append); },
+    [runSearch, lastCall]
+  );
+
+  // Sort is a server-side parameter — re-run the search whenever it changes,
+  // but skip the initial mount (no implicit fetch before the user asks).
+  useEffect(() => {
+    if (!hasSearchedRef.current) return;
+    void runSearch(0, false);
+    // runSearch is intentionally omitted: it captures `sort`, so including it
+    // would cause a second fire after the first state update.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sort]);
 
   const handleAction = useCallback(async (id: string, flag: ActionFlag, value: boolean) => {
     const next = await setAction(id, flag, value);
