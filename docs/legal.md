@@ -50,9 +50,54 @@ The MVP is **single-user, self-hosted, personal use only**. If/when we host Rent
 ## Per-Platform Notes
 
 ### liv.rent, PadMapper, Zumper, REW.ca
-Public listings, no login required to view. Standard rules above apply. Check each site's Terms of Service before adding the adapter — TOS may explicitly prohibit scraping. If it does, we either:
-1. Skip that source, OR
-2. Implement a "user-driven" mode where the user opens their browser, RentWise watches the page they're on, and extracts info only from pages the user visited (this is closer to a personal browsing assistant than scraping).
+
+Public listings, no login required to view — but all four (plus Rentals.ca) have been TOS-verified and **all five prohibit automated extraction**. Per-source verbatim findings are below. There is no server-side adapter for any of them.
+
+The TOS prohibitions describe what *RentWise's automation* may not do. They do not necessarily reach activity initiated by the user themselves in their own browser. RentWise's path forward for these sources is the **user-driven mode**: a browser extension that extracts data only from pages the user requested in their own session. See `docs/roadmap.md` Phase 3 for the pivot, and issue #14 for the original framing.
+
+### Zumper (verified 2026-05-07)
+
+**Operator:** Zumper, Inc. (parent of PadMapper).
+
+**Terms of Use:** https://www.zumper.com/terms-of-use (effective 2021-05-27)
+
+**Decision: PROHIBITED.** Section 11 (Services Uses and Restrictions) forbids scraping verbatim:
+
+> Harvest or otherwise collect any data, information or Site Content from the Website, including by using manual or automated software, devices, or other processes to "crawl", "scrape" or "spider" any page
+
+Section 6 (Proprietary Rights; Restrictions on Use) prohibits redistribution, decompilation, and reverse engineering of site software. The clause is identical in template to PadMapper § 8.4 — unsurprising given the shared parent. **No Zumper adapter** is implemented.
+
+### REW.ca (verified 2026-05-07)
+
+**Operator:** REW Digital Ltd. and subsidiaries/affiliates.
+
+**Terms of Use:** https://www.rew.ca/terms (last modified 2026-03-30)
+
+**Decision: PROHIBITED.** The "User Submitted Content" section forbids automated access:
+
+> using any robot, spider, or other automatic device, process, or means to access the Website for any purpose, including monitoring or copying any of the material on the Website
+
+The "Copyright And License" section additionally forbids both screen scraping and database scraping by name:
+
+> The prohibited uses include commercial use, "screen scraping", "database scraping", and any other activity intended to collect, store, reorganize or manipulate data on the pages produced by or displayed on this website.
+
+Framing/deep-linking is also prohibited. **No REW.ca adapter** is implemented.
+
+### liv.rent (verified 2026-05-07)
+
+**Operator:** Liv Strategies Inc. (Vancouver-based).
+
+**Terms and Conditions:** https://liv.rent/terms (effective 2024-02-10)
+
+**Decision: PROHIBITED.** Section 7.1 forbids scraping and bot use verbatim:
+
+> 7.1(v) data scrape, index, or data mine the Services
+>
+> 7.1(w) use bots or automated processes on the Services
+
+Section 7.1(x) prohibits mirroring/framing, § 7.1(y) prohibits harvesting personal info, § 7.1(aa) prohibits reverse engineering, § 7.1(bb) prohibits overburdening servers. **No liv.rent adapter** is implemented.
+
+Note: liv.rent is a Vancouver-based startup. Per `docs/roadmap.md` Open Questions, an official integration partnership is worth exploring as a parallel track — that could provide an explicitly authorized path that this TOS prohibits otherwise.
 
 ### PadMapper (verified 2026-05-07)
 

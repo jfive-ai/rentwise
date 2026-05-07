@@ -42,19 +42,40 @@
 - [x] **Milestone:** "이스트 밴 2베드 2500불 이하" works equally well
 - [x] **Milestone:** Switching from NL to filter view preserves the parsed query
 
-## Phase 3: More Sources (Week 5-6)
-**Goal:** Add browser-based adapters with rate limiting and robots.txt respect.
+## Phase 3: User-driven multi-source capture (browser extension) (Week 5-7)
+
+**Goal:** Surface listings from Rentals.ca, PadMapper, Zumper, REW.ca, liv.rent, and Facebook Marketplace via a browser extension that captures data only from pages the user already visited in their own browser session. No server-side scraping.
+
+**Pivot rationale:** All five originally planned server-side sources have been TOS-verified and all five prohibit automated extraction (see `docs/legal.md`). The TOS prohibitions describe what RentWise's automation may not do; they do not necessarily reach activity initiated by the user in their own browser. The user-driven model is the only TOS-compliant path. It is also identical in shape to what was originally Phase 6 (Facebook Marketplace), so Phase 6 is folded into Phase 3.
+
+### Server-side base (kept, reusable when a future source clears TOS)
 
 - [x] Playwright adapter base class
 - [x] `robots.txt` parser & cache (shipped in Phase 1, reused by Playwright base)
 - [x] Rate limiter (token bucket per source) (shipped in Phase 1, reused by Playwright base)
-- [ ] Implement adapters in this order (easiest to hardest):
-  1. [~] ~~Rentals.ca~~ — **blocked: TOS § 3.16 prohibits automated extraction** (see `docs/legal.md`); rerouted to user-driven mode in #14
-  2. [~] ~~PadMapper~~ — **blocked: TOS § 8.4 prohibits scraping** (see `docs/legal.md`); Zumper-owned, so Zumper likely also blocked
-  3. [ ] REW.ca
-  4. [ ] Zumper
-  5. [ ] liv.rent
-- [ ] **Milestone:** Search across 6 sources from one query
+
+### Originally planned server-side adapters — all TOS-blocked
+
+  1. [~] ~~Rentals.ca~~ — TOS § 3.16 prohibits automated extraction (see `docs/legal.md`)
+  2. [~] ~~PadMapper~~ — TOS § 8.4 prohibits scraping
+  3. [~] ~~Zumper~~ — TOS § 11 prohibits crawl/scrape/spider (PadMapper parent; identical clause)
+  4. [~] ~~REW.ca~~ — TOS forbids robot/spider access and "screen scraping" / "database scraping" by name
+  5. [~] ~~liv.rent~~ — TOS § 7.1(v)/(w) prohibits scraping/indexing/data-mining and bot use
+
+### User-driven extension (new direction)
+
+- [ ] Phase 3 design doc: extension architecture + per-site capture UX + local capture API contract
+- [ ] Browser extension scaffold (Chrome MV3; Firefox where the same MV3 manifest works)
+- [ ] Content scripts that activate **only** on listing pages the user navigated to themselves (no background fetch of pages the user did not request)
+- [ ] Local capture endpoint on the FastAPI backend with shared-secret auth bound to localhost
+- [ ] Per-site capture for the five blocked sources + Facebook Marketplace (was Phase 6)
+- [ ] Extension UI: "Save to RentWise" affordance with a clear "captured" toast; per-site enable toggle; clear off-state so the extension is dormant outside listing pages
+- [ ] Document the legal posture in `docs/legal.md` — captured pages must be ones the user requested
+- [ ] **Milestone:** User browses any of the six sources normally; matching listings appear in RentWise
+
+### Parallel track (slow, low certainty)
+
+- [ ] Reach out to liv.rent (Vancouver-based) about an explicitly-authorized integration. If accepted, a server-side liv.rent adapter becomes possible alongside the extension. See open question in this doc.
 
 ## Phase 4: Deduplication & Enrichment (Week 7)
 **Goal:** Useful, clean results.
@@ -76,15 +97,9 @@
 - [ ] Alert dedup (don't notify twice for same listing)
 - [ ] **Milestone:** Get an email when a new matching listing appears
 
-## Phase 6: Facebook Marketplace via Browser Extension (Week 9-10)
-**Goal:** Capture FB listings without violating their TOS.
+## Phase 6: ~~Facebook Marketplace via Browser Extension~~ — folded into Phase 3
 
-- [ ] Chrome extension scaffold
-- [ ] Content script that detects Marketplace listing pages
-- [ ] Extract data from pages the user is *already viewing*
-- [ ] Send to local RentWise API
-- [ ] Clear UX: extension only activates when user is on Marketplace
-- [ ] **Milestone:** Browse FB Marketplace normally → listings appear in RentWise
+Originally a standalone phase. As of the Phase 3 pivot to user-driven capture, Facebook Marketplace is one of the per-site captures handled by the same extension architecture. See Phase 3.
 
 ## Phase 7: Map View, Split View & Mobile Polish (Week 11)
 **Goal:** Add map and split views; make mobile experience excellent.
