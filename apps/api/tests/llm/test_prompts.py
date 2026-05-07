@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from rentwise.llm.prompts import QUERY_TOOL_SCHEMA
 from rentwise.models import NormalizedQuery
 
@@ -27,10 +29,26 @@ def test_query_tool_schema_shape() -> None:
 
 
 def test_query_tool_schema_pets_enum_matches_pet_policy() -> None:
+    from rentwise.models import PetPolicy
+
     pets_prop = QUERY_TOOL_SCHEMA["function"]["parameters"]["properties"]["pets"]
-    assert set(pets_prop["enum"]) == {"required", "ok", "no", "any"}
+    # Use the model's enum as the source of truth so renames stay in sync.
+    assert set(pets_prop["enum"]) == {m.value for m in PetPolicy}
 
 
 def test_query_tool_schema_furnished_enum_matches_policy() -> None:
+    from rentwise.models import FurnishedPolicy
+
     fp = QUERY_TOOL_SCHEMA["function"]["parameters"]["properties"]["furnished"]
-    assert set(fp["enum"]) == {"yes", "no", "any"}
+    assert set(fp["enum"]) == {m.value for m in FurnishedPolicy}
+
+
+def test_build_query_tool_schema_raises_on_unhandled_ref(monkeypatch) -> None:
+    from rentwise.llm import prompts as prompts_mod
+
+    def fake_schema(*args, **kwargs):
+        return {"properties": {"new_enum_field": {"$ref": "#/$defs/Foo"}}}
+
+    monkeypatch.setattr(NormalizedQuery, "model_json_schema", fake_schema)
+    with pytest.raises(RuntimeError, match="new_enum_field"):
+        prompts_mod._build_query_tool_schema()

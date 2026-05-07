@@ -15,5 +15,5 @@ class LLMTransportError(LLMError):
     """Network / provider error from LiteLLM (after fallback exhausted)."""
 
 
-class LLMMalformedResponse(LLMError):  # noqa: N818
+class LLMMalformedResponse(LLMError):  # noqa: N818 — name matches public API contract documented in /translate-query spec
     """Provider returned no tool call or arguments that can't be parsed."""
