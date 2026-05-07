@@ -54,6 +54,12 @@ class Settings(BaseSettings):
     rentwise_llm_timeout_seconds: int = 30
     rentwise_llm_max_retries: int = 2
 
+    # --- Settings encryption ---
+    # Fernet key used to encrypt secrets at rest (LLM API keys, etc.).
+    # Generate with: `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`
+    # Required for any settings persistence; tests provide a fixed key via monkeypatch.
+    rentwise_settings_encryption_key: str | None = None
+
     # API keys — only set whichever provider you use.
     openrouter_api_key: str | None = None
     anthropic_api_key: str | None = None
