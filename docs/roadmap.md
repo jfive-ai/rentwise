@@ -74,9 +74,9 @@
 - [x] Launcher in the web app — one click opens N tabs in the user's browser; results re-poll for 30s
 - [x] **Milestone:** User browses any of the six sources normally; matching listings appear in RentWise
 
-### Parallel track (slow, low certainty)
+### Parallel track (cancelled)
 
-- [ ] Reach out to liv.rent (Vancouver-based) about an explicitly-authorized integration. If accepted, a server-side liv.rent adapter becomes possible alongside the extension. See open question in this doc.
+- [~] ~~Reach out to liv.rent (Vancouver-based) about an explicitly-authorized integration.~~ Cancelled by decision: the user-driven extension already covers liv.rent under the same TOS posture as the other five sources, so the partnership outreach was deprioritized. Recorded here for audit, not as planned work.
 
 ## Phase 4: Deduplication & Enrichment (Week 7)
 **Goal:** Useful, clean results.
@@ -135,6 +135,6 @@ Originally a standalone phase. As of the Phase 3 pivot to user-driven capture, F
 
 ## Open Questions
 
-- Should we build a "user-driven" mode where the user opens their own browser and RentWise observes their activity? (More like a Pinboard for rentals than a scraper.) This may be more legally bulletproof.
-- Should we partner with one of the platforms (e.g. liv.rent is Vancouver-based and might be open to an integration)?
+- ~~Should we build a "user-driven" mode where the user opens their own browser and RentWise observes their activity? (More like a Pinboard for rentals than a scraper.) This may be more legally bulletproof.~~ Resolved Phase 3 — that's exactly what the extension does.
+- ~~Should we partner with one of the platforms (e.g. liv.rent is Vancouver-based and might be open to an integration)?~~ Cancelled — see the cancelled parallel track in Phase 3.
 - Do we want to support the Vancouver short-term rental registry data?
