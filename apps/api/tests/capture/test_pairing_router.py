@@ -52,9 +52,7 @@ def test_pair_get_returns_same_token_on_repeat(client):
 
 def test_pair_rotate_changes_token(client):
     a = client.get("/capture/pair", headers={"Origin": "http://localhost:8081"}).json()
-    rot = client.post(
-        "/capture/pair/rotate", headers={"Origin": "http://localhost:8081"}
-    )
+    rot = client.post("/capture/pair/rotate", headers={"Origin": "http://localhost:8081"})
     assert rot.status_code == 200
     b = client.get("/capture/pair", headers={"Origin": "http://localhost:8081"}).json()
     assert a["token"] != b["token"]

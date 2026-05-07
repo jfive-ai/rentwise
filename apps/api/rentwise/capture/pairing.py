@@ -39,18 +39,14 @@ class CapturePairingRepo:
 
     async def _row(self) -> CapturePairingRow | None:
         return (
-            await self.session.execute(
-                select(CapturePairingRow).where(CapturePairingRow.id == 1)
-            )
+            await self.session.execute(select(CapturePairingRow).where(CapturePairingRow.id == 1))
         ).scalar_one_or_none()
 
     async def get(self) -> CapturePairing | None:
         row = await self._row()
         if row is None:
             return None
-        return CapturePairing(
-            token=row.token, created_at=row.created_at, rotated_at=row.rotated_at
-        )
+        return CapturePairing(token=row.token, created_at=row.created_at, rotated_at=row.rotated_at)
 
     async def get_or_create(self) -> CapturePairing:
         row = await self._row()
@@ -60,9 +56,7 @@ class CapturePairingRepo:
             )
             self.session.add(row)
             await self.session.flush()
-        return CapturePairing(
-            token=row.token, created_at=row.created_at, rotated_at=row.rotated_at
-        )
+        return CapturePairing(token=row.token, created_at=row.created_at, rotated_at=row.rotated_at)
 
     async def rotate(self) -> CapturePairing:
         row = await self._row()
@@ -74,6 +68,4 @@ class CapturePairingRepo:
             row.token = _new_token()
             row.rotated_at = now
         await self.session.flush()
-        return CapturePairing(
-            token=row.token, created_at=row.created_at, rotated_at=row.rotated_at
-        )
+        return CapturePairing(token=row.token, created_at=row.created_at, rotated_at=row.rotated_at)

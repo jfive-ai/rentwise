@@ -168,9 +168,7 @@ class ListingRepo:
                 source_url=str(fields.get("source_url") or ""),
                 title=fields.get("title") or "",
                 snippet=(
-                    fields.get("description_snippet")
-                    if page_type == "listing_detail"
-                    else None
+                    fields.get("description_snippet") if page_type == "listing_detail" else None
                 ),
                 address_raw=None,
                 address_normalized=None,
