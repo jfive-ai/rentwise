@@ -41,9 +41,25 @@ class PlaywrightFetcher:
     async def _ensure_browser(self) -> BrowserContext:
         if self._context is not None:
             return self._context
-        self._pw = await async_playwright().start()
-        self._browser = await self._pw.chromium.launch(headless=True)
-        self._context = await self._browser.new_context(user_agent=self.user_agent)
+        try:
+            self._pw = await async_playwright().start()
+            self._browser = await self._pw.chromium.launch(headless=True)
+            self._context = await self._browser.new_context(user_agent=self.user_agent)
+        except BaseException:
+            if self._browser is not None:
+                try:
+                    await self._browser.close()
+                except BaseException:
+                    pass
+                self._browser = None
+            if self._pw is not None:
+                try:
+                    await self._pw.stop()
+                except BaseException:
+                    pass
+                self._pw = None
+            self._context = None
+            raise
         log.info("playwright.browser.started", user_agent=self.user_agent)
         return self._context
 
@@ -67,10 +83,13 @@ class PlaywrightFetcher:
 
     async def close(self) -> None:
         """Idempotent shutdown."""
-        if self._browser is not None:
-            await self._browser.close()
-            self._browser = None
-        if self._pw is not None:
-            await self._pw.stop()
-            self._pw = None
+        browser, pw = self._browser, self._pw
+        self._browser = None
+        self._pw = None
         self._context = None
+        try:
+            if browser is not None:
+                await browser.close()
+        finally:
+            if pw is not None:
+                await pw.stop()

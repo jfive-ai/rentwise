@@ -109,3 +109,18 @@ async def test_close_is_idempotent(fake_pw: MagicMock) -> None:
         await fetcher.close()  # never started — no-op
         await fetcher.close()  # double-close — no-op
         fake_pw.stop.assert_not_called()
+
+
+async def test_page_closed_when_goto_raises(fake_pw: MagicMock, fake_page: MagicMock) -> None:
+    """If page.goto raises, the page is still closed (resource cleanup)."""
+    with patch("rentwise.adapters.playwright_fetcher.async_playwright") as start_pw:
+        start_pw.return_value.start = AsyncMock(return_value=fake_pw)
+        fake_page.goto = AsyncMock(side_effect=TimeoutError("nav timeout"))
+
+        fetcher = PlaywrightFetcher(user_agent="RentWise/test")
+        fetcher.robots.is_allowed = AsyncMock(return_value=True)
+
+        with pytest.raises(TimeoutError):
+            await fetcher.fetch_html("https://slow.test/")
+
+        fake_page.close.assert_awaited_once()
