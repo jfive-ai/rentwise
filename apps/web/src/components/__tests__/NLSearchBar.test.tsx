@@ -5,6 +5,7 @@ import React from "react";
 import { Platform, Text } from "react-native";
 import { fireEvent, render, waitFor } from "@testing-library/react-native";
 import { NLSearchBar } from "@/src/components/NLSearchBar";
+import { ParsedQueryChips } from "@/src/components/ParsedQueryChips";
 import { QueryProvider, useQuery } from "@/src/state/QueryProvider";
 
 beforeAll(() => {
@@ -20,10 +21,10 @@ beforeEach(() => {
   (global.fetch as jest.Mock).mockReset();
 });
 
-// Rendered probe — writes provider state into the DOM so waitFor() can poll
-// the rendered tree directly instead of relying on a JS variable updated by
-// a useEffect (which CI's React/jest-expo combo did not reliably surface).
-function Probe(props: { initialMode?: "nl" | "filters" }) {
+// Mode-only probe so failure-path tests can assert on mode via testID.
+// The happy-path test asserts on rendered <ParsedQueryChips/> instead, since
+// chip presence in the DOM is a real signal that the parse succeeded.
+function ModeProbe(props: { initialMode?: "nl" | "filters" }) {
   const q = useQuery();
   const initialModeApplied = React.useRef(false);
   React.useEffect(() => {
@@ -32,20 +33,15 @@ function Probe(props: { initialMode?: "nl" | "filters" }) {
       if (q.mode !== props.initialMode) q.setMode(props.initialMode);
     }
   }, [props.initialMode, q]);
-  return (
-    <>
-      <Text testID="probe-mode">{q.mode}</Text>
-      <Text testID="probe-bedrooms-min">{q.query.bedrooms_min ?? ""}</Text>
-      <Text testID="probe-neighborhoods">{q.query.neighborhoods.join(",")}</Text>
-    </>
-  );
+  return <Text testID="probe-mode">{q.mode}</Text>;
 }
 
 function renderBar(initialMode?: "nl" | "filters") {
   return render(
     <QueryProvider>
-      <Probe initialMode={initialMode} />
+      <ModeProbe initialMode={initialMode} />
       <NLSearchBar apiBaseUrl="http://api.test" />
+      <ParsedQueryChips />
     </QueryProvider>
   );
 }
@@ -74,13 +70,12 @@ describe("NLSearchBar", () => {
       lang_detected: "en",
       model_used: "m",
     });
-    const { getByLabelText, getByText, getByTestId } = renderBar();
+    const { getByLabelText, getByText, findByLabelText } = renderBar();
     fireEvent.changeText(getByLabelText("Search input"), "2br Kits under 3000");
     fireEvent.press(getByText("Parse"));
-    await waitFor(() =>
-      expect(getByTestId("probe-bedrooms-min").props.children).toBe(2)
-    );
-    expect(getByTestId("probe-neighborhoods").props.children).toBe("Kitsilano");
+    // Chips appearing in the DOM = parse succeeded + state updated + reconciled.
+    await findByLabelText("Remove 2+ beds");
+    await findByLabelText("Remove Kitsilano");
   });
 
   it("falls back to filter mode on 5xx", async () => {
