@@ -145,7 +145,7 @@ def create_app() -> FastAPI:
 
         start = perf_counter()
         try:
-            await acompletion(**kwargs)  # type: ignore[arg-type]
+            await acompletion(**kwargs)
         except Exception as exc:
             return LLMConnectionTestResult(
                 ok=False,
