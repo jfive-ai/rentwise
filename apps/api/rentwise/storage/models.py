@@ -89,3 +89,22 @@ class SourceHealthRow(Base):
     last_error_message: Mapped[str | None] = mapped_column(String, nullable=True)
     consecutive_failures: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     updated_at: Mapped[str] = mapped_column(String, nullable=False)
+
+
+class LLMSettingsRow(Base):
+    """Single-row table holding the user's LLM provider configuration.
+
+    The id column is constrained to 1 by the application layer (the repo).
+    API keys are Fernet-encrypted at rest.
+    """
+
+    __tablename__ = "llm_settings"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    primary_model: Mapped[str] = mapped_column(String, nullable=False)
+    primary_api_key_encrypted: Mapped[str | None] = mapped_column(String, nullable=True)
+    fallback_model: Mapped[str | None] = mapped_column(String, nullable=True)
+    fallback_api_key_encrypted: Mapped[str | None] = mapped_column(String, nullable=True)
+    custom_base_url: Mapped[str | None] = mapped_column(String, nullable=True)
+    timeout_seconds: Mapped[int] = mapped_column(Integer, nullable=False, default=30)
+    updated_at: Mapped[str] = mapped_column(String, nullable=False)
