@@ -4,6 +4,9 @@ import { searchClient } from "@/src/api/client";
 import type { NormalizedListing, SearchResponse, SortOrder } from "@/src/api/types";
 import { useQuery } from "@/src/state/QueryProvider";
 import { FilterPanel } from "@/src/components/FilterPanel";
+import { ModeToggle } from "@/src/components/ModeToggle";
+import { NLSearchBar } from "@/src/components/NLSearchBar";
+import { ParsedQueryChips } from "@/src/components/ParsedQueryChips";
 import { ResultsToolbar, type ViewMode } from "@/src/components/ResultsToolbar";
 import { ListingCard } from "@/src/components/ListingCard";
 import { ListingTable } from "@/src/components/ListingTable";
@@ -29,7 +32,7 @@ interface Props {
 
 export function SearchScreen({ apiBaseUrl }: Props) {
   const t = useTheme();
-  const { query } = useQuery();
+  const { query, mode } = useQuery();
   const client = useMemo(() => searchClient(apiBaseUrl), [apiBaseUrl]);
 
   const [view, setView] = useState<ViewMode>("cards");
@@ -117,7 +120,24 @@ export function SearchScreen({ apiBaseUrl }: Props) {
   return (
     <View style={[styles.root, { backgroundColor: t.bg }]}>
       <View style={[styles.filters, { borderColor: t.border, backgroundColor: t.surface }]}>
-        <FilterPanel onSearch={onSearch} />
+        <View style={styles.modeRow}>
+          <ModeToggle />
+        </View>
+        {mode === "nl" ? (
+          <View style={styles.nlPane}>
+            <NLSearchBar apiBaseUrl={apiBaseUrl} />
+            <ParsedQueryChips />
+            <Pressable
+              accessibilityRole="button"
+              onPress={onSearch}
+              style={[styles.searchBtn, { backgroundColor: t.accent }]}
+            >
+              <Text style={{ color: "#fff", fontWeight: "600" }}>Search</Text>
+            </Pressable>
+          </View>
+        ) : (
+          <FilterPanel onSearch={onSearch} />
+        )}
       </View>
 
       <ScrollView style={styles.results} contentContainerStyle={styles.resultsContent}>
@@ -179,6 +199,9 @@ export function SearchScreen({ apiBaseUrl }: Props) {
 const styles = StyleSheet.create({
   root: { flex: 1, flexDirection: "row", flexWrap: "wrap" },
   filters: { width: 320, minWidth: 260, borderRightWidth: 1 },
+  modeRow: { padding: 12, borderBottomWidth: 1, borderColor: "transparent" },
+  nlPane: { padding: 12, gap: 12 },
+  searchBtn: { alignSelf: "flex-end", paddingHorizontal: 18, paddingVertical: 10, borderRadius: 8 },
   results: { flex: 1, minWidth: 320 },
   resultsContent: { padding: 16, gap: 16 },
   grid: { flexDirection: "row", flexWrap: "wrap", gap: 16 },
