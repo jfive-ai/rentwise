@@ -274,7 +274,10 @@ GET /capture/pair                          # web-app facing, no token required, 
   200: { "token": <string>, "server_url": "http://127.0.0.1:8000" }
 
 POST /capture/pair/rotate                  # web-app facing, gated by Origin
-  204
+  200: { "token": <string>, "server_url": "http://127.0.0.1:8000" }
+  # Symmetric with GET /capture/pair: callers need the new token to display
+  # to the user for paste-into-extension. A 204 would force a follow-up GET
+  # with a race window between rotation and read.
 ```
 
 ### 6.3 `CaptureListing` schema
