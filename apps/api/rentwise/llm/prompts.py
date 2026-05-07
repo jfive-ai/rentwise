@@ -72,32 +72,34 @@ def _build_query_tool_schema() -> dict[str, Any]:
 QUERY_TOOL_SCHEMA: dict[str, Any] = _build_query_tool_schema()
 
 
-# Vancouver knowledge grounded in the 24 neighborhoods used by FilterPanel.tsx.
+# Must match `NEIGHBORHOODS` in apps/web/src/components/FilterPanel.tsx so that
+# NL parses produce queries equivalent to filter-form queries. If you edit one,
+# edit the other (or refactor both to read from a shared source of truth).
 _NEIGHBORHOODS = [
-    "Downtown",
-    "West End",
-    "Yaletown",
     "Coal Harbour",
-    "Gastown",
-    "Kitsilano",
-    "Point Grey",
-    "Dunbar",
-    "Kerrisdale",
-    "South Granville",
-    "Fairview",
-    "Mount Pleasant",
-    "Olympic Village",
-    "Riley Park",
-    "Main",
     "Commercial Drive",
-    "Strathcona",
+    "Downtown",
+    "Dunbar",
     "East Vancouver",
-    "Hastings-Sunrise",
-    "Renfrew",
-    "Marpole",
-    "Oakridge",
-    "Cambie",
+    "Fairview",
     "False Creek",
+    "Gastown",
+    "Grandview-Woodland",
+    "Kerrisdale",
+    "Kitsilano",
+    "Marpole",
+    "Mount Pleasant",
+    "Oakridge",
+    "Point Grey",
+    "Riley Park",
+    "Shaughnessy",
+    "South Cambie",
+    "South Granville",
+    "Strathcona",
+    "Sunset",
+    "West End",
+    "West Point Grey",
+    "Yaletown",
 ]
 
 _SECONDARY_SCHOOLS = [
@@ -157,7 +159,7 @@ SYSTEM_PROMPT_KO = f"""당신은 사용자의 임대 검색 요청을 `submit_qu
 지역은 캐나다 밴쿠버 (Vancouver, BC) 입니다.
 
 알려진 동네: {", ".join(_NEIGHBORHOODS)}.
-한국어 표기 예: 키츠(Kitsilano), 이스트밴(East Vancouver), 메인(Main), 다운타운(Downtown), 코머셜(Commercial Drive).
+한국어 표기 예: 키츠/키칠라노(Kitsilano), 이스트밴(East Vancouver), 다운타운(Downtown), 코머셜(Commercial Drive), 옐레타운(Yaletown), 마운트플레전트(Mount Pleasant), 게스타운(Gastown), 페어뷰(Fairview), 마폴(Marpole).
 알려진 고등학교 학군: {", ".join(_SECONDARY_SCHOOLS)}.
 스카이트레인 역: {", ".join(_SKYTRAIN_STATIONS)}.
 
@@ -170,6 +172,7 @@ SYSTEM_PROMPT_KO = f"""당신은 사용자의 임대 검색 요청을 `submit_qu
 - 가격은 캐나다 달러/월. "3000불", "3천", "3k" 모두 price_max=3000.
 - "6월 입주"는 다음 6월 1일.
 - 필드에 없는 표현(예: "발코니", "세탁기 있음")은 free_text_keywords에 넣으세요.
+- 우리가 지원하지 않는 표현(예: "남향")이라도 free_text_keywords에 포함시켜도 됩니다. 진짜 지원되지 않는 표현은 API가 별도로 알려줍니다.
 """
 
 

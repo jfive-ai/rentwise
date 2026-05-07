@@ -73,8 +73,41 @@ def test_system_prompt_en_lists_known_neighborhoods() -> None:
 
 def test_system_prompt_ko_includes_korean_transliterations() -> None:
     # Common Korean spellings users actually type.
-    for token in ["키츠", "이스트밴", "밴쿠버"]:
+    for token in ["키츠", "이스트밴", "밴쿠버", "옐레타운", "마운트플레전트", "키칠라노"]:
         assert token in SYSTEM_PROMPT_KO
+
+
+def test_system_prompt_ko_includes_unsupported_phrases_rule() -> None:
+    """KO prompt must mirror EN's permission to include unsupported phrases in
+    free_text_keywords; otherwise KO speakers get a strictly weaker prompt.
+    """
+    assert "진짜 지원되지 않는 표현" in SYSTEM_PROMPT_KO
+
+
+def test_neighborhoods_match_filter_panel() -> None:
+    """The prompt's neighborhood list must equal the frontend's NEIGHBORHOODS const,
+    or NL parses will produce queries the filter UI can't reproduce.
+    """
+    import re
+    from pathlib import Path
+
+    from rentwise.llm import prompts as prompts_mod
+
+    panel = (
+        Path(__file__).resolve().parents[4]
+        / "apps"
+        / "web"
+        / "src"
+        / "components"
+        / "FilterPanel.tsx"
+    )
+    text = panel.read_text(encoding="utf-8")
+    match = re.search(r"export const NEIGHBORHOODS = \[(.*?)\];", text, re.DOTALL)
+    assert match, "Could not locate NEIGHBORHOODS in FilterPanel.tsx"
+    panel_neighborhoods = sorted(re.findall(r'"([^"]+)"', match.group(1)))
+    assert sorted(prompts_mod._NEIGHBORHOODS) == panel_neighborhoods, (
+        "API and Web neighborhood lists drifted; update both."
+    )
 
 
 @pytest.mark.parametrize(
