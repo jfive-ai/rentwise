@@ -258,3 +258,41 @@ async def test_translate_query_raises_malformed_when_response_shape_unexpected(
     client = LLMClient()
     with pytest.raises(LLMMalformedResponse):
         await client.translate_query("anything")
+
+
+async def test_translate_query_threads_openrouter_api_key(patch_acompletion, monkeypatch) -> None:
+    monkeypatch.setattr(
+        "rentwise.llm.client.settings.rentwise_llm_model",
+        "openrouter/qwen/qwen-2.5-72b-instruct:free",
+    )
+    monkeypatch.setattr("rentwise.llm.client.settings.rentwise_llm_fallback_model", None)
+    monkeypatch.setattr("rentwise.llm.client.settings.openrouter_api_key", "sk-or-test")
+    mock = patch_acompletion(_tool_call_response({"bedrooms_min": 1}))
+    await LLMClient().translate_query("anything")
+    assert mock.call_args.kwargs["api_key"] == "sk-or-test"
+
+
+async def test_translate_query_threads_ollama_base_url(patch_acompletion, monkeypatch) -> None:
+    monkeypatch.setattr("rentwise.llm.client.settings.rentwise_llm_model", "ollama/llama3")
+    monkeypatch.setattr("rentwise.llm.client.settings.rentwise_llm_fallback_model", None)
+    monkeypatch.setattr("rentwise.llm.client.settings.ollama_base_url", "http://localhost:11434")
+    mock = patch_acompletion(_tool_call_response({"bedrooms_min": 1}))
+    await LLMClient().translate_query("anything")
+    assert mock.call_args.kwargs["api_base"] == "http://localhost:11434"
+
+
+async def test_translate_query_omits_api_key_when_unset(patch_acompletion, monkeypatch) -> None:
+    monkeypatch.setattr("rentwise.llm.client.settings.rentwise_llm_model", "anthropic/claude")
+    monkeypatch.setattr("rentwise.llm.client.settings.rentwise_llm_fallback_model", None)
+    monkeypatch.setattr("rentwise.llm.client.settings.anthropic_api_key", None)
+    mock = patch_acompletion(_tool_call_response({"bedrooms_min": 1}))
+    await LLMClient().translate_query("anything")
+    assert "api_key" not in mock.call_args.kwargs
+
+
+async def test_translate_query_system_message_includes_today(patch_acompletion) -> None:
+    mock = patch_acompletion(_tool_call_response({"bedrooms_min": 1}))
+    await LLMClient().translate_query("1br anywhere")
+    msgs = mock.call_args.kwargs["messages"]
+    assert msgs[0]["role"] == "system"
+    assert msgs[0]["content"].startswith("Today's date is ")

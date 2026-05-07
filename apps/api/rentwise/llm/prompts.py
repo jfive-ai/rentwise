@@ -7,6 +7,7 @@ LLM is constrained to valid values.
 
 from __future__ import annotations
 
+from datetime import date
 from typing import Any
 
 from rentwise.models import FurnishedPolicy, NormalizedQuery, PetPolicy
@@ -190,3 +191,16 @@ def detect_language(text: str) -> str:
 
 def pick_prompt(lang: str) -> str:
     return SYSTEM_PROMPT_KO if lang == "ko" else SYSTEM_PROMPT_EN
+
+
+def render_system_prompt(lang: str, today: date) -> str:
+    """Return the system prompt with today's date prepended.
+
+    Models can't reliably guess the current date, so we inject it for any
+    relative-date phrasing ("available June", "next month") to resolve correctly.
+    """
+    prompt = pick_prompt(lang)
+    header_en = f"Today's date is {today.isoformat()} (YYYY-MM-DD)."
+    header_ko = f"오늘 날짜는 {today.isoformat()} (YYYY-MM-DD) 입니다."
+    header = header_ko if lang == "ko" else header_en
+    return f"{header}\n\n{prompt}"

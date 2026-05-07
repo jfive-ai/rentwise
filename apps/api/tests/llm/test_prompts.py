@@ -129,3 +129,32 @@ def test_pick_prompt_returns_correct_language() -> None:
     assert pick_prompt("ko") is SYSTEM_PROMPT_KO
     # Unknown lang code falls back to English.
     assert pick_prompt("zz") is SYSTEM_PROMPT_EN
+
+
+def test_render_system_prompt_prepends_date_en() -> None:
+    from datetime import date
+
+    from rentwise.llm.prompts import render_system_prompt
+
+    rendered = render_system_prompt("en", date(2026, 5, 7))
+    assert rendered.startswith("Today's date is 2026-05-07")
+    assert "submit_query" in rendered  # base prompt still there
+
+
+def test_render_system_prompt_prepends_date_ko() -> None:
+    from datetime import date
+
+    from rentwise.llm.prompts import render_system_prompt
+
+    rendered = render_system_prompt("ko", date(2026, 5, 7))
+    assert rendered.startswith("오늘 날짜는 2026-05-07")
+    assert "submit_query" in rendered  # base prompt still there
+
+
+def test_render_system_prompt_unknown_lang_falls_back_to_en() -> None:
+    from datetime import date
+
+    from rentwise.llm.prompts import render_system_prompt
+
+    rendered = render_system_prompt("zz", date(2026, 5, 7))
+    assert rendered.startswith("Today's date is 2026-05-07")
