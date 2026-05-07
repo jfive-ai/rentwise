@@ -215,3 +215,46 @@ async def test_translate_query_raises_malformed_on_validation_error(patch_acompl
     client = LLMClient()
     with pytest.raises(LLMMalformedResponse):
         await client.translate_query("anything")
+
+
+@pytest.mark.parametrize(
+    ("model", "key_attr", "key_value", "expected"),
+    [
+        ("openrouter/qwen/qwen-2.5-72b-instruct:free", "openrouter_api_key", "sk-or-v1-x", True),
+        ("openrouter/qwen/qwen-2.5-72b-instruct:free", "openrouter_api_key", None, False),
+        ("anthropic/claude-sonnet-4", "anthropic_api_key", "sk-ant-x", True),
+        ("anthropic/claude-sonnet-4", "anthropic_api_key", None, False),
+        ("openai/gpt-4o-mini", "openai_api_key", "sk-x", True),
+        ("openai/gpt-4o-mini", "openai_api_key", None, False),
+        ("google/gemini-2.5-flash", "google_api_key", "g-x", True),
+        ("gemini/gemini-1.5", "google_api_key", "g-x", True),
+        ("ollama/llama3", "openrouter_api_key", None, True),  # ollama needs no key
+        ("unknown-provider/model", "openrouter_api_key", "doesnt-matter", False),
+    ],
+)
+def test_is_configured_per_provider(
+    monkeypatch, model: str, key_attr: str, key_value, expected: bool
+) -> None:
+    """is_configured() reads model + provider key live; covers all match arms."""
+    monkeypatch.setattr("rentwise.llm.client.settings.rentwise_llm_model", model)
+    monkeypatch.setattr(f"rentwise.llm.client.settings.{key_attr}", key_value)
+    assert LLMClient().is_configured() is expected
+
+
+async def test_translate_query_raises_malformed_when_response_shape_unexpected(
+    patch_acompletion,
+) -> None:
+    """Cover the bare `except Exception` in _parse_tool_call.
+
+    A response missing `.choices` entirely (or `.choices[0].message`) shouldn't
+    crash the server with AttributeError — it should map to LLMMalformedResponse.
+    """
+
+    class _BrokenResp:
+        model = "x"
+        # No `choices` attribute at all.
+
+    patch_acompletion(_BrokenResp())
+    client = LLMClient()
+    with pytest.raises(LLMMalformedResponse):
+        await client.translate_query("anything")
