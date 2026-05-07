@@ -1,6 +1,6 @@
 import React from "react";
 import { Pressable, Text } from "react-native";
-import { render, fireEvent } from "@testing-library/react-native";
+import { render, fireEvent, renderHook, act } from "@testing-library/react-native";
 import { QueryProvider, useQuery } from "@/src/state/QueryProvider";
 
 function Probe() {
@@ -111,5 +111,38 @@ describe("QueryProvider", () => {
       return null;
     };
     expect(() => render(<Bad />)).toThrow(/QueryProvider/);
+  });
+});
+
+describe("mode + nlText", () => {
+  it("defaults to filters mode and empty nlText", () => {
+    const { result } = renderHook(() => useQuery(), { wrapper: QueryProvider });
+    expect(result.current.mode).toBe("filters");
+    expect(result.current.nlText).toBe("");
+  });
+
+  it("setMode updates mode", () => {
+    const { result } = renderHook(() => useQuery(), { wrapper: QueryProvider });
+    act(() => result.current.setMode("nl"));
+    expect(result.current.mode).toBe("nl");
+  });
+
+  it("filters→nl clears nlText (no fake sentence)", () => {
+    const { result } = renderHook(() => useQuery(), { wrapper: QueryProvider });
+    act(() => result.current.setMode("nl"));
+    act(() => result.current.setNlText("키츠 2베드"));
+    act(() => result.current.setMode("filters"));
+    act(() => result.current.setMode("nl"));
+    // re-entered NL mode after filter mode → nlText cleared per spec
+    expect(result.current.nlText).toBe("");
+  });
+
+  it("nl→filters preserves structured query", () => {
+    const { result } = renderHook(() => useQuery(), { wrapper: QueryProvider });
+    act(() => result.current.setMode("nl"));
+    act(() => result.current.set({ bedrooms_min: 2, neighborhoods: ["Kitsilano"] }));
+    act(() => result.current.setMode("filters"));
+    expect(result.current.query.bedrooms_min).toBe(2);
+    expect(result.current.query.neighborhoods).toEqual(["Kitsilano"]);
   });
 });
