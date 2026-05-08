@@ -13,9 +13,22 @@ interface Props {
   onSortChange: (s: SortOrder) => void;
   actions: ListingActionMap;
   onAction: (id: string, flag: ActionFlag, value: boolean) => void;
+  /** Phase 7 PR-B: split-view selection sync. */
+  selectedListingId?: string | null;
+  onSelectListing?: (id: string) => void;
+  onHoverListing?: (id: string | null) => void;
 }
 
-export function ListingTable({ listings, sort, onSortChange, actions, onAction }: Props) {
+export function ListingTable({
+  listings,
+  sort,
+  onSortChange,
+  actions,
+  onAction,
+  selectedListingId = null,
+  onSelectListing,
+  onHoverListing,
+}: Props) {
   const t = useTheme();
 
   return (
@@ -36,6 +49,9 @@ export function ListingTable({ listings, sort, onSortChange, actions, onAction }
             listing={item}
             acts={actions[item.id] ?? {}}
             onAction={(f, v) => onAction(item.id, f, v)}
+            selected={item.id === selectedListingId}
+            onSelect={onSelectListing}
+            onHover={onHoverListing}
           />
         )}
       />
@@ -63,11 +79,47 @@ function Header({
 }
 
 function Row({
-  listing, acts, onAction,
-}: { listing: NormalizedListing; acts: ListingActions; onAction: (f: ActionFlag, v: boolean) => void }) {
+  listing,
+  acts,
+  onAction,
+  selected,
+  onSelect,
+  onHover,
+}: {
+  listing: NormalizedListing;
+  acts: ListingActions;
+  onAction: (f: ActionFlag, v: boolean) => void;
+  selected: boolean;
+  onSelect?: (id: string) => void;
+  onHover?: (id: string | null) => void;
+}) {
   const t = useTheme();
+  // Pressable wraps the row so click anywhere outside the action
+  // buttons selects it (the Save / Open buttons stop propagation by
+  // having their own onPress). Web hover events arrive via
+  // onPointerEnter / onPointerLeave through react-native-web.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const hoverProps: any = onHover
+    ? {
+        onPointerEnter: () => onHover(listing.id),
+        onPointerLeave: () => onHover(null),
+      }
+    : {};
   return (
-    <View style={[styles.row, { height: ROW_HEIGHT, borderColor: t.border }]}>
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`Select ${listing.title}`}
+      onPress={() => onSelect?.(listing.id)}
+      style={[
+        styles.row,
+        {
+          height: ROW_HEIGHT,
+          borderColor: t.border,
+          backgroundColor: selected ? t.surfaceAlt : "transparent",
+        },
+      ]}
+      {...hoverProps}
+    >
       <View style={styles.cell}>
         <Text numberOfLines={1} style={{ color: t.text }}>{listing.title}</Text>
       </View>
@@ -90,7 +142,7 @@ function Row({
           <Text style={{ color: t.textMuted }}>↗</Text>
         </Pressable>
       </View>
-    </View>
+    </Pressable>
   );
 }
 

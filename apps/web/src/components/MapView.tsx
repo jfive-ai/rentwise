@@ -1,5 +1,5 @@
 /**
- * Phase 7 PR-A: web-only MapLibre view of `NormalizedListing`s.
+ * Phase 7 PR-A / PR-B: web-only MapLibre view of `NormalizedListing`s.
  *
  * Native (iOS / macOS) builds render a placeholder; the native map
  * lands alongside Phase 8.
@@ -8,6 +8,11 @@
  * we accept the listing array + view callbacks and never mutate
  * shared state directly. The `maplibre-gl` Map instance lives in a
  * `useEffect` so re-renders don't recreate the GL context.
+ *
+ * PR-B adds:
+ * - `selectedListingId` + `onHoverListing` for split-view selection sync.
+ * - `overlays` toggles for VSB catchments + SkyTrain station radii;
+ *   data is lazy-fetched from the backend `/map/overlays/*` endpoints.
  */
 
 import Constants from "expo-constants";
@@ -31,15 +36,36 @@ const CLUSTER_LAYER = "rentwise-clusters";
 const CLUSTER_COUNT_LAYER = "rentwise-cluster-count";
 const POINT_LAYER = "rentwise-points";
 
+const CATCHMENTS_SOURCE = "rentwise-catchments";
+const CATCHMENTS_FILL_LAYER = "rentwise-catchments-fill";
+const CATCHMENTS_LINE_LAYER = "rentwise-catchments-line";
+const SKYTRAIN_SOURCE = "rentwise-skytrain";
+const SKYTRAIN_LAYER = "rentwise-skytrain-radii";
+
+export interface MapOverlaysToggle {
+  catchments: boolean;
+  skytrain: boolean;
+}
+
 interface Props {
   listings: NormalizedListing[];
   onSelectListing: (id: string) => void;
   /** Fired when the user clicks "Search this area"; the bbox encodes
    * the visible viewport for the caller to re-run /search with. */
   onSearchBbox: (bbox: Bbox) => void;
+  /** Phase 7 PR-B: split-view sync. */
+  selectedListingId?: string | null;
+  onHoverListing?: (id: string | null) => void;
+  /** Phase 7 PR-B: overlay layer toggles. Lazy-fetched on first
+   * enable; the backend caches with a 24h max-age. */
+  overlays?: MapOverlaysToggle;
+  onToggleOverlay?: (key: keyof MapOverlaysToggle) => void;
+  /** Required when any overlay is enabled — same shape as the
+   * `apiBaseUrl` SearchScreen receives. */
+  apiBaseUrl?: string;
 }
 
-export function MapView({ listings, onSelectListing, onSearchBbox }: Props) {
+export function MapView(props: Props) {
   const t = useTheme();
 
   // Native: render the polite placeholder; never instantiate MapLibre
@@ -53,25 +79,33 @@ export function MapView({ listings, onSelectListing, onSearchBbox }: Props) {
       </View>
     );
   }
-
-  return (
-    <MapViewWeb
-      listings={listings}
-      onSelectListing={onSelectListing}
-      onSearchBbox={onSearchBbox}
-    />
-  );
+  return <MapViewWeb {...props} />;
 }
 
-function MapViewWeb({ listings, onSelectListing, onSearchBbox }: Props) {
+function MapViewWeb({
+  listings,
+  onSelectListing,
+  onSearchBbox,
+  selectedListingId = null,
+  onHoverListing,
+  overlays = { catchments: false, skytrain: false },
+  onToggleOverlay,
+  apiBaseUrl,
+}: Props) {
   const t = useTheme();
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
-  // Keep the latest listing-id index in a ref so the click handler we
-  // attach to the map (once) always sees fresh data.
+  // Latest listing index in a ref so the click handler we attach to
+  // the map (once) always sees fresh data.
   const idIndexRef = useRef<Map<string, NormalizedListing>>(new Map());
   const [moved, setMoved] = useState(false);
   const initialBboxRef = useRef<Bbox | null>(null);
+  const mapLoadedRef = useRef(false);
+  // Cache of fetched overlay data so we never refetch in a session.
+  const overlayCacheRef = useRef<{
+    catchments?: GeoJSON.FeatureCollection | null;
+    skytrain?: SkytrainStop[] | null;
+  }>({});
 
   const { features, dropped } = useMemo(
     () => listingsToFeatures(listings),
@@ -113,12 +147,68 @@ function MapViewWeb({ listings, onSelectListing, onSearchBbox }: Props) {
     mapRef.current = map;
 
     map.on("load", () => {
+      mapLoadedRef.current = true;
+      // Catchments + skytrain sources are added empty; the toggle
+      // effect below populates + renders layers when first enabled.
+      map.addSource(CATCHMENTS_SOURCE, {
+        type: "geojson",
+        data: { type: "FeatureCollection", features: [] },
+      });
+      map.addSource(SKYTRAIN_SOURCE, {
+        type: "geojson",
+        data: { type: "FeatureCollection", features: [] },
+      });
+
       map.addSource(SOURCE_ID, {
         type: "geojson",
         data: featureCollection([]),
         cluster: true,
         clusterRadius: 60,
         clusterMaxZoom: 14,
+      });
+
+      // Catchment polygons — drawn under listing markers so a marker
+      // is never hidden under a polygon fill.
+      map.addLayer({
+        id: CATCHMENTS_FILL_LAYER,
+        type: "fill",
+        source: CATCHMENTS_SOURCE,
+        layout: { visibility: "none" },
+        paint: { "fill-color": "#16a34a", "fill-opacity": 0.12 },
+      });
+      map.addLayer({
+        id: CATCHMENTS_LINE_LAYER,
+        type: "line",
+        source: CATCHMENTS_SOURCE,
+        layout: { visibility: "none" },
+        paint: {
+          "line-color": "#16a34a",
+          "line-opacity": 0.5,
+          "line-width": 1.5,
+        },
+      });
+      // SkyTrain radii — circles at fixed pixel size so they read at
+      // every zoom; rough walkable-buffer.
+      map.addLayer({
+        id: SKYTRAIN_LAYER,
+        type: "circle",
+        source: SKYTRAIN_SOURCE,
+        layout: { visibility: "none" },
+        paint: {
+          "circle-color": "#7c3aed",
+          "circle-opacity": 0.15,
+          "circle-radius": [
+            "interpolate",
+            ["linear"],
+            ["zoom"],
+            10, 8,
+            14, 28,
+            16, 60,
+          ],
+          "circle-stroke-color": "#7c3aed",
+          "circle-stroke-opacity": 0.6,
+          "circle-stroke-width": 1.5,
+        },
       });
 
       map.addLayer({
@@ -154,8 +244,18 @@ function MapViewWeb({ listings, onSelectListing, onSearchBbox }: Props) {
         source: SOURCE_ID,
         filter: ["!", ["has", "point_count"]],
         paint: {
-          "circle-color": "#1d4ed8",
-          "circle-radius": 8,
+          "circle-color": [
+            "case",
+            ["==", ["get", "id"], ["literal", ""]],
+            "#dc2626",
+            "#1d4ed8",
+          ],
+          "circle-radius": [
+            "case",
+            ["==", ["get", "id"], ["literal", ""]],
+            12,
+            8,
+          ],
           "circle-stroke-width": 2,
           "circle-stroke-color": "#ffffff",
         },
@@ -182,6 +282,13 @@ function MapViewWeb({ listings, onSelectListing, onSearchBbox }: Props) {
           }
         });
       });
+      if (onHoverListing) {
+        map.on("mousemove", POINT_LAYER, (e) => {
+          const id = e.features?.[0]?.properties?.id;
+          onHoverListing(typeof id === "string" ? id : null);
+        });
+        map.on("mouseleave", POINT_LAYER, () => onHoverListing(null));
+      }
 
       const bounds = map.getBounds();
       initialBboxRef.current = [
@@ -203,6 +310,7 @@ function MapViewWeb({ listings, onSelectListing, onSearchBbox }: Props) {
     return () => {
       map.remove();
       mapRef.current = null;
+      mapLoadedRef.current = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -214,6 +322,88 @@ function MapViewWeb({ listings, onSelectListing, onSearchBbox }: Props) {
     const src = map.getSource(SOURCE_ID) as maplibregl.GeoJSONSource | undefined;
     if (src) src.setData(featureCollection(features));
   }, [features]);
+
+  // Highlight the selected listing — the POINT_LAYER paint expression
+  // keys off `["==", ["get", "id"], ["literal", selectedId]]`. We
+  // re-set the paint when the selection changes.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapLoadedRef.current) return;
+    const id = selectedListingId ?? "";
+    map.setPaintProperty(POINT_LAYER, "circle-color", [
+      "case",
+      ["==", ["get", "id"], ["literal", id]],
+      "#dc2626",
+      "#1d4ed8",
+    ]);
+    map.setPaintProperty(POINT_LAYER, "circle-radius", [
+      "case",
+      ["==", ["get", "id"], ["literal", id]],
+      12,
+      8,
+    ]);
+  }, [selectedListingId]);
+
+  // Catchments overlay — fetch once, toggle layer visibility per props.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapLoadedRef.current) return;
+    const visibility = overlays.catchments ? "visible" : "none";
+    map.setLayoutProperty(CATCHMENTS_FILL_LAYER, "visibility", visibility);
+    map.setLayoutProperty(CATCHMENTS_LINE_LAYER, "visibility", visibility);
+    if (!overlays.catchments) return;
+    if (overlayCacheRef.current.catchments !== undefined) return; // already fetched
+    if (!apiBaseUrl) return;
+    void fetch(`${apiBaseUrl.replace(/\/$/, "")}/map/overlays/catchments`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data: GeoJSON.FeatureCollection | null) => {
+        overlayCacheRef.current.catchments = data;
+        const src = map.getSource(CATCHMENTS_SOURCE) as
+          | maplibregl.GeoJSONSource
+          | undefined;
+        if (src && data) src.setData(data);
+      })
+      .catch(() => {
+        overlayCacheRef.current.catchments = null;
+      });
+  }, [overlays.catchments, apiBaseUrl]);
+
+  // Skytrain overlay — fetch once, render as point features for the
+  // radii circle layer.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapLoadedRef.current) return;
+    const visibility = overlays.skytrain ? "visible" : "none";
+    map.setLayoutProperty(SKYTRAIN_LAYER, "visibility", visibility);
+    if (!overlays.skytrain) return;
+    if (overlayCacheRef.current.skytrain !== undefined) return;
+    if (!apiBaseUrl) return;
+    void fetch(`${apiBaseUrl.replace(/\/$/, "")}/map/overlays/skytrain-stops`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data: { stops: SkytrainStop[] } | null) => {
+        const stops = data?.stops ?? [];
+        overlayCacheRef.current.skytrain = stops;
+        const fc: GeoJSON.FeatureCollection<GeoJSON.Point> = {
+          type: "FeatureCollection",
+          features: stops
+            .filter(
+              (s) => Number.isFinite(s.lat) && Number.isFinite(s.lon),
+            )
+            .map((s) => ({
+              type: "Feature",
+              geometry: { type: "Point", coordinates: [s.lon, s.lat] },
+              properties: { name: s.name },
+            })),
+        };
+        const src = map.getSource(SKYTRAIN_SOURCE) as
+          | maplibregl.GeoJSONSource
+          | undefined;
+        if (src) src.setData(fc);
+      })
+      .catch(() => {
+        overlayCacheRef.current.skytrain = null;
+      });
+  }, [overlays.skytrain, apiBaseUrl]);
 
   const onSearchHere = () => {
     const map = mapRef.current;
@@ -233,6 +423,22 @@ function MapViewWeb({ listings, onSelectListing, onSearchBbox }: Props) {
         }}
         style={styles.canvas as React.CSSProperties}
       />
+      {onToggleOverlay && (
+        <View style={styles.overlayToggles}>
+          <OverlayToggle
+            label={`Catchments${overlays.catchments ? " ✓" : ""}`}
+            active={overlays.catchments}
+            accessibilityLabel="Toggle school catchments overlay"
+            onPress={() => onToggleOverlay("catchments")}
+          />
+          <OverlayToggle
+            label={`SkyTrain${overlays.skytrain ? " ✓" : ""}`}
+            active={overlays.skytrain}
+            accessibilityLabel="Toggle skytrain radii overlay"
+            onPress={() => onToggleOverlay("skytrain")}
+          />
+        </View>
+      )}
       {moved && (
         <View style={styles.searchHere}>
           <Pressable
@@ -255,6 +461,46 @@ function MapViewWeb({ listings, onSelectListing, onSearchBbox }: Props) {
         </View>
       )}
     </View>
+  );
+}
+
+interface SkytrainStop {
+  name: string;
+  lat: number;
+  lon: number;
+  lines?: string[];
+  route_types?: string[];
+}
+
+function OverlayToggle({
+  label,
+  active,
+  accessibilityLabel,
+  onPress,
+}: {
+  label: string;
+  active: boolean;
+  accessibilityLabel: string;
+  onPress: () => void;
+}) {
+  const t = useTheme();
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+      onPress={onPress}
+      style={[
+        styles.toggle,
+        {
+          backgroundColor: active ? t.accent : t.surface,
+          borderColor: t.border,
+        },
+      ]}
+    >
+      <Text style={{ color: active ? "#fff" : t.text, fontSize: 12 }}>
+        {label}
+      </Text>
+    </Pressable>
   );
 }
 
@@ -290,6 +536,18 @@ const styles = StyleSheet.create({
     left: 8,
     right: 8,
     padding: 8,
+    borderRadius: 6,
+  },
+  overlayToggles: {
+    position: "absolute",
+    top: 12,
+    right: 12,
+    gap: 4,
+  },
+  toggle: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderWidth: 1,
     borderRadius: 6,
   },
 });

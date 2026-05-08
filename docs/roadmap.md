@@ -108,15 +108,15 @@ Originally a standalone phase. As of the Phase 3 pivot to user-driven capture, F
 ## Phase 7: Map View, Split View & Mobile Polish (Week 11)
 **Goal:** Add map and split views; make mobile experience excellent.
 
-- [ ] Map view with MapLibre GL JS + OpenStreetMap tiles
-- [ ] Marker clustering (`supercluster`)
-- [ ] "Search this area" affordance after pan/zoom
-- [ ] School catchment polygon overlay (toggleable)
-- [ ] SkyTrain station radii overlay (toggleable)
-- [ ] Split view (map + list, synced hover/selection state)
-- [ ] Responsive design pass — list view default on mobile, split view default on wide desktop
-- [ ] Filter persistence (URL params) so searches are shareable/bookmarkable
-- [ ] PWA install support
+- [x] Map view with MapLibre GL JS + OpenStreetMap tiles — PR-A
+- [x] Marker clustering (`supercluster`) — PR-A
+- [x] "Search this area" affordance after pan/zoom — PR-A
+- [x] School catchment polygon overlay (toggleable) — PR-B
+- [x] SkyTrain station radii overlay (toggleable) — PR-B
+- [x] Split view (map + list, synced hover/selection state) — PR-B
+- [ ] Responsive design pass — list view default on mobile, split view default on wide desktop — PR-C
+- [ ] Filter persistence (URL params) so searches are shareable/bookmarkable — PR-C
+- [ ] PWA install support — PR-C
 - [ ] **Milestone:** Beautiful experience on iPhone Safari and large desktop alike
 
 ## Phase 8: macOS & iOS Native (Phase 2 territory)

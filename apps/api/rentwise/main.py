@@ -198,6 +198,10 @@ def create_app() -> FastAPI:
 
     app.include_router(build_web_push_router())
 
+    from rentwise.http.map_overlays import build_router as build_map_overlays_router
+
+    app.include_router(build_map_overlays_router())
+
     # Phase 5 PR-B: alert scheduler. Off by default — tests / CI never
     # start a real interval. Production sets RENTWISE_SCHEDULER_ENABLED=1.
     _wire_alert_scheduler(app)

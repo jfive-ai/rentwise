@@ -49,6 +49,14 @@ export function SearchScreen({ apiBaseUrl }: Props) {
   const [errMsg, setErrMsg] = useState<string>("");
   const [savedDrawerOpen, setSavedDrawerOpen] = useState(false);
   const [savePromptOpen, setSavePromptOpen] = useState(false);
+  // Phase 7 PR-B: selection sync between map + list. Hover lives in
+  // its own state so the highlight is responsive without forcing the
+  // parent to re-render the whole grid; click commits to selection.
+  const [selectedListingId, setSelectedListingId] = useState<string | null>(null);
+  const [overlays, setOverlays] = useState<{ catchments: boolean; skytrain: boolean }>({
+    catchments: false,
+    skytrain: false,
+  });
   const [offset, setOffset] = useState<number>(0);
   const [lastCall, setLastCall] = useState<{ offset: number; append: boolean }>({
     offset: 0,
@@ -227,17 +235,50 @@ export function SearchScreen({ apiBaseUrl }: Props) {
           <View style={{ minHeight: 480 }}>
             <MapView
               listings={listings}
-              onSelectListing={() => {
-                // PR-A: hover/selection sync lands in PR-B's split view.
-                // For now the click is a no-op that PR-B will plug into.
-              }}
+              selectedListingId={selectedListingId}
+              onSelectListing={setSelectedListingId}
+              onHoverListing={setSelectedListingId}
+              overlays={overlays}
+              onToggleOverlay={(k) =>
+                setOverlays((o) => ({ ...o, [k]: !o[k] }))
+              }
+              apiBaseUrl={apiBaseUrl}
               onSearchBbox={() => {
-                // PR-A: bbox is captured but the backend doesn't yet act
-                // on it. PR-C wires it through URL params + a backend
-                // bbox filter.
+                // PR-C will encode bbox in URL params + add a backend filter.
                 onSearch();
               }}
             />
+          </View>
+        ) : view === "split" ? (
+          <View style={styles.split}>
+            <View style={styles.splitMap}>
+              <MapView
+                listings={listings}
+                selectedListingId={selectedListingId}
+                onSelectListing={setSelectedListingId}
+                onHoverListing={setSelectedListingId}
+                overlays={overlays}
+                onToggleOverlay={(k) =>
+                  setOverlays((o) => ({ ...o, [k]: !o[k] }))
+                }
+                apiBaseUrl={apiBaseUrl}
+                onSearchBbox={() => {
+                  onSearch();
+                }}
+              />
+            </View>
+            <View style={styles.splitList}>
+              <ListingTable
+                listings={listings}
+                sort={sort}
+                onSortChange={setSort}
+                actions={actions}
+                onAction={(id, f, v) => { void handleAction(id, f, v); }}
+                selectedListingId={selectedListingId}
+                onSelectListing={setSelectedListingId}
+                onHoverListing={setSelectedListingId}
+              />
+            </View>
           </View>
         ) : (
           <View style={{ minHeight: 400 }}>
@@ -247,6 +288,8 @@ export function SearchScreen({ apiBaseUrl }: Props) {
               onSortChange={setSort}
               actions={actions}
               onAction={(id, f, v) => { void handleAction(id, f, v); }}
+              selectedListingId={selectedListingId}
+              onSelectListing={setSelectedListingId}
             />
           </View>
         )}
@@ -286,4 +329,7 @@ const styles = StyleSheet.create({
   resultsContent: { padding: 16, gap: 16 },
   grid: { flexDirection: "row", flexWrap: "wrap", gap: 16 },
   loadMore: { alignSelf: "center", paddingHorizontal: 18, paddingVertical: 10, borderWidth: 1, borderRadius: 8 },
+  split: { flexDirection: "row", flexWrap: "wrap", gap: 16, minHeight: 480 },
+  splitMap: { flex: 1, minWidth: 320, minHeight: 480 },
+  splitList: { flex: 1, minWidth: 320, minHeight: 480 },
 });

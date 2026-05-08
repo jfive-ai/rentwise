@@ -41,11 +41,11 @@ describe("ResultsToolbar", () => {
     expect(props.onViewChange).toHaveBeenCalledWith("map");
   });
 
-  it("Split is still flagged as Phase 7 PR-B placeholder", () => {
+  it("Split view is now active and switches via the toolbar", () => {
     const { getByLabelText } = render(<ResultsToolbar {...props} />);
-    const splitBtn = getByLabelText(/Split view/);
-    expect(splitBtn.props.accessibilityState).toMatchObject({ disabled: true });
+    const splitBtn = getByLabelText("Split view");
+    expect(splitBtn.props.accessibilityState).not.toMatchObject({ disabled: true });
     fireEvent.press(splitBtn);
-    expect(props.onViewChange).not.toHaveBeenCalled();
+    expect(props.onViewChange).toHaveBeenCalledWith("split");
   });
 });
