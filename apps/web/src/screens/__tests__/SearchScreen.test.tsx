@@ -4,8 +4,25 @@
 import React from "react";
 import { Platform } from "react-native";
 import { fireEvent, render, waitFor } from "@testing-library/react-native";
+// Mock expo-router before importing SearchScreen — pulling the real module
+// drags in expo-asset which contains untransformed ESM and crashes the
+// jest transformer. Each test can override useLocalSearchParams via the
+// `mockSearchParams` helper below.
+let mockSearchParams: Record<string, string | string[]> = {};
+const mockReplace = jest.fn();
+jest.mock("expo-router", () => ({
+  router: { replace: (...args: unknown[]) => mockReplace(...args) },
+  useLocalSearchParams: () => mockSearchParams,
+}));
+
+// The mock+let block above MUST precede this import so the factory captures
+// the live mockSearchParams/mockReplace bindings before SearchScreen pulls
+// expo-router transitively. import/first is silenced for the same reason.
+// eslint-disable-next-line import/first
 import { SearchScreen } from "@/src/screens/SearchScreen";
+// eslint-disable-next-line import/first
 import { QueryProvider } from "@/src/state/QueryProvider";
+// eslint-disable-next-line import/first
 import fixture from "@/__fixtures__/search_response.json";
 
 beforeAll(() => {
@@ -36,6 +53,8 @@ describe("SearchScreen", () => {
       Promise.resolve(okResponse() as never)
     );
     window.localStorage.clear();
+    mockSearchParams = {};
+    mockReplace.mockReset();
   });
 
   afterEach(() => {
@@ -288,6 +307,37 @@ describe("SearchScreen", () => {
     expect((await findAllByText("$2,800")).length).toBeGreaterThan(0);
     // The pre-search empty state should be gone
     expect(queryByText(/Set filters and press Search/i)).toBeNull();
+  });
+
+  it("URL params on mount: hydrates query state and auto-fires a search", async () => {
+    // Simulate landing on /?bedrooms_min=2&price_max=3000&neighborhoods=Kitsilano
+    mockSearchParams = {
+      bedrooms_min: "2",
+      price_max: "3000",
+      neighborhoods: "Kitsilano",
+    };
+    const { getByText } = renderScreen();
+    // Auto-search runs; results render without us pressing Search.
+    await waitFor(() => expect(getByText("5 listings")).toBeTruthy());
+    // Find the /search call (skip /capture/pair etc) and check its query body.
+    const searchCall = (global.fetch as jest.Mock).mock.calls.find(
+      (c) => (c[0] as string).endsWith("/search"),
+    )!;
+    expect(JSON.parse(searchCall[1].body).query).toMatchObject({
+      bedrooms_min: 2,
+      price_max: 3000,
+      neighborhoods: ["Kitsilano"],
+    });
+  });
+
+  it("Search updates the URL with the encoded query (router.replace)", async () => {
+    const { getByText } = renderScreen();
+    fireEvent.press(getByText("Search"));
+    await waitFor(() => expect(getByText("5 listings")).toBeTruthy());
+    expect(mockReplace).toHaveBeenCalledWith({
+      pathname: "/",
+      params: expect.any(Object),
+    });
   });
 
   it("rapid Search clicks: only the latest response wins", async () => {
