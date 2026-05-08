@@ -40,14 +40,14 @@ def test_translate_query_happy_path_en(monkeypatch, client_under_test) -> None:
             ),
             unsupported_filters=[],
             lang_detected="en",
-            model_used="openrouter/qwen/qwen-2.5-72b-instruct:free",
+            model_used="openrouter/qwen/qwen3-next-80b-a3b-instruct:free",
         ),
     )
     resp = client_under_test.post("/translate-query", json={"text": "2br Kits under 3000 pet ok"})
     assert resp.status_code == 200
     body = resp.json()
     assert body["lang_detected"] == "en"
-    assert body["model_used"] == "openrouter/qwen/qwen-2.5-72b-instruct:free"
+    assert body["model_used"] == "openrouter/qwen/qwen3-next-80b-a3b-instruct:free"
     assert body["query"]["bedrooms_min"] == 2
     assert body["query"]["price_max"] == 3000
     assert body["query"]["neighborhoods"] == ["Kitsilano"]
@@ -61,7 +61,7 @@ def test_translate_query_happy_path_ko(monkeypatch, client_under_test) -> None:
             query=NormalizedQuery(bedrooms_min=2, price_max=3000, neighborhoods=["Kitsilano"]),
             unsupported_filters=[],
             lang_detected="ko",
-            model_used="openrouter/qwen/qwen-2.5-72b-instruct:free",
+            model_used="openrouter/qwen/qwen3-next-80b-a3b-instruct:free",
         ),
     )
     resp = client_under_test.post("/translate-query", json={"text": "키츠 2베드 3000불 이하"})

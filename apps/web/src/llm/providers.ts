@@ -1,5 +1,5 @@
 export interface ModelOption {
-  id: string; // litellm model string, e.g. "openrouter/qwen/qwen-2.5-72b-instruct:free"
+  id: string; // litellm model string, e.g. "openrouter/qwen/qwen3-next-80b-a3b-instruct:free"
   label: string; // user-facing label
   free?: boolean;
 }
@@ -18,8 +18,8 @@ export const PROVIDERS: ProviderOption[] = [
     needsKey: true,
     models: [
       {
-        id: "openrouter/qwen/qwen-2.5-72b-instruct:free",
-        label: "Qwen 2.5 72B (free, recommended for KO)",
+        id: "openrouter/qwen/qwen3-next-80b-a3b-instruct:free",
+        label: "Qwen3 Next 80B (free, recommended for KO)",
         free: true,
       },
       {
@@ -28,8 +28,8 @@ export const PROVIDERS: ProviderOption[] = [
         free: true,
       },
       {
-        id: "openrouter/google/gemma-3-27b-it:free",
-        label: "Gemma 3 27B (free)",
+        id: "openrouter/google/gemma-4-26b-a4b-it:free",
+        label: "Gemma 4 26B (free)",
         free: true,
       },
       { id: "openrouter/anthropic/claude-sonnet-4", label: "Claude Sonnet 4 (paid)" },

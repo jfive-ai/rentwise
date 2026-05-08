@@ -29,7 +29,7 @@ const mockResponse = (body: unknown, ok = true, status = 200) =>
   }) as never;
 
 const existingSettings = {
-  primary_model: "openrouter/qwen/qwen-2.5-72b-instruct:free",
+  primary_model: "openrouter/qwen/qwen3-next-80b-a3b-instruct:free",
   primary_api_key_masked: "sk-or-...eeff",
   fallback_model: null,
   fallback_api_key_masked: null,
@@ -92,7 +92,7 @@ describe("SettingsScreen", () => {
     const { getByText } = render(<SettingsScreen apiBaseUrl="http://api.test" />);
 
     await waitFor(() => expect(getByText("sk-or-...eeff")).toBeTruthy());
-    expect(getByText(/Qwen 2.5 72B/)).toBeTruthy();
+    expect(getByText(/Qwen3 Next 80B/)).toBeTruthy();
   });
 
   it("replace flow: typing a new key and Save sends it in the PUT body", async () => {
@@ -120,7 +120,7 @@ describe("SettingsScreen", () => {
       (c) => (c[1] as { method: string }).method === "PUT"
     )!;
     expect(JSON.parse((putCall[1] as { body: string }).body)).toMatchObject({
-      primary_model: "openrouter/qwen/qwen-2.5-72b-instruct:free",
+      primary_model: "openrouter/qwen/qwen3-next-80b-a3b-instruct:free",
       primary_api_key: "sk-or-newkey",
     });
   });

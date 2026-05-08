@@ -49,7 +49,7 @@ class Settings(BaseSettings):
 
     # --- LLM (LiteLLM) ---
     # See docs/llm-providers.md for full options.
-    rentwise_llm_model: str = "openrouter/qwen/qwen-2.5-72b-instruct:free"
+    rentwise_llm_model: str = "openrouter/qwen/qwen3-next-80b-a3b-instruct:free"
     rentwise_llm_fallback_model: str | None = "openrouter/meta-llama/llama-3.3-70b-instruct:free"
     rentwise_llm_timeout_seconds: int = 30
     rentwise_llm_max_retries: int = 2

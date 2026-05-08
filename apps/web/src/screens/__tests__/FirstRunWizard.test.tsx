@@ -34,7 +34,7 @@ describe("FirstRunWizard", () => {
       <FirstRunWizard apiBaseUrl="http://api.test" onComplete={() => {}} />
     );
     expect(getByText(/OpenRouter/)).toBeTruthy();
-    expect(getByText(/Qwen 2.5 72B/)).toBeTruthy();
+    expect(getByText(/Qwen3 Next 80B/)).toBeTruthy();
   });
 
   it("ollama provider hides the API key input", () => {
@@ -85,7 +85,7 @@ describe("FirstRunWizard", () => {
       )
       .mockResolvedValueOnce(
         mockResponse({
-          primary_model: "openrouter/qwen/qwen-2.5-72b-instruct:free",
+          primary_model: "openrouter/qwen/qwen3-next-80b-a3b-instruct:free",
           primary_api_key_masked: "sk-or-...test",
           fallback_model: null,
           fallback_api_key_masked: null,
@@ -104,7 +104,7 @@ describe("FirstRunWizard", () => {
     const calls = (global.fetch as jest.Mock).mock.calls;
     const putCall = calls.find((c) => (c[1] as { method: string }).method === "PUT")!;
     expect(JSON.parse((putCall[1] as { body: string }).body)).toMatchObject({
-      primary_model: "openrouter/qwen/qwen-2.5-72b-instruct:free",
+      primary_model: "openrouter/qwen/qwen3-next-80b-a3b-instruct:free",
       primary_api_key: "sk-or-test",
     });
   });

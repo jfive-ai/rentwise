@@ -48,7 +48,7 @@ def test_get_returns_404_when_unset(http_client: TestClient) -> None:
 
 def test_put_creates_settings_then_get_returns_masked(http_client: TestClient) -> None:
     body = {
-        "primary_model": "openrouter/qwen/qwen-2.5-72b-instruct:free",
+        "primary_model": "openrouter/qwen/qwen3-next-80b-a3b-instruct:free",
         "primary_api_key": "sk-or-v1-aabbccddeeff",
         "timeout_seconds": 20,
     }
@@ -92,7 +92,7 @@ def test_test_connection_success_does_not_persist(
         "R",
         (),
         {
-            "model": "openrouter/qwen/qwen-2.5-72b-instruct:free",
+            "model": "openrouter/qwen/qwen3-next-80b-a3b-instruct:free",
             "choices": [type("C", (), {"message": type("M", (), {"content": "ok"})()})()],
         },
     )()
@@ -100,7 +100,7 @@ def test_test_connection_success_does_not_persist(
     monkeypatch.setattr("rentwise.main.acompletion", mock)
 
     body = {
-        "primary_model": "openrouter/qwen/qwen-2.5-72b-instruct:free",
+        "primary_model": "openrouter/qwen/qwen3-next-80b-a3b-instruct:free",
         "primary_api_key": "sk-or-v1-test",
         "timeout_seconds": 5,
     }
@@ -123,7 +123,7 @@ def test_test_connection_failure_returns_ok_false(
     monkeypatch.setattr("rentwise.main.acompletion", mock)
 
     body = {
-        "primary_model": "openrouter/qwen/qwen-2.5-72b-instruct:free",
+        "primary_model": "openrouter/qwen/qwen3-next-80b-a3b-instruct:free",
         "primary_api_key": "sk-or-v1-test",
     }
     resp = http_client.post("/settings/llm/test", json=body)

@@ -91,7 +91,7 @@ describe("translateQuery", () => {
       },
       unsupported_filters: [],
       lang_detected: "en",
-      model_used: "openrouter/qwen/qwen-2.5-72b-instruct:free",
+      model_used: "openrouter/qwen/qwen3-next-80b-a3b-instruct:free",
     };
     const fetchMock = jest.fn().mockResolvedValue({
       ok: true,
@@ -149,7 +149,7 @@ describe("settings", () => {
 
   it("getSettings returns the masked payload on 200", async () => {
     const fixture = {
-      primary_model: "openrouter/qwen/qwen-2.5-72b-instruct:free",
+      primary_model: "openrouter/qwen/qwen3-next-80b-a3b-instruct:free",
       primary_api_key_masked: "sk-or-...eeff",
       fallback_model: null,
       fallback_api_key_masked: null,
