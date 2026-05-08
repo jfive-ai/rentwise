@@ -40,7 +40,6 @@ Tests use an in-memory SQLite per case (file-backed under a tmp dir so Alembic c
 rentwise/
 ├── adapters/          # Source adapters (Craigslist + Playwright base)
 ├── aggregator/        # /search orchestration + freshness / cache
-├── capture/           # /capture endpoint for the browser extension (Phase 3)
 ├── dedup/             # Cross-source duplicate scoring (Phase 4)
 ├── enrichment/        # Address + geocode + catchment + transit + photo phash
 ├── http/              # FastAPI routers
