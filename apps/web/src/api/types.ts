@@ -164,3 +164,23 @@ export interface SavedSearchResponse {
 export interface SavedSearchListResponse {
   items: SavedSearchResponse[];
 }
+
+// --- Phase 5 PR-C: web push subscriptions ---
+
+export interface WebPushPublicKeyResponse {
+  public_key: string;
+}
+
+export interface WebPushSubscribeRequest {
+  endpoint: string;
+  keys: { p256dh: string; auth: string };
+  alert_email?: string | null;
+  label?: string | null;
+}
+
+export interface WebPushSubscribeResponse {
+  id: number;
+  endpoint: string;
+  alert_email: string | null;
+  label: string | null;
+}

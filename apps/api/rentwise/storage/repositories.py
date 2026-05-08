@@ -19,6 +19,7 @@ from rentwise.storage.models import (
     PhotoHashCacheRow,
     Search,
     SourceHealthRow,
+    WebPushSubscriptionRow,
 )
 
 
@@ -634,8 +635,18 @@ class AlertLogRepo:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
-    async def get_alerted_ids(self, cache_key: str) -> set[str]:
-        stmt = select(AlertLogRow.listing_id).where(AlertLogRow.cache_key == cache_key)
+    async def get_alerted_ids(self, cache_key: str, *, channel: str = "email") -> set[str]:
+        """Listings already notified-on for ``cache_key`` via ``channel``.
+
+        Per-channel dedup means email and web push each maintain their
+        own ledger column-side, so adding a new channel later still
+        notifies for backlog listings the user previously got via the
+        other channel.
+        """
+        stmt = select(AlertLogRow.listing_id).where(
+            AlertLogRow.cache_key == cache_key,
+            AlertLogRow.channel == channel,
+        )
         rows = (await self.session.execute(stmt)).scalars().all()
         return set(rows)
 
@@ -652,7 +663,7 @@ class AlertLogRepo:
         # Use a per-row insert with skip-on-conflict semantics. SQLite has
         # `INSERT OR IGNORE`; SQLAlchemy's higher-level API doesn't expose
         # that portably, so we filter against the existing set first.
-        existing = await self.get_alerted_ids(cache_key)
+        existing = await self.get_alerted_ids(cache_key, channel=channel)
         for lid in listing_ids:
             if lid in existing:
                 continue
@@ -665,3 +676,112 @@ class AlertLogRepo:
                 )
             )
         await self.session.flush()
+
+
+# ---------------------------------------------------------------------------
+# WebPushSubscriptionRepo (Phase 5 PR-C)
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class WebPushSubscription:
+    id: int
+    endpoint: str
+    p256dh: str
+    auth: str
+    alert_email: str | None
+    label: str | None
+    created_at: str
+    last_seen_at: str
+
+
+class WebPushSubscriptionRepo:
+    """Persistence layer for browser web-push subscriptions.
+
+    Subscriptions are tagged with ``alert_email`` so the notifier can
+    route a saved-search alert to all subscriptions that share its
+    email. The natural key is ``endpoint`` (per RFC 8030) — the same
+    browser/origin re-subscribing produces the same endpoint and we
+    update in place rather than creating duplicates.
+    """
+
+    def __init__(self, session: AsyncSession) -> None:
+        self.session = session
+
+    async def get_by_endpoint(self, endpoint: str) -> WebPushSubscription | None:
+        stmt = select(WebPushSubscriptionRow).where(WebPushSubscriptionRow.endpoint == endpoint)
+        row = (await self.session.execute(stmt)).scalar_one_or_none()
+        return _to_subscription(row) if row else None
+
+    async def upsert(
+        self,
+        *,
+        endpoint: str,
+        p256dh: str,
+        auth: str,
+        alert_email: str | None,
+        label: str | None,
+    ) -> WebPushSubscription:
+        existing_stmt = select(WebPushSubscriptionRow).where(
+            WebPushSubscriptionRow.endpoint == endpoint
+        )
+        existing = (await self.session.execute(existing_stmt)).scalar_one_or_none()
+        now = _now_iso()
+        if existing is None:
+            row = WebPushSubscriptionRow(
+                endpoint=endpoint,
+                p256dh=p256dh,
+                auth=auth,
+                alert_email=alert_email,
+                label=label,
+                created_at=now,
+                last_seen_at=now,
+            )
+            self.session.add(row)
+        else:
+            existing.p256dh = p256dh
+            existing.auth = auth
+            existing.alert_email = alert_email
+            existing.label = label
+            existing.last_seen_at = now
+            row = existing
+        await self.session.flush()
+        return _to_subscription(row)
+
+    async def list_for_email(self, alert_email: str) -> list[WebPushSubscription]:
+        stmt = select(WebPushSubscriptionRow).where(
+            WebPushSubscriptionRow.alert_email == alert_email
+        )
+        rows = (await self.session.execute(stmt)).scalars().all()
+        return [_to_subscription(r) for r in rows]
+
+    async def delete(self, sub_id: int) -> bool:
+        row = await self.session.get(WebPushSubscriptionRow, sub_id)
+        if row is None:
+            return False
+        await self.session.delete(row)
+        await self.session.flush()
+        return True
+
+    async def delete_by_endpoint(self, endpoint: str) -> bool:
+        """Used by the notifier when the push service returns 410 Gone."""
+        stmt = select(WebPushSubscriptionRow).where(WebPushSubscriptionRow.endpoint == endpoint)
+        row = (await self.session.execute(stmt)).scalar_one_or_none()
+        if row is None:
+            return False
+        await self.session.delete(row)
+        await self.session.flush()
+        return True
+
+
+def _to_subscription(row: WebPushSubscriptionRow) -> WebPushSubscription:
+    return WebPushSubscription(
+        id=row.id,
+        endpoint=row.endpoint,
+        p256dh=row.p256dh,
+        auth=row.auth,
+        alert_email=row.alert_email,
+        label=row.label,
+        created_at=row.created_at,
+        last_seen_at=row.last_seen_at,
+    )

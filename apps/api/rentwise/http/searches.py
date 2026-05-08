@@ -86,10 +86,15 @@ def get_alert_runner(session: AsyncSession = Depends(session_dep)) -> AlertRunne
     from rentwise.adapters.base import SourceAdapter
     from rentwise.adapters.craigslist.adapter import CraigslistAdapter
     from rentwise.aggregator.service import AggregatorService
-    from rentwise.notifications.email import SmtpConfig, SmtpEmailNotifier
+    from rentwise.notifications.email import (
+        Notifier,
+        SmtpConfig,
+        SmtpEmailNotifier,
+    )
     from rentwise.notifications.runner import RunnerConfig
+    from rentwise.notifications.web_push import VapidConfig, WebPushNotifier
     from rentwise.settings import settings
-    from rentwise.storage.repositories import AlertLogRepo
+    from rentwise.storage.repositories import AlertLogRepo, WebPushSubscriptionRepo
 
     adapters: list[SourceAdapter] = [
         CraigslistAdapter(
@@ -102,19 +107,36 @@ def get_alert_runner(session: AsyncSession = Depends(session_dep)) -> AlertRunne
         session=session,
         cache_ttl_seconds=settings.search_cache_ttl_seconds,
     )
-    notifier = SmtpEmailNotifier(
-        SmtpConfig(
-            host=settings.rentwise_smtp_host or "localhost",
-            port=settings.rentwise_smtp_port,
-            starttls=settings.rentwise_smtp_starttls,
-            username=settings.rentwise_smtp_username,
-            password=settings.rentwise_smtp_password,
-            from_addr=settings.rentwise_alerts_from,
+
+    channels: dict[str, Notifier] = {
+        "email": SmtpEmailNotifier(
+            SmtpConfig(
+                host=settings.rentwise_smtp_host or "localhost",
+                port=settings.rentwise_smtp_port,
+                starttls=settings.rentwise_smtp_starttls,
+                username=settings.rentwise_smtp_username,
+                password=settings.rentwise_smtp_password,
+                from_addr=settings.rentwise_alerts_from,
+            )
         )
-    )
+    }
+    if (
+        settings.rentwise_web_push_enabled
+        and settings.rentwise_vapid_private_key is not None
+        and settings.rentwise_vapid_public_key is not None
+    ):
+        channels["web_push"] = WebPushNotifier(
+            repo=WebPushSubscriptionRepo(session),
+            vapid=VapidConfig(
+                public_key=settings.rentwise_vapid_public_key,
+                private_key=settings.rentwise_vapid_private_key,
+                contact=settings.rentwise_vapid_contact,
+            ),
+        )
+
     return AlertRunner(
         aggregator=aggregator,
-        notifier=notifier,
+        notifiers=channels,
         alert_log=AlertLogRepo(session),
         config=RunnerConfig(app_base_url=settings.rentwise_alerts_app_base_url),
     )

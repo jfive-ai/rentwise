@@ -11,6 +11,9 @@ import type {
   SearchResponse,
   TranslateQueryRequest,
   TranslateQueryResult,
+  WebPushPublicKeyResponse,
+  WebPushSubscribeRequest,
+  WebPushSubscribeResponse,
 } from "./types";
 
 export class ApiError extends Error {
@@ -35,6 +38,9 @@ export interface ApiClient {
   saveSearch(req: SaveSearchRequest): Promise<SavedSearchResponse>;
   listSavedSearches(): Promise<SavedSearchListResponse>;
   deleteSavedSearch(cacheKey: string): Promise<void>;
+  getWebPushPublicKey(): Promise<WebPushPublicKeyResponse | null>;
+  subscribeWebPush(req: WebPushSubscribeRequest): Promise<WebPushSubscribeResponse>;
+  unsubscribeWebPush(id: number): Promise<void>;
 }
 
 type HttpMethod = "GET" | "POST" | "PUT" | "DELETE";
@@ -112,6 +118,33 @@ export function searchClient(baseUrl: string): ApiClient {
       await request<void>(
         "DELETE",
         `/searches/${encodeURIComponent(cacheKey)}`,
+      );
+    },
+    async getWebPushPublicKey() {
+      try {
+        return await request<WebPushPublicKeyResponse>(
+          "GET",
+          "/notifications/web-push/public-key",
+        );
+      } catch (e) {
+        // Server returns 503 when web push isn't configured. The UI
+        // surfaces "browser notifications unavailable" rather than a
+        // hard error in that case.
+        if (e instanceof ApiError && e.status === 503) return null;
+        throw e;
+      }
+    },
+    subscribeWebPush(req) {
+      return request<WebPushSubscribeResponse>(
+        "POST",
+        "/notifications/web-push/subscribe",
+        req,
+      );
+    },
+    async unsubscribeWebPush(id: number) {
+      await request<void>(
+        "DELETE",
+        `/notifications/web-push/subscribe/${id}`,
       );
     },
   };

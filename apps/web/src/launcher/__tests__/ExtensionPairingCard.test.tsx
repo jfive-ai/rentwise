@@ -20,6 +20,9 @@ function makeClient(overrides: Partial<ApiClient>): ApiClient {
     saveSearch: jest.fn(),
     listSavedSearches: jest.fn(),
     deleteSavedSearch: jest.fn(),
+    getWebPushPublicKey: jest.fn(),
+    subscribeWebPush: jest.fn(),
+    unsubscribeWebPush: jest.fn(),
   };
   return { ...base, ...overrides };
 }

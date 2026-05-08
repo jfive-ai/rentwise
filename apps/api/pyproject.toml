@@ -23,6 +23,7 @@ dependencies = [
     "shapely>=2.0.0",
     "imagehash>=4.3.1",
     "pillow>=10.4.0",
+    "pywebpush>=2.0.0",
 ]
 
 [project.optional-dependencies]
@@ -76,6 +77,10 @@ module = [
     "PIL.*",
     "apscheduler",
     "apscheduler.*",
+    "pywebpush",
+    "pywebpush.*",
+    "py_vapid",
+    "py_vapid.*",
 ]
 ignore_missing_imports = true
 

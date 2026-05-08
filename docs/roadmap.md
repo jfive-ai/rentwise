@@ -97,7 +97,7 @@
 - [x] Save search UI (CRUD: drawer, save form, label + alert metadata) — PR-A
 - [x] Background job runner (APScheduler) — PR-B
 - [x] Email notifier (SMTP) — PR-B
-- [ ] Web push notifications — PR-C
+- [x] Web push notifications — PR-C
 - [x] Alert dedup (don't notify twice for same listing) — PR-B
 - [x] **Milestone:** Get an email when a new matching listing appears — PR-B
 
