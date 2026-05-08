@@ -4,6 +4,8 @@ import { searchClient } from "@/src/api/client";
 import { BrowserNotificationsCard } from "@/src/components/BrowserNotificationsCard";
 import { ExtensionPairingCard } from "@/src/launcher/ExtensionPairingCard";
 import {
+  CUSTOM_MODEL_ID,
+  inferProviderFromModelId,
   PROVIDERS,
   type ModelOption,
   type ProviderOption,
@@ -38,11 +40,18 @@ export function SettingsScreen({ apiBaseUrl }: Props) {
     [providerId]
   );
   const [modelId, setModelId] = useState<string>(provider.models[0].id);
+  // Holds the typed model string when modelId === CUSTOM_MODEL_ID. On mount,
+  // a saved primary_model that doesn't match any curated entry is restored
+  // here (and modelId is set to the sentinel) so the user can edit it.
+  const [customModel, setCustomModel] = useState<string>("");
   const [maskedKey, setMaskedKey] = useState<string | null>(null);
   const [replaceMode, setReplaceMode] = useState(false);
   const [apiKey, setApiKey] = useState("");
   const [test, setTest] = useState<TestState>({ kind: "idle" });
   const [save, setSave] = useState<SaveState>({ kind: "idle" });
+
+  const effectiveModel = modelId === CUSTOM_MODEL_ID ? customModel.trim() : modelId;
+  const customMissing = modelId === CUSTOM_MODEL_ID && effectiveModel.length === 0;
 
   // Load existing settings on mount.
   useEffect(() => {
@@ -52,12 +61,22 @@ export function SettingsScreen({ apiBaseUrl }: Props) {
       .then((s) => {
         if (cancelled) return;
         if (s) {
-          const found =
-            PROVIDERS.find((p) =>
-              p.models.some((m) => m.id === s.primary_model)
-            ) ?? PROVIDERS[0];
-          setProviderId(found.id);
-          setModelId(s.primary_model);
+          // If the saved model matches a curated entry, select it; otherwise
+          // route the saved string into the Custom branch and infer the
+          // provider from its LiteLLM prefix.
+          const matchedProvider = PROVIDERS.find((p) =>
+            p.models.some((m) => m.id === s.primary_model)
+          );
+          if (matchedProvider) {
+            setProviderId(matchedProvider.id);
+            setModelId(s.primary_model);
+            setCustomModel("");
+          } else {
+            const inferred = inferProviderFromModelId(s.primary_model);
+            setProviderId(inferred.id);
+            setModelId(CUSTOM_MODEL_ID);
+            setCustomModel(s.primary_model);
+          }
           setMaskedKey(s.primary_api_key_masked);
         }
         setLoading(false);
@@ -76,14 +95,16 @@ export function SettingsScreen({ apiBaseUrl }: Props) {
     const p = PROVIDERS.find((x) => x.id === id)!;
     setProviderId(id);
     setModelId(p.models[0].id);
+    setCustomModel("");
     setTest({ kind: "idle" });
   };
 
   const onTest = async () => {
+    if (customMissing) return;
     setTest({ kind: "running" });
     try {
       const result = await client.testConnection({
-        primary_model: modelId,
+        primary_model: effectiveModel,
         primary_api_key:
           provider.needsKey && replaceMode && apiKey.length > 0 ? apiKey : null,
       });
@@ -98,9 +119,10 @@ export function SettingsScreen({ apiBaseUrl }: Props) {
   };
 
   const onSave = async () => {
+    if (customMissing) return;
     setSave({ kind: "saving" });
     try {
-      const body: LLMSettingsUpdate = { primary_model: modelId };
+      const body: LLMSettingsUpdate = { primary_model: effectiveModel };
       if (replaceMode && apiKey.length > 0) {
         body.primary_api_key = apiKey;
       }
@@ -171,6 +193,21 @@ export function SettingsScreen({ apiBaseUrl }: Props) {
             </Text>
           </Pressable>
         ))}
+        {modelId === CUSTOM_MODEL_ID ? (
+          <TextInput
+            accessibilityLabel="Custom model ID"
+            placeholder="e.g. openai/gpt-5.5-pro"
+            placeholderTextColor={t.textMuted}
+            value={customModel}
+            onChangeText={(v) => {
+              setCustomModel(v);
+              setTest({ kind: "idle" });
+            }}
+            autoCapitalize="none"
+            autoCorrect={false}
+            style={[styles.input, { color: t.text, borderColor: t.border }]}
+          />
+        ) : null}
       </Section>
 
       {provider.needsKey ? (
