@@ -73,15 +73,15 @@ ios:
 	cd $(WEB_DIR) && npm run ios
 
 macos:
-	@echo "Starting macOS desktop app (Tauri)..."
-	@echo "Expo web dev server must be running (make web) or start it now..."
-	cd $(DESKTOP_DIR) && npm run tauri dev
+	@bash ./start-macos.sh
 
 stop:
 	@echo "Stopping RentWise services..."
 	@pkill -f "uvicorn rentwise.main:app" 2>/dev/null || true
 	@pkill -f "npm run web" 2>/dev/null || true
 	@pkill -f "start.sh" 2>/dev/null || true
+	@pkill -f "start-macos.sh" 2>/dev/null || true
+	@pkill -f "tauri dev" 2>/dev/null || true
 	@lsof -ti :8000 | xargs kill -9 2>/dev/null || true
 	@lsof -ti :8081 | xargs kill -9 2>/dev/null || true
 	@sleep 1
