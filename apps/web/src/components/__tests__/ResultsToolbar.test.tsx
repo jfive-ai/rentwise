@@ -33,14 +33,19 @@ describe("ResultsToolbar", () => {
     expect(props.onViewChange).toHaveBeenCalledWith("list");
   });
 
-  it("Map and Split buttons are disabled with a Phase 7 hint", () => {
-    const { getByLabelText, getByText } = render(<ResultsToolbar {...props} />);
-    const mapBtn = getByLabelText(/Map view/);
-    const splitBtn = getByLabelText(/Split view/);
-    expect(mapBtn.props.accessibilityState).toMatchObject({ disabled: true });
-    expect(splitBtn.props.accessibilityState).toMatchObject({ disabled: true });
+  it("Map view is now active and switches via the toolbar", () => {
+    const { getByLabelText } = render(<ResultsToolbar {...props} />);
+    const mapBtn = getByLabelText("Map view");
+    expect(mapBtn.props.accessibilityState).not.toMatchObject({ disabled: true });
     fireEvent.press(mapBtn);
+    expect(props.onViewChange).toHaveBeenCalledWith("map");
+  });
+
+  it("Split is still flagged as Phase 7 PR-B placeholder", () => {
+    const { getByLabelText } = render(<ResultsToolbar {...props} />);
+    const splitBtn = getByLabelText(/Split view/);
+    expect(splitBtn.props.accessibilityState).toMatchObject({ disabled: true });
+    fireEvent.press(splitBtn);
     expect(props.onViewChange).not.toHaveBeenCalled();
-    expect(getByText(/Phase 7/i)).toBeTruthy();
   });
 });
