@@ -99,7 +99,7 @@ RENTWISE_LLM_FALLBACK_MODEL=openrouter/meta-llama/llama-3.3-70b-instruct:free
 
 ## Settings UI Schema
 
-The app settings store this in SQLite (encrypted at rest):
+The app settings store this in SQLite (encrypted at rest with a Fernet key in `RENTWISE_SETTINGS_ENCRYPTION_KEY`):
 
 ```python
 class LLMSettings(BaseModel):
@@ -112,29 +112,40 @@ class LLMSettings(BaseModel):
     timeout_seconds: int = 30
 ```
 
-UI in the app:
-- **Provider** dropdown: OpenRouter / Anthropic / OpenAI / Google / Ollama / Custom
-- **Model** dropdown (filtered by provider, with free models tagged 🆓)
-- **API Key** input (masked, with "test connection" button)
-- **Fallback** section (collapsed by default)
+UI in the app (`apps/web/src/llm/providers.ts` is the source of truth for the curated lists):
+
+- **Provider** dropdown: OpenRouter / Anthropic / OpenAI / Google / Ollama.
+- **Model** dropdown filtered by provider, with free OpenRouter models tagged.
+- **Custom model ID…** sentinel option on every provider — selecting it reveals a `TextInput` so users can type any LiteLLM model string the curated list doesn't carry. Curated lists drift (OpenRouter rotates free models monthly; OpenAI ships new variants); the escape hatch makes the wizard durable.
+- **API Key** input (masked, with "Test connection" button — see the test-connection note below).
+- **Fallback** section (collapsed by default).
+
+### Test-connection budget
+
+`POST /settings/llm/test` issues a one-shot `acompletion` against the supplied settings without persisting them. Reasoning models (gpt-5.x, o-series, deepseek-r1) consume `max_tokens` with internal reasoning *before* any visible output, so a tiny budget like 1 returns "max_tokens reached" before the model finishes thinking. The endpoint sets `max_tokens=256` — enough for any current reasoning model's ping, trivial for non-reasoning ones. LiteLLM normalizes the parameter name across providers.
 
 ## Recommended Free Models for Korean + English
 
-Tested for RentWise's specific use case (NL → structured rental query):
+Tested for RentWise's specific use case (NL → structured rental query). OpenRouter's free roster rotates often — the curated list in `apps/web/src/llm/providers.ts` is what the wizard actually offers. As of the latest model-ID refresh (commit `f13db90` — `qwen-2.5-72b:free` and `gemma-3-12b:free` started returning HTTP 404):
 
 | Model | Korean Quality | English Quality | Tool Use | Notes |
 |---|---|---|---|---|
-| `qwen/qwen3-next-80b-a3b-instruct:free` | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ | ✅ Solid | **Default recommendation** |
-| `meta-llama/llama-3.3-70b-instruct:free` | ⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ | ✅ Solid | Strong fallback |
-| `google/gemma-4-26b-a4b-it:free` | ⭐⭐⭐⭐ | ⭐⭐⭐⭐ | ⚠️ Limited | Good for explanations, weaker tool use |
-| `deepseek/deepseek-r1:free` | ⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ | ⚠️ No native | Reasoning model — slower but accurate |
+| `openrouter/qwen/qwen3-next-80b-a3b-instruct:free` | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ | ✅ Solid | **Default recommendation** |
+| `openrouter/meta-llama/llama-3.3-70b-instruct:free` | ⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ | ✅ Solid | Strong fallback |
+| `openrouter/google/gemma-4-26b-a4b-it:free` | ⭐⭐⭐⭐ | ⭐⭐⭐⭐ | ⚠️ Limited | Good for explanations, weaker tool use |
+
+When OpenRouter rotates a free model out, use the **Custom model ID…** option in the wizard to type the new string instead of waiting for `providers.ts` to catch up.
 
 ## Recommended Paid Models (for production / hosted use)
+
+The OpenAI dropdown carries the gpt-5.x family added in commit `3b0cd70`; reasoning variants pair with the bumped test-connection budget noted above.
 
 | Model | Quality | Cost (approx) | Why |
 |---|---|---|---|
 | `anthropic/claude-sonnet-4` | ⭐⭐⭐⭐⭐ | ~$0.003 / query | Best Korean + tool use |
-| `openai/gpt-4o-mini` | ⭐⭐⭐⭐ | ~$0.0005 / query | Cheapest decent option |
+| `openai/gpt-5.5` | ⭐⭐⭐⭐⭐ | varies | OpenAI flagship; reasoning model — keep `timeout_seconds` ≥30 |
+| `openai/gpt-5.4-mini` | ⭐⭐⭐⭐ | varies | Mid-tier reasoning model, cheaper than 5.5 |
+| `openai/gpt-4o-mini` | ⭐⭐⭐⭐ | ~$0.0005 / query | Cheapest non-reasoning option, fast |
 | `google/gemini-2.5-flash` | ⭐⭐⭐⭐ | ~$0.0008 / query | Fast, multilingual |
 
 A "query" here = one user search input → one structured-query JSON output (~500 input + 200 output tokens).

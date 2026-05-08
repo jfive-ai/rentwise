@@ -116,10 +116,10 @@ Originally a standalone phase. As of the Phase 3 pivot to user-driven capture, F
 - [x] School catchment polygon overlay (toggleable) — PR-B
 - [x] SkyTrain station radii overlay (toggleable) — PR-B
 - [x] Split view (map + list, synced hover/selection state) — PR-B
-- [ ] Responsive design pass — list view default on mobile, split view default on wide desktop — PR-C-1
-- [ ] Filter persistence (URL params) so searches are shareable/bookmarkable — PR-C-2
-- [ ] PWA install support — PR-C-3
-- [ ] **Milestone:** Beautiful experience on iPhone Safari and large desktop alike
+- [x] Responsive design pass — list view default on mobile, split view default on wide desktop — PR-C-1
+- [x] Filter persistence (URL params) so searches are shareable/bookmarkable — PR-C-2
+- [x] PWA install support (manifest + app-shell service worker) — PR-C-3
+- [x] **Milestone:** Beautiful experience on iPhone Safari and large desktop alike
 
 ## Phase 8: Personal macOS app — retire the extension, ship direct adapters
 
@@ -129,13 +129,13 @@ Originally a standalone phase. As of the Phase 3 pivot to user-driven capture, F
 
 **Scope.**
 
-- [ ] PR-A — Package the existing Expo Universal app as a macOS app (start with Expo's web build wrapped via `expo-router/static` + a thin native shell, OR `expo build` for macOS Catalyst — whichever is the lighter lift).
-- [ ] PR-B — Extension removal. Delete `apps/extension/`, the capture endpoints under `apps/api/rentwise/capture/`, the pairing-token system, and the launcher subsystem in the web app. Update tests, README source table, and docs.
-- [ ] PR-C — Direct adapter: Rentals.ca. Their robots.txt is permissive on listing pages. Build a server-side adapter following `operational-rules.md`. Recorded fixtures only in CI.
-- [ ] PR-D — Direct adapter: PadMapper. Same shape as PR-C; check robots.txt at adapter init.
-- [ ] PR-E — Direct adapters: Zumper + REW.ca + liv.rent (one PR each, or bundled if shape ends up identical).
-- [ ] PR-F — Facebook Marketplace stays out of scope (login-walled; never automate). Add a clear "not supported" note in the source table.
-- [ ] **Milestone:** I can `open RentWise.app`, type "2br Kitsilano under $3000 pet-friendly", and see real results from all five direct sources within 10 seconds.
+- [x] PR-A — Package the existing Expo Universal app as a macOS app. Mac Catalyst via `expo run:ios --device "Mac"` produced an iOS-platform `.app` Finder refused to launch; we shipped an Electron shell at `apps/desktop/` instead. Build with `./scripts/build-mac.sh` (or `./scripts/build-mac.sh --install` to drop into `/Applications`). 100% of the TS source is the Expo web bundle — no native fork.
+- [x] PR-B — Extension removal. Deleted `apps/extension/`, the capture router/pairing/auth modules under `apps/api/rentwise/capture/`, the launcher subsystem in the web app, and the `captures` table (Alembic `0010_drop_capture`). README source table + docs updated.
+- [x] PR-C — Direct adapter: Rentals.ca. Server-side scaffold gated behind `RENTWISE_RENTALSCA_ENABLED`; honors robots.txt + the explicit query-param allow-list in the URL builder. Selectors calibrated against the synthetic test fixture only — `_extract` returns `[]` and logs `rentalsca.selectors_not_yet_calibrated` when no cards match. Re-calibration against live markup is a follow-up.
+- [x] PR-D — Direct adapter: PadMapper. Same shape as PR-C; gated behind `RENTWISE_PADMAPPER_ENABLED`. Enforces in-process guards against the documented Disallow paths and the `box=` query parameter (Python's `urllib.robotparser` does not parse `Disallow: /*box=*` reliably).
+- [x] PR-E — Direct adapters: Zumper + REW.ca + liv.rent — one bundled PR. All three are scaffolds with stub `_extract` returning `[]`, gated behind `RENTWISE_ZUMPER_ENABLED` / `RENTWISE_REW_ENABLED` / `RENTWISE_LIVRENT_ENABLED`. Real selectors land in follow-up PRs; do not claim coverage until then.
+- [x] PR-F — Facebook Marketplace confirmed out of scope (login-walled; never automate logins). README source table marks it as such.
+- [ ] **Milestone:** I can `open RentWise.app`, type "2br Kitsilano under $3000 pet-friendly", and see real results from all five direct sources within 10 seconds. *(Blocked on real selector calibration for PR-C/D/E — the `.app` ships and aggregates Craigslist today.)*
 
 ## Phase 9: Multi-user Hosted (Future)
 **Goal:** Let others sign up and use it without self-hosting.
