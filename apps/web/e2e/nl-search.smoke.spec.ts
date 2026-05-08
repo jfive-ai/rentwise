@@ -41,7 +41,8 @@ test("NL flow: type → parse → chips → search", async ({ page }) => {
   await expect(page.getByRole("button", { name: "Remove ≤$3000" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Remove 2+ beds" })).toBeVisible();
 
-  // Search
-  await page.getByRole("button", { name: "Search" }).click();
+  // Search — exact:true so Phase 5 PR-A's "Open saved searches" button
+  // doesn't also match this selector by name-substring.
+  await page.getByRole("button", { name: "Search", exact: true }).click();
   await expect(page.getByText("5 listings")).toBeVisible();
 });
