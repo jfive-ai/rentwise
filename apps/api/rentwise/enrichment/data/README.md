@@ -8,7 +8,7 @@ data.
 
 For real-world production use, refresh both files from the upstream
 sources below. This is a **manual maintainer task**, not an automated
-job — per the project's TOS posture (`docs/legal.md`) we don't
+job — per the project's TOS posture (`docs/operational-rules.md`) we don't
 auto-fetch external data.
 
 ## Refreshing `vsb_catchments.geojson`

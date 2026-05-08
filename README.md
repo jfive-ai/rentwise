@@ -12,7 +12,9 @@
 
 ## Status
 
-🚧 **Pre-alpha — under active development.** Vancouver, BC only for the MVP. Single-user, self-hosted.
+🚧 **Pre-alpha — under active development.** Vancouver, BC only.
+
+**Personal-use tool, not a service.** RentWise runs locally on a single machine for the person who installed it. It is not hosted for other users, not sold, and not redistributed. See [`docs/operational-rules.md`](docs/operational-rules.md) for the rules every adapter follows (rate limits, `robots.txt`, snippet caps, no re-hosting photos) so the project stays a polite citizen of the sites it queries.
 
 **Phases shipped:**
 
@@ -30,15 +32,15 @@
 
 | Source | Method | Status | Notes |
 |---|---|---|---|
-| Craigslist Vancouver | RSS, server-side | ✅ Shipped (Phase 1) | RSS-only per [legal.md § Craigslist](docs/legal.md#craigslist) |
-| Rentals.ca | Browser extension (user-driven) | ✅ Shipped (Phase 3 PR-C) | Server-side scraping prohibited by [TOS § 3.16](docs/legal.md#rentalsca-verified-2026-05-06) |
-| PadMapper | Browser extension (user-driven) | ✅ Shipped (Phase 3 PR-B) | Server-side scraping prohibited by [TOS § 8.4](docs/legal.md#padmapper-verified-2026-05-07) |
-| Zumper | Browser extension (user-driven) | ✅ Shipped (Phase 3 PR-C) | Server-side scraping prohibited by [TOS § 11](docs/legal.md#zumper-verified-2026-05-07) |
-| REW.ca | Browser extension (user-driven) | ✅ Shipped (Phase 3 PR-C) | Server-side scraping prohibited by [TOS](docs/legal.md#rewca-verified-2026-05-07) |
-| liv.rent | Browser extension (user-driven) | ✅ Shipped (Phase 3 PR-C) | Server-side scraping prohibited by [TOS § 7.1(v)/(w)](docs/legal.md#livrent-verified-2026-05-07) |
-| Facebook Marketplace | Browser extension (user-driven) | ✅ Shipped (Phase 3 PR-C) | Login-walled; extension reads pages the user already views |
+| Craigslist Vancouver | RSS, server-side | ✅ Shipped | RSS-only per [operational-rules.md § Craigslist](docs/operational-rules.md#craigslist) |
+| Rentals.ca | Browser extension (user-driven) | ✅ Shipped | Captures pages the user already views in their own session |
+| PadMapper | Browser extension (user-driven) | ✅ Shipped | Captures pages the user already views in their own session |
+| Zumper | Browser extension (user-driven) | ✅ Shipped | Captures pages the user already views in their own session |
+| REW.ca | Browser extension (user-driven) | ✅ Shipped | Captures pages the user already views in their own session |
+| liv.rent | Browser extension (user-driven) | ✅ Shipped | Captures pages the user already views in their own session |
+| Facebook Marketplace | Browser extension (user-driven) | ✅ Shipped | Login-walled; extension reads pages the user already views |
 
-The five originally planned server-side adapters all turned out to be TOS-blocked, so Phase 3 pivoted to a [user-driven browser extension](apps/extension/README.md) that captures listings from pages the user navigates to in their own session. See [`docs/roadmap.md`](docs/roadmap.md) Phase 3 for the rationale.
+> **Phase 8 pivot in progress** — the browser extension is being retired in favor of direct adapters that run inside the macOS app, since the extension was inconvenient in practice for a personal-use install. See `docs/roadmap.md` Phase 8.
 
 ## Why RentWise?
 
@@ -204,7 +206,7 @@ rentwise/
 │       └── src/                   # background worker, popup, options, content scripts
 ├── docs/
 │   ├── architecture.md
-│   ├── legal.md                  # Per-source TOS verdicts. Read before adding adapters.
+│   ├── operational-rules.md      # Rate limits, robots.txt, snippet caps. Read before adding adapters.
 │   ├── llm-providers.md
 │   ├── roadmap.md
 │   └── specifications.md
@@ -216,7 +218,7 @@ rentwise/
 ## Docs
 
 - [Roadmap](docs/roadmap.md) — phased build plan, what's shipped vs in-flight.
-- [Legal & Ethics](docs/legal.md) — per-source TOS verdicts. **Read before adding any adapter.**
+- [Operational rules](docs/operational-rules.md) — rate limits, robots.txt, snippet caps. **Read before adding any adapter.**
 - [Architecture](docs/architecture.md) — system design.
 - [LLM Providers](docs/llm-providers.md) — provider-agnostic LLM strategy.
 - [Specifications](docs/specifications.md) — full feature spec.

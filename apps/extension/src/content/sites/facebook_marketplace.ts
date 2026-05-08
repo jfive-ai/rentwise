@@ -1,7 +1,7 @@
 /**
  * Facebook Marketplace content script.
  *
- * Per `docs/legal.md` § "Facebook Marketplace": this is the highest-risk
+ * Per `docs/operational-rules.md` § "Facebook Marketplace": this is the highest-risk
  * source. The script:
  *   - activates ONLY on `/marketplace/.../propertyrentals` search paths
  *     and on `/marketplace/item/<id>/` detail pages,

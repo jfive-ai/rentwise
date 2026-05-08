@@ -185,7 +185,7 @@ class SourceAdapter(Protocol):
 | Rentals.ca | Browser | Respects robots.txt, throttled |
 | REW.ca | Browser | Respects robots.txt, throttled |
 | Craigslist Vancouver | RSS | Has RSS feeds — preferred |
-| Facebook Marketplace | Browser, opt-in only | See legal.md — user must auth their own session |
+| Facebook Marketplace | Browser, opt-in only | User must auth their own session — no automated login |
 
 ### 3.4 Deduplication
 
@@ -213,16 +213,18 @@ Once ingested, listings are enriched with:
 
 ## 4. Non-Functional Requirements
 
-### 4.1 Legal & Ethical
-- **Respect robots.txt** for every source.
-- **Throttle requests** — never more than 1 req/sec per source, with jitter.
-- **No login bypass** — for sites requiring login (e.g. Facebook Marketplace), the user must provide their own auth session via browser cookie.
-- **No re-display of full listing content** — store metadata + thumbnail only; full description/photos are linked back to source.
-- **User-agent honesty** — identify as RentWise/version with contact email.
-- **Honor opt-out requests** — if a platform asks us to stop, we stop.
-- **Personal use scope** — MVP is single-user self-hosted; commercial/hosted usage will require platform-specific permissions.
+### 4.1 Operational rules
 
-See [legal.md](legal.md) for the full policy.
+RentWise is a personal-use tool. To stay a polite citizen of the sites it queries (and keep my IP off block lists), every adapter follows:
+
+- **Respect `robots.txt`** for every source.
+- **Throttle requests** — ≤ 1 req/sec per source with 500–1500 ms jitter, no parallel requests against the same source.
+- **No login bypass / no CAPTCHA solving / no proxy hopping.** For sites requiring login (e.g. Facebook Marketplace), the user must provide their own auth session via their own browser cookie.
+- **No re-display of full listing content** — store metadata + thumbnail link only (≤ 200-char description snippet); full description and photos always link back to the source.
+- **User-Agent honesty** — identify as `RentWise/<version>` with a contact email so a sysadmin can reach me.
+- **Take-down responsiveness** — if a site asks me to stop, the adapter is disabled within 7 days and that source's cached rows are purged within 14.
+
+See [`operational-rules.md`](operational-rules.md) for the full playbook.
 
 ### 4.2 Privacy
 - All data stays on user's machine in self-hosted mode.

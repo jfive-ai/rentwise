@@ -5,7 +5,7 @@ Fetches the listing's primary photo URL once, computes a 64-bit
 keyed by URL. The cache is what keeps subsequent searches cheap — we
 never re-download an image we've already hashed.
 
-Per ``docs/legal.md`` § 4: photo URLs may be stored, photo bytes may
+Per ``docs/operational-rules.md`` § 4: photo URLs may be stored, photo bytes may
 not. The bytes live in memory only for the duration of the hash; we
 never write them to disk.
 """

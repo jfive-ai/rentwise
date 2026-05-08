@@ -7,7 +7,7 @@ login automation** — it is a passive reader of pages the user causes
 the browser to load.
 
 See `docs/superpowers/specs/2026-05-07-phase-3-launcher-extension-design.md`
-for the full design and `docs/legal.md` for the legal posture.
+for the full design and `docs/operational-rules.md` for the rate-limit / scraping rules every capture path follows.
 
 ## Sites covered
 
@@ -86,12 +86,12 @@ To refresh against production:
    the listing markup. Keep the file under a few hundred KB.
 4. Run `npm test` and update `SELECTORS` until tests pass.
 
-This is a manual maintainer task, not an automated job. Per the legal
-posture, RentWise does not auto-fetch source pages.
+This is a manual maintainer task, not an automated job — RentWise does
+not auto-fetch source pages.
 
 ## What is **never** captured
 
-Per `docs/legal.md`:
+Per `docs/operational-rules.md`:
 
 - Photo bytes (URLs only)
 - Verbatim listing descriptions in full (≤200 char snippet only)
