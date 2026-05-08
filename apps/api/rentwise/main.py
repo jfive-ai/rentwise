@@ -84,11 +84,23 @@ def create_app() -> FastAPI:
         }
 
     @app.post("/translate-query")
-    async def translate_query(payload: TranslateQueryRequest) -> dict:
-        """Translate natural-language input into a NormalizedQuery."""
+    async def translate_query(
+        payload: TranslateQueryRequest,
+        session: AsyncSession = Depends(session_dep),
+    ) -> dict:
+        """Translate natural-language input into a NormalizedQuery.
+
+        Prefer the LLM settings written through `PUT /settings/llm` (Settings
+        UI); fall back to env-based defaults when no row has been saved.
+        Without this lookup the env values would silently shadow the user's
+        chosen provider/key, which is what was happening in production for
+        users who had configured a non-default model via the UI.
+        """
+        repo = LLMSettingsRepo(session)
+        override = await repo.get()
         client = LLMClient()
         try:
-            result = await client.translate_query(payload.text)
+            result = await client.translate_query(payload.text, override=override)
         except LLMMalformedResponse as exc:
             raise HTTPException(
                 status_code=502,

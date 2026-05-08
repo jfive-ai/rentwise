@@ -14,11 +14,12 @@ from typing import Any
 
 import structlog
 from litellm import acompletion
-from pydantic import ValidationError
+from pydantic import SecretStr, ValidationError
 
 from rentwise.llm.errors import LLMMalformedResponse, LLMTransportError
 from rentwise.llm.prompts import QUERY_TOOL_SCHEMA, detect_language, render_system_prompt
 from rentwise.llm.result import TranslateQueryResult
+from rentwise.llm.settings_models import LLMSettings
 from rentwise.models import NormalizedQuery
 from rentwise.settings import settings
 
@@ -28,13 +29,18 @@ log = structlog.get_logger(__name__)
 class LLMClient:
     """Thin wrapper over LiteLLM with a single fallback retry."""
 
-    async def translate_query(self, user_input: str) -> TranslateQueryResult:
+    async def translate_query(
+        self,
+        user_input: str,
+        override: LLMSettings | None = None,
+    ) -> TranslateQueryResult:
         """Translate natural-language input into a TranslateQueryResult.
 
-        Tries primary model first; on transport failure (any exception from
-        LiteLLM), retries once with the fallback model if configured. Malformed
-        responses (no tool call, bad JSON, fields outside the schema) raise
-        immediately — they indicate a model or prompt regression, not a flake.
+        When `override` is provided (typically the row persisted via the
+        Settings UI), its model/key/timeout/base_url take precedence over env
+        defaults. Otherwise we read env-based settings — unchanged Phase-2
+        behavior. Tries primary first; on transport failure falls back once
+        if a fallback model is configured.
         """
         lang = detect_language(user_input)
         today = datetime.now(UTC).date()
@@ -44,19 +50,25 @@ class LLMClient:
             {"role": "user", "content": user_input},
         ]
 
-        # Read settings live each call so a settings UI / monkeypatch takes
-        # effect immediately, without depending on construction order.
-        primary = settings.rentwise_llm_model
-        fallback = settings.rentwise_llm_fallback_model
-        timeout = settings.rentwise_llm_timeout_seconds
-
-        models_to_try: list[str] = [primary]
-        if fallback:
-            models_to_try.append(fallback)
+        attempts: list[tuple[str, SecretStr | None]]
+        if override is not None:
+            attempts = [(override.primary_model, override.primary_api_key)]
+            if override.fallback_model:
+                attempts.append((override.fallback_model, override.fallback_api_key))
+            timeout = override.timeout_seconds
+            custom_base_url = override.custom_base_url
+        else:
+            attempts = [(settings.rentwise_llm_model, None)]
+            if settings.rentwise_llm_fallback_model:
+                attempts.append((settings.rentwise_llm_fallback_model, None))
+            timeout = settings.rentwise_llm_timeout_seconds
+            custom_base_url = None
 
         last_transport_error: Exception | None = None
-        for model in models_to_try:
-            credentials = _resolve_credentials(model)
+        for model, explicit_key in attempts:
+            credentials = _resolve_credentials(model, explicit_key)
+            if custom_base_url:
+                credentials["api_base"] = custom_base_url
             try:
                 response = await acompletion(
                     model=model,
@@ -108,14 +120,24 @@ class LLMClient:
                 return False
 
 
-def _resolve_credentials(model: str) -> dict[str, str]:
+def _resolve_credentials(
+    model: str,
+    explicit_key: SecretStr | None = None,
+) -> dict[str, str]:
     """Return kwargs (api_key, api_base) to pass to acompletion for the given model.
 
-    Reads from `settings` so a settings-UI change takes effect immediately.
-    Empty/None values are omitted so LiteLLM's own resolution still applies.
+    `explicit_key` (when set) wins — that's the path used when settings come
+    from the DB row written by the Settings UI. When no explicit key is
+    given, we fall back to the env-based per-provider key lookup. Empty/None
+    values are omitted so LiteLLM's own resolution still applies.
     """
     provider = model.split("/")[0]
     out: dict[str, str] = {}
+    if explicit_key is not None:
+        out["api_key"] = explicit_key.get_secret_value()
+        if provider == "ollama":
+            out["api_base"] = settings.ollama_base_url
+        return out
     match provider:
         case "openrouter" if settings.openrouter_api_key:
             out["api_key"] = settings.openrouter_api_key
