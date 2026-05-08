@@ -164,8 +164,23 @@ def create_app() -> FastAPI:
     @app.post("/settings/llm/test", response_model=LLMConnectionTestResult)
     async def test_llm_connection(
         body: LLMConnectionTestRequest,
+        session: AsyncSession = Depends(session_dep),
     ) -> LLMConnectionTestResult:
-        """Validate the supplied LLM settings WITHOUT persisting them."""
+        """Validate LLM settings WITHOUT persisting them.
+
+        Resolution rules for the API key:
+        - If the request supplies `primary_api_key`, use that (the user is
+          testing a freshly-typed key before saving).
+        - Otherwise, if a settings row exists *and its primary_model matches
+          the model being tested*, fall back to the saved key (the user
+          revisited Settings, didn't click Replace, and is just re-testing
+          what's already saved).
+        - Otherwise, send no api_key — LiteLLM will surface the missing-key
+          error, which is the truthful result.
+
+        Without this fallback, returning users always saw "api_key must be
+        set" because the masked key never round-trips back to the request.
+        """
         kwargs: dict[str, object] = {
             "model": body.primary_model,
             "messages": [{"role": "user", "content": "ping"}],
@@ -179,6 +194,14 @@ def create_app() -> FastAPI:
         }
         if body.primary_api_key is not None:
             kwargs["api_key"] = body.primary_api_key.get_secret_value()
+        else:
+            saved = await LLMSettingsRepo(session).get()
+            if (
+                saved is not None
+                and saved.primary_model == body.primary_model
+                and saved.primary_api_key is not None
+            ):
+                kwargs["api_key"] = saved.primary_api_key.get_secret_value()
         if body.custom_base_url is not None:
             kwargs["api_base"] = body.custom_base_url
 

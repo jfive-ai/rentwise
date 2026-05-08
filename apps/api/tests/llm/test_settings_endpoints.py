@@ -14,8 +14,16 @@ _TEST_FERNET_KEY = "M2zZqQrAvFkkr_xWmaVjJqASfh-dhmL7yLQ2hM6oMmU="
 
 
 @pytest.fixture(autouse=True)
-def _isolate_db_and_keys(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Each test gets its own SQLite file + a fresh schema."""
+def _isolate_db_and_keys(tmp_path, monkeypatch: pytest.MonkeyPatch):
+    """Each test gets its own SQLite file + a fresh schema.
+
+    Clearing the cache on teardown matters: without it, `get_engine`'s
+    lru_cache holds a connection to the now-deleted tmp_path DB, which the
+    next test file (e.g. test_translate_query_endpoint) inherits and fails
+    on with a Fernet `InvalidToken` (DB rows were encrypted with the
+    monkeypatched test key, but the live settings have reverted to the
+    real key).
+    """
     from alembic.config import Config
 
     from alembic import command
@@ -33,6 +41,11 @@ def _isolate_db_and_keys(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
     cfg = Config(str(pathlib.Path(__file__).resolve().parents[2] / "alembic.ini"))
     cfg.set_main_option("sqlalchemy.url", db_url)
     command.upgrade(cfg, "head")
+
+    yield
+
+    db_mod.get_engine.cache_clear()
+    db_mod.get_sessionmaker.cache_clear()
 
 
 @pytest.fixture
@@ -164,3 +177,69 @@ def test_test_connection_failure_returns_ok_false(
     out = resp.json()
     assert out["ok"] is False
     assert "provider unreachable" in (out["error"] or "")
+
+
+def test_test_connection_falls_back_to_saved_key_when_body_omits_it(
+    http_client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Returning user revisits Settings, sees the masked key, and clicks
+    Test connection without clicking Replace. The frontend sends
+    primary_api_key=null. The endpoint must re-use the persisted key —
+    otherwise Test always fails with "api_key must be set" until you
+    re-paste the key, which is the bug we're fixing."""
+    fake_response = type(
+        "R",
+        (),
+        {
+            "model": "openai/gpt-5-nano",
+            "choices": [type("C", (), {"message": type("M", (), {"content": "ok"})()})()],
+        },
+    )()
+    mock = AsyncMock(return_value=fake_response)
+    monkeypatch.setattr("rentwise.main.acompletion", mock)
+
+    # Seed via PUT (mirrors the wizard saving)
+    put = http_client.put(
+        "/settings/llm",
+        json={
+            "primary_model": "openai/gpt-5-nano",
+            "primary_api_key": "sk-real-saved-key",
+        },
+    )
+    assert put.status_code == 200
+
+    # Now Test connection with no key in the body (the masked key never
+    # round-trips)
+    resp = http_client.post(
+        "/settings/llm/test",
+        json={"primary_model": "openai/gpt-5-nano"},
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["ok"] is True
+
+    # Crucially, the saved key was passed to LiteLLM
+    assert mock.await_args.kwargs["api_key"] == "sk-real-saved-key"
+
+
+def test_test_connection_does_not_use_saved_key_for_a_different_model(
+    http_client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """If the user picks a different model than what's saved, the saved
+    key shouldn't be silently sent — it likely belongs to a different
+    provider (e.g. switching from OpenAI to Anthropic) and would 401."""
+    mock = AsyncMock(return_value=type("R", (), {"model": "x", "choices": []})())
+    monkeypatch.setattr("rentwise.main.acompletion", mock)
+
+    http_client.put(
+        "/settings/llm",
+        json={
+            "primary_model": "openai/gpt-5-nano",
+            "primary_api_key": "sk-openai",
+        },
+    )
+
+    http_client.post(
+        "/settings/llm/test",
+        json={"primary_model": "anthropic/claude-sonnet-4"},
+    )
+    assert "api_key" not in mock.await_args.kwargs
