@@ -6,6 +6,7 @@ import { QueryProvider } from "@/src/state/QueryProvider";
 import { FirstRunWizard } from "@/src/screens/FirstRunWizard";
 import { searchClient } from "@/src/api/client";
 import { installPwaHooks } from "@/src/lib/pwa";
+import { LogoLockup } from "@/src/components/Logo";
 
 const API_BASE_URL =
   (Constants.expoConfig?.extra?.apiBaseUrl as string | undefined) ??
@@ -92,18 +93,20 @@ export default function RootLayout() {
     <QueryProvider>
       <Stack
         screenOptions={{
-          headerStyle: { backgroundColor: "#0f172a" },
-          headerTintColor: "#f8fafc",
+          headerStyle: { backgroundColor: "#ffffff" },
+          headerTintColor: "#0f172a",
           headerTitleStyle: { fontWeight: "600" },
+          headerShadowVisible: true,
         }}
       >
         <Stack.Screen
           name="index"
           options={{
             title: "RentWise",
+            headerTitle: () => <LogoLockup size={24} />,
             headerRight: () => (
               <Link href="/settings" accessibilityLabel="Open settings">
-                <Text style={{ color: "#f8fafc", fontSize: 18, paddingHorizontal: 12 }}>
+                <Text style={{ color: "#0f172a", fontSize: 18, paddingHorizontal: 12 }}>
                   ⚙
                 </Text>
               </Link>
