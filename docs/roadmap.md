@@ -85,9 +85,9 @@
 - [x] Geocoding (Nominatim) + persistent geocode cache — PR-A
 - [ ] Photo perceptual hashing (`imagehash`) — PR-C
 - [ ] Dedup matching algorithm + confidence scoring — PR-C
-- [ ] School catchment lookup (VSB shapefiles) — PR-B
-- [ ] Transit lookup (TransLink GTFS) — PR-B
-- [ ] Filters: `school_catchment` + `transit_max_walk_minutes` wired through `/search` — PR-B
+- [x] School catchment lookup (VSB GeoJSON; `shapely` point-in-polygon) — PR-B
+- [x] Transit lookup (TransLink slim stops; haversine + 5 km/h) — PR-B
+- [x] Filters: `school_catchment` + `transit_max_walk_minutes` wired through `/search` — PR-B
 - [ ] UI polish: school chip, transit slider, "duplicate of …" affordance — PR-D
 - [ ] **Milestone:** "2br in Lord Byng catchment" works correctly
 

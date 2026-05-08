@@ -1,0 +1,74 @@
+{
+  "type": "FeatureCollection",
+  "_note": "Synthetic Vancouver School Board catchment polygons. Hand-authored, NOT verbatim VSB shapefiles. See README.md for the manual refresh process.",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "level": "elementary",
+        "name": "Henry Hudson"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-123.180, 49.265],
+          [-123.150, 49.265],
+          [-123.150, 49.285],
+          [-123.180, 49.285],
+          [-123.180, 49.265]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "level": "elementary",
+        "name": "Lord Tennyson"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-123.150, 49.245],
+          [-123.110, 49.245],
+          [-123.110, 49.270],
+          [-123.150, 49.270],
+          [-123.150, 49.245]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "level": "secondary",
+        "name": "Lord Byng"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-123.220, 49.255],
+          [-123.150, 49.255],
+          [-123.150, 49.295],
+          [-123.220, 49.295],
+          [-123.220, 49.255]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "level": "secondary",
+        "name": "Eric Hamber"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [-123.150, 49.225],
+          [-123.090, 49.225],
+          [-123.090, 49.265],
+          [-123.150, 49.265],
+          [-123.150, 49.225]
+        ]]
+      }
+    }
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "_note": "Synthetic TransLink stop subset. Hand-authored, NOT verbatim GTFS data. See README.md for the manual refresh process from translink.ca's GTFS feed.",
+  "stops": [
+    { "stop_id": "61610", "name": "Broadway-City Hall Station", "lat": 49.2630, "lon": -123.1140, "lines": ["Canada Line"], "route_types": ["skytrain"] },
+    { "stop_id": "61570", "name": "Granville Station",          "lat": 49.2839, "lon": -123.1170, "lines": ["Canada Line", "Expo Line"], "route_types": ["skytrain"] },
+    { "stop_id": "61240", "name": "Olympic Village Station",    "lat": 49.2666, "lon": -123.1162, "lines": ["Canada Line"], "route_types": ["skytrain"] },
+    { "stop_id": "60490", "name": "Stadium-Chinatown Station",  "lat": 49.2796, "lon": -123.1093, "lines": ["Expo Line"],   "route_types": ["skytrain"] },
+    { "stop_id": "50010", "name": "Main Street-Science World",  "lat": 49.2731, "lon": -123.1004, "lines": ["Expo Line"],   "route_types": ["skytrain"] },
+    { "stop_id": "55280", "name": "King Edward Station",        "lat": 49.2491, "lon": -123.1158, "lines": ["Canada Line"], "route_types": ["skytrain"] },
+    { "stop_id": "55320", "name": "Oakridge-41st Avenue",       "lat": 49.2330, "lon": -123.1170, "lines": ["Canada Line"], "route_types": ["skytrain"] },
+    { "stop_id": "60690", "name": "Commercial-Broadway Station","lat": 49.2625, "lon": -123.0691, "lines": ["Expo Line", "Millennium Line"], "route_types": ["skytrain"] },
+    { "stop_id": "62530", "name": "Joyce-Collingwood Station",  "lat": 49.2382, "lon": -123.0322, "lines": ["Expo Line"],   "route_types": ["skytrain"] },
+    { "stop_id": "61020", "name": "VCC-Clark Station",          "lat": 49.2654, "lon": -123.0784, "lines": ["Millennium Line"], "route_types": ["skytrain"] },
+    { "stop_id": "10020", "name": "W 4th @ MacDonald (bus)",    "lat": 49.2680, "lon": -123.1741, "lines": ["4"], "route_types": ["bus"] },
+    { "stop_id": "10030", "name": "W Broadway @ Granville",     "lat": 49.2638, "lon": -123.1383, "lines": ["9", "99"], "route_types": ["bus"] }
+  ]
+}

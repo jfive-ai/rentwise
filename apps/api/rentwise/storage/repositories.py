@@ -11,7 +11,7 @@ from pydantic import HttpUrl
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from rentwise.models import AdapterHealth, NormalizedListing, SchoolCatchments
+from rentwise.models import AdapterHealth, NormalizedListing, SchoolCatchments, TransitInfo
 from rentwise.storage.models import GeocodeCacheRow, Listing, Search, SourceHealthRow
 
 
@@ -47,6 +47,15 @@ def _to_pydantic(row: Listing) -> NormalizedListing:
             elementary=row.catchment_elementary,
             middle=row.catchment_middle,
             secondary=row.catchment_secondary,
+        ),
+        nearest_transit=(
+            TransitInfo(
+                nearest_stop_name=row.nearest_transit_stop,
+                walk_minutes=row.nearest_transit_walk_minutes,
+                line=row.nearest_transit_line,
+            )
+            if row.nearest_transit_stop is not None and row.nearest_transit_walk_minutes is not None
+            else None
         ),
         raw_metadata=json.loads(row.raw_metadata_json or "{}"),
     )
@@ -109,6 +118,19 @@ class ListingRepo:
                 catchment_elementary=listing.school_catchments.elementary,
                 catchment_middle=listing.school_catchments.middle,
                 catchment_secondary=listing.school_catchments.secondary,
+                nearest_transit_stop=(
+                    listing.nearest_transit.nearest_stop_name
+                    if listing.nearest_transit is not None
+                    else None
+                ),
+                nearest_transit_walk_minutes=(
+                    listing.nearest_transit.walk_minutes
+                    if listing.nearest_transit is not None
+                    else None
+                ),
+                nearest_transit_line=(
+                    listing.nearest_transit.line if listing.nearest_transit is not None else None
+                ),
                 photo_urls_json=json.dumps([str(u) for u in listing.photos]),
                 raw_metadata_json=json.dumps(listing.raw_metadata or {}),
                 created_at=now,
@@ -118,12 +140,24 @@ class ListingRepo:
         else:
             existing.title = listing.title
             existing.snippet = listing.description_snippet
+            existing.address_normalized = listing.address_normalized
             existing.lat = listing.lat
             existing.lon = listing.lon
             existing.bedrooms = listing.bedrooms
             existing.bathrooms = listing.bathrooms
             existing.price_cad = listing.price_cad
             existing.last_seen_at = listing.last_seen_at.isoformat()
+            existing.catchment_elementary = listing.school_catchments.elementary
+            existing.catchment_middle = listing.school_catchments.middle
+            existing.catchment_secondary = listing.school_catchments.secondary
+            if listing.nearest_transit is not None:
+                existing.nearest_transit_stop = listing.nearest_transit.nearest_stop_name
+                existing.nearest_transit_walk_minutes = listing.nearest_transit.walk_minutes
+                existing.nearest_transit_line = listing.nearest_transit.line
+            else:
+                existing.nearest_transit_stop = None
+                existing.nearest_transit_walk_minutes = None
+                existing.nearest_transit_line = None
             existing.updated_at = now
             row = existing
 

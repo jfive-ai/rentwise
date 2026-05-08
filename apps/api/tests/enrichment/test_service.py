@@ -64,11 +64,22 @@ class FakeGeocoder:
 
 @pytest.fixture
 def make_service(session):
-    def factory(geocoder: FakeGeocoder, *, enabled: bool = True) -> EnrichmentService:
+    def factory(
+        geocoder: FakeGeocoder,
+        *,
+        enabled: bool = True,
+        school_catchments_enabled: bool = True,
+        transit_enabled: bool = True,
+    ) -> EnrichmentService:
         return EnrichmentService(
             cache_repo=GeocodeCacheRepo(session),
             geocoder=geocoder,
-            config=EnrichmentConfig(enabled=enabled, cache_ttl_days=30),
+            config=EnrichmentConfig(
+                enabled=enabled,
+                cache_ttl_days=30,
+                school_catchments_enabled=school_catchments_enabled,
+                transit_enabled=transit_enabled,
+            ),
         )
 
     return factory
@@ -222,3 +233,48 @@ async def test_enrich_caches_negative_result(make_service, session):
     assert cached is not None
     assert cached.lat is None
     assert cached.lon is None
+
+
+@pytest.mark.asyncio
+async def test_enrich_populates_school_catchments_when_inside_polygon(make_service):
+    """Geocoder returns coords inside the synthetic Lord Byng polygon."""
+    geocoder = FakeGeocoder(result=GeocodeResult(lat=49.275, lon=-123.180))
+    svc = make_service(geocoder)
+    listing = _listing()
+
+    out = await svc.enrich(listing)
+    assert out.school_catchments.secondary == "Lord Byng"
+
+
+@pytest.mark.asyncio
+async def test_enrich_populates_nearest_transit_when_within_radius(make_service):
+    """Geocoder returns coords near Broadway-City Hall in the synthetic stops."""
+    geocoder = FakeGeocoder(result=GeocodeResult(lat=49.263, lon=-123.115))
+    svc = make_service(geocoder)
+    listing = _listing()
+
+    out = await svc.enrich(listing)
+    assert out.nearest_transit is not None
+    assert out.nearest_transit.nearest_stop_name == "Broadway-City Hall Station"
+    assert out.nearest_transit.line == "Canada Line"
+    assert out.nearest_transit.walk_minutes >= 0
+
+
+@pytest.mark.asyncio
+async def test_enrich_skips_school_catchments_when_disabled(make_service):
+    geocoder = FakeGeocoder(result=GeocodeResult(lat=49.275, lon=-123.180))
+    svc = make_service(geocoder, school_catchments_enabled=False)
+    listing = _listing()
+
+    out = await svc.enrich(listing)
+    assert out.school_catchments.secondary is None
+
+
+@pytest.mark.asyncio
+async def test_enrich_skips_transit_when_disabled(make_service):
+    geocoder = FakeGeocoder(result=GeocodeResult(lat=49.263, lon=-123.115))
+    svc = make_service(geocoder, transit_enabled=False)
+    listing = _listing()
+
+    out = await svc.enrich(listing)
+    assert out.nearest_transit is None

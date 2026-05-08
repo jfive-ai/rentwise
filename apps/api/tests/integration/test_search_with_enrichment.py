@@ -160,3 +160,92 @@ def test_second_search_uses_cache(app_client) -> None:
         json={"query": {"bedrooms_min": 1, "price_max": 99999}, "limit": 50},
     )
     assert len(geocoder.calls) == first_calls
+
+
+@pytest.fixture
+def app_client_post_filter(monkeypatch, tmp_sqlite_url):
+    """Variant of app_client whose geocoder dispatches per-address so we
+    can place listings inside vs outside the synthetic Lord Byng polygon."""
+    monkeypatch.setenv("DATABASE_URL", tmp_sqlite_url)
+
+    from alembic.config import Config
+
+    from alembic import command
+
+    cfg = Config(str(Path(__file__).resolve().parents[2] / "alembic.ini"))
+    cfg.set_main_option("sqlalchemy.url", tmp_sqlite_url)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+        pool.submit(command.upgrade, cfg, "head").result()
+
+    from rentwise.storage import db as dbmod
+
+    dbmod.get_engine.cache_clear()
+    dbmod.get_sessionmaker.cache_clear()
+
+    from rentwise.settings import settings
+
+    settings.database_url = tmp_sqlite_url
+
+    from rentwise.http.search import get_adapters, get_geocoder
+    from rentwise.main import create_app
+
+    # Two listings with parseable Vancouver addresses. The geocoder
+    # dispatches by street so one lands in the synthetic Lord Byng
+    # polygon and one lands outside it.
+    fake_adapter = _FakeAdapter(
+        [
+            _raw(101, "1234 W 8th Ave, Vancouver, BC"),
+            _raw(102, "5500 E 49th Ave, Vancouver, BC"),
+        ]
+    )
+
+    class _DispatchingGeocoder:
+        def __init__(self):
+            self.calls = []
+
+        async def geocode(self, query: str):
+            self.calls.append(query)
+            if "8th avenue" in query.lower():
+                return GeocodeResult(lat=49.275, lon=-123.180)
+            return GeocodeResult(lat=49.230, lon=-123.080)
+
+    geo = _DispatchingGeocoder()
+
+    app = create_app()
+    app.dependency_overrides[get_adapters] = lambda: [fake_adapter]
+    app.dependency_overrides[get_geocoder] = lambda: geo
+
+    with TestClient(app) as client:
+        yield client, geo
+
+
+@pytest.mark.integration
+def test_school_catchment_post_filter_drops_outside_listings(app_client_post_filter) -> None:
+    client, _geo = app_client_post_filter
+    r = client.post("/search", json={"query": {"school_catchment": "Lord Byng"}, "limit": 50})
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["total"] == 1
+    assert body["listings"][0]["source_listing_id"] == "101"
+    assert body["listings"][0]["school_catchments"]["secondary"] == "Lord Byng"
+    assert "school_catchment" not in body["unsupported_filters"]
+
+
+@pytest.mark.integration
+def test_transit_max_walk_post_filter(app_client_post_filter) -> None:
+    """Both listings get a nearest_transit (synthetic stops cover the city);
+    a max-walk filter that only the inside-Byng coords satisfy proves the
+    aggregator drops the other one."""
+    client, _geo = app_client_post_filter
+    # Inside-Byng (49.275, -123.180) is ~5 km from Broadway-City Hall but
+    # closer to W 4th @ MacDonald (10020 at 49.268, -123.174). The outside
+    # listing (49.230, -123.080) is closest to Joyce-Collingwood (49.238,
+    # -123.032) — much further from any other stop. Cap walk at 4 minutes
+    # to drop the latter.
+    r = client.post("/search", json={"query": {"transit_max_walk_minutes": 4}, "limit": 50})
+    assert r.status_code == 200, r.text
+    body = r.json()
+    # At least the obviously-far listing must be dropped.
+    ids = {lst["source_listing_id"] for lst in body["listings"]}
+    assert "102" not in ids
+    assert "transit_max_walk_minutes" not in body["unsupported_filters"]
