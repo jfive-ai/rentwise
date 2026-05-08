@@ -14,6 +14,7 @@ import { MapView } from "@/src/components/MapView";
 import { SaveSearchForm } from "@/src/components/SaveSearchForm";
 import { SavedSearchesDrawer } from "@/src/components/SavedSearchesDrawer";
 import { groupByCanonical } from "@/src/lib/listingClusters";
+import { defaultViewForWidth, isStacked, useViewportWidth } from "@/src/lib/responsive";
 import {
   EmptyState,
   ErrorState,
@@ -39,7 +40,21 @@ export function SearchScreen({ apiBaseUrl }: Props) {
   const { query, mode, replace } = useQuery();
   const client = useMemo(() => searchClient(apiBaseUrl), [apiBaseUrl]);
 
-  const [view, setView] = useState<ViewMode>("cards");
+  // Phase 7 PR-C-1: viewport-aware initial view. Mount-only so a user
+  // who picks Cards on a wide screen and resizes narrower keeps Cards.
+  const viewportWidth = useViewportWidth();
+  const initialView = useMemo<ViewMode>(
+    () => defaultViewForWidth(viewportWidth),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
+  const [view, setView] = useState<ViewMode>(initialView);
+  // True when filter sidebar should stack above results (narrow screens).
+  // Re-evaluates on resize because layout *should* react live, unlike `view`.
+  const stacked = isStacked(viewportWidth);
+  // On narrow viewports the filter pane is collapsed by default to give the
+  // results room to breathe. The user can expand it via the toolbar toggle.
+  const [filtersOpen, setFiltersOpen] = useState<boolean>(!stacked);
   const [sort, setSort] = useState<SortOrder>("newest");
   const [listings, setListings] = useState<NormalizedListing[]>([]);
   const [total, setTotal] = useState<number>(0);
@@ -159,26 +174,49 @@ export function SearchScreen({ apiBaseUrl }: Props) {
   const clusters = useMemo(() => groupByCanonical(listings), [listings]);
 
   return (
-    <View style={[styles.root, { backgroundColor: t.bg }]}>
-      <View style={[styles.filters, { borderColor: t.border, backgroundColor: t.surface }]}>
-        <View style={styles.modeRow}>
-          <ModeToggle />
-        </View>
-        {mode === "nl" ? (
-          <View style={styles.nlPane}>
-            <NLSearchBar apiBaseUrl={apiBaseUrl} />
-            <ParsedQueryChips />
-            <Pressable
-              accessibilityRole="button"
-              onPress={onSearch}
-              style={[styles.searchBtn, { backgroundColor: t.accent }]}
-            >
-              <Text style={{ color: "#fff", fontWeight: "600" }}>Search</Text>
-            </Pressable>
-          </View>
-        ) : (
-          <FilterPanel onSearch={onSearch} onLauncherFired={onLauncherFired} />
-        )}
+    <View style={[styles.root, stacked && styles.rootStacked, { backgroundColor: t.bg }]}>
+      <View
+        style={[
+          styles.filters,
+          stacked && styles.filtersStacked,
+          { borderColor: t.border, backgroundColor: t.surface },
+        ]}
+      >
+        {stacked ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={filtersOpen ? "Hide filters" : "Show filters"}
+            accessibilityState={{ expanded: filtersOpen }}
+            onPress={() => setFiltersOpen((open) => !open)}
+            style={[styles.filtersToggle, { borderColor: t.border }]}
+          >
+            <Text style={{ color: t.text, fontWeight: "600" }}>
+              {filtersOpen ? "Hide filters ▴" : "Show filters ▾"}
+            </Text>
+          </Pressable>
+        ) : null}
+        {!stacked || filtersOpen ? (
+          <>
+            <View style={styles.modeRow}>
+              <ModeToggle />
+            </View>
+            {mode === "nl" ? (
+              <View style={styles.nlPane}>
+                <NLSearchBar apiBaseUrl={apiBaseUrl} />
+                <ParsedQueryChips />
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={onSearch}
+                  style={[styles.searchBtn, { backgroundColor: t.accent }]}
+                >
+                  <Text style={{ color: "#fff", fontWeight: "600" }}>Search</Text>
+                </Pressable>
+              </View>
+            ) : (
+              <FilterPanel onSearch={onSearch} onLauncherFired={onLauncherFired} />
+            )}
+          </>
+        ) : null}
       </View>
 
       <ScrollView style={styles.results} contentContainerStyle={styles.resultsContent}>
@@ -310,6 +348,8 @@ export function SearchScreen({ apiBaseUrl }: Props) {
 
 const styles = StyleSheet.create({
   root: { flex: 1, flexDirection: "row", flexWrap: "wrap" },
+  // Narrow viewports: stack filters above results, full width.
+  rootStacked: { flexDirection: "column", flexWrap: "nowrap" },
   // alignSelf:"stretch" → the column inherits the row's cross-axis
   // height so the inner ScrollView in FilterPanel has a bounded
   // height to scroll within. maxHeight ties it to the viewport on
@@ -321,6 +361,21 @@ const styles = StyleSheet.create({
     alignSelf: "stretch",
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     maxHeight: ("100vh" as any),
+  },
+  filtersStacked: {
+    width: "100%",
+    minWidth: 0,
+    borderRightWidth: 0,
+    borderBottomWidth: 1,
+    alignSelf: "auto",
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    maxHeight: ("none" as any),
+  },
+  filtersToggle: {
+    paddingHorizontal: 12,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    alignItems: "flex-start",
   },
   modeRow: { padding: 12, borderBottomWidth: 1, borderColor: "transparent" },
   nlPane: { padding: 12, gap: 12 },
