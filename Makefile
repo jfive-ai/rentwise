@@ -1,8 +1,9 @@
-.PHONY: help install setup dev api web stop kill-all clean lint test type-check clean-all
+.PHONY: help install setup dev api web ios macos setup-desktop stop kill-all clean lint test type-check clean-all
 
 PYTHON := /opt/homebrew/bin/python3.12
 API_DIR := apps/api
 WEB_DIR := apps/web
+DESKTOP_DIR := apps/desktop
 API_VENV := $(API_DIR)/.venv/bin/activate
 
 help:
@@ -13,11 +14,14 @@ help:
 	@echo "  make install         Install all dependencies (backend + frontend)"
 	@echo "  make setup-api       Set up backend only"
 	@echo "  make setup-web       Set up frontend only"
+	@echo "  make setup-desktop   Set up macOS desktop app (first-time, ~5 min Rust build)"
 	@echo ""
 	@echo "Running the App:"
-	@echo "  make dev             Start both API and web"
+	@echo "  make dev             Start both API and web (browser)"
 	@echo "  make api             Start API only"
-	@echo "  make web             Start web only"
+	@echo "  make web             Start web only (browser)"
+	@echo "  make ios             Start iOS simulator"
+	@echo "  make macos           Start macOS desktop app (Tauri)"
 	@echo "  make stop            Stop API and web services"
 	@echo "  make kill-all        Force kill all Node/Python processes"
 	@echo ""
@@ -46,6 +50,12 @@ setup-web:
 	cd $(WEB_DIR) && npm install
 	@echo "✅ Frontend ready"
 
+setup-desktop:
+	@echo "Setting up macOS desktop app (Tauri)..."
+	cd $(DESKTOP_DIR) && npm install
+	cd $(DESKTOP_DIR) && npm run tauri build -- --debug
+	@echo "✅ Desktop app ready — run 'make macos' to launch"
+
 # Running the App
 dev:
 	@bash ./start.sh
@@ -57,6 +67,15 @@ api:
 web:
 	@echo "Starting Web on http://localhost:8081..."
 	cd $(WEB_DIR) && npm run web
+
+ios:
+	@echo "Starting iOS simulator..."
+	cd $(WEB_DIR) && npm run ios
+
+macos:
+	@echo "Starting macOS desktop app (Tauri)..."
+	@echo "Expo web dev server must be running (make web) or start it now..."
+	cd $(DESKTOP_DIR) && npm run tauri dev
 
 stop:
 	@echo "Stopping RentWise services..."
