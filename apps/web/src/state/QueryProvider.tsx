@@ -6,6 +6,8 @@ type Mode = "nl" | "filters";
 interface QueryContextValue {
   query: NormalizedQuery;
   set: (patch: Partial<NormalizedQuery>) => void;
+  /** Replace the entire query (Phase 5 PR-A: load saved search). */
+  replace: (next: NormalizedQuery) => void;
   reset: () => void;
   toggleNeighborhood: (name: string) => void;
   toggleKeyword: (k: string) => void;
@@ -29,6 +31,13 @@ export function QueryProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const reset = useCallback(() => setQuery(emptyQuery()), []);
+
+  const replace = useCallback((next: NormalizedQuery) => {
+    // Defensively merge over emptyQuery so any field the server omitted
+    // (e.g. an older saved-search row written before a field was added)
+    // falls back to its safe default.
+    setQuery({ ...emptyQuery(), ...next });
+  }, []);
 
   const toggleNeighborhood = useCallback((name: string) => {
     setQuery((prev) => {
@@ -67,6 +76,7 @@ export function QueryProvider({ children }: { children: React.ReactNode }) {
     () => ({
       query,
       set,
+      replace,
       reset,
       toggleNeighborhood,
       toggleKeyword,
@@ -75,7 +85,7 @@ export function QueryProvider({ children }: { children: React.ReactNode }) {
       nlText,
       setNlText,
     }),
-    [query, set, reset, toggleNeighborhood, toggleKeyword, mode, setMode, nlText]
+    [query, set, replace, reset, toggleNeighborhood, toggleKeyword, mode, setMode, nlText]
   );
 
   return <QueryContext.Provider value={value}>{children}</QueryContext.Provider>;

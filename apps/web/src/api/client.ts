@@ -4,6 +4,9 @@ import type {
   LLMConnectionTestResult,
   LLMSettingsPublic,
   LLMSettingsUpdate,
+  SaveSearchRequest,
+  SavedSearchListResponse,
+  SavedSearchResponse,
   SearchRequest,
   SearchResponse,
   TranslateQueryRequest,
@@ -29,9 +32,12 @@ export interface ApiClient {
   testConnection(body: LLMConnectionTestRequest): Promise<LLMConnectionTestResult>;
   getCapturePair(): Promise<CapturePairResponse>;
   rotateCapturePair(): Promise<CapturePairResponse>;
+  saveSearch(req: SaveSearchRequest): Promise<SavedSearchResponse>;
+  listSavedSearches(): Promise<SavedSearchListResponse>;
+  deleteSavedSearch(cacheKey: string): Promise<void>;
 }
 
-type HttpMethod = "GET" | "POST" | "PUT";
+type HttpMethod = "GET" | "POST" | "PUT" | "DELETE";
 
 // Keep `searchClient` exported for backwards compatibility with existing
 // imports, but it now returns the broader `ApiClient`.
@@ -65,6 +71,7 @@ export function searchClient(baseUrl: string): ApiClient {
       }
       throw new ApiError(res.status, `HTTP ${res.status}`, payload);
     }
+    if (res.status === 204) return undefined as T;
     return (await res.json()) as T;
   }
 
@@ -94,6 +101,18 @@ export function searchClient(baseUrl: string): ApiClient {
     },
     rotateCapturePair() {
       return request<CapturePairResponse>("POST", "/capture/pair/rotate");
+    },
+    saveSearch(req) {
+      return request<SavedSearchResponse>("POST", "/searches", req);
+    },
+    listSavedSearches() {
+      return request<SavedSearchListResponse>("GET", "/searches");
+    },
+    async deleteSavedSearch(cacheKey: string) {
+      await request<void>(
+        "DELETE",
+        `/searches/${encodeURIComponent(cacheKey)}`,
+      );
     },
   };
 }

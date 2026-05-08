@@ -10,6 +10,8 @@ import { ParsedQueryChips } from "@/src/components/ParsedQueryChips";
 import { ResultsToolbar, type ViewMode } from "@/src/components/ResultsToolbar";
 import { ListingCard } from "@/src/components/ListingCard";
 import { ListingTable } from "@/src/components/ListingTable";
+import { SaveSearchForm } from "@/src/components/SaveSearchForm";
+import { SavedSearchesDrawer } from "@/src/components/SavedSearchesDrawer";
 import { groupByCanonical } from "@/src/lib/listingClusters";
 import {
   EmptyState,
@@ -33,7 +35,7 @@ interface Props {
 
 export function SearchScreen({ apiBaseUrl }: Props) {
   const t = useTheme();
-  const { query, mode } = useQuery();
+  const { query, mode, replace } = useQuery();
   const client = useMemo(() => searchClient(apiBaseUrl), [apiBaseUrl]);
 
   const [view, setView] = useState<ViewMode>("cards");
@@ -44,6 +46,8 @@ export function SearchScreen({ apiBaseUrl }: Props) {
   const [actions, setActions] = useState<ListingActionMap>({});
   const [status, setStatus] = useState<"idle" | "loading" | "error" | "ok">("idle");
   const [errMsg, setErrMsg] = useState<string>("");
+  const [savedDrawerOpen, setSavedDrawerOpen] = useState(false);
+  const [savePromptOpen, setSavePromptOpen] = useState(false);
   const [offset, setOffset] = useState<number>(0);
   const [lastCall, setLastCall] = useState<{ offset: number; append: boolean }>({
     offset: 0,
@@ -175,6 +179,25 @@ export function SearchScreen({ apiBaseUrl }: Props) {
           onSortChange={setSort}
           view={view}
           onViewChange={setView}
+          onOpenSaved={() => setSavedDrawerOpen(true)}
+          onSave={() => setSavePromptOpen(true)}
+          canSave={status === "ok" && total > 0}
+        />
+
+        {savePromptOpen && (
+          <SaveSearchForm
+            client={client}
+            query={query}
+            onSaved={() => setSavePromptOpen(false)}
+            onCancel={() => setSavePromptOpen(false)}
+          />
+        )}
+
+        <SavedSearchesDrawer
+          visible={savedDrawerOpen}
+          onClose={() => setSavedDrawerOpen(false)}
+          client={client}
+          onLoad={(q) => replace(q)}
         />
 
         <UnsupportedFiltersBanner filters={unsupported} />
