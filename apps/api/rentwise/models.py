@@ -140,6 +140,9 @@ class NormalizedListing(BaseModel):
     school_catchments: SchoolCatchments = Field(default_factory=SchoolCatchments)
     nearest_transit: TransitInfo | None = None
     walkscore: int | None = None
+    # Phase 4 PR-C: hex-encoded 64-bit perceptual hash of the listing's
+    # primary photo. None if no photo / hashing failed / disabled.
+    phash: str | None = None
 
     raw_metadata: dict[str, Any] = Field(default_factory=dict)
 

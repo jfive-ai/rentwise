@@ -12,7 +12,13 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from rentwise.models import AdapterHealth, NormalizedListing, SchoolCatchments, TransitInfo
-from rentwise.storage.models import GeocodeCacheRow, Listing, Search, SourceHealthRow
+from rentwise.storage.models import (
+    GeocodeCacheRow,
+    Listing,
+    PhotoHashCacheRow,
+    Search,
+    SourceHealthRow,
+)
 
 
 def _now_iso() -> str:
@@ -57,6 +63,7 @@ def _to_pydantic(row: Listing) -> NormalizedListing:
             if row.nearest_transit_stop is not None and row.nearest_transit_walk_minutes is not None
             else None
         ),
+        phash=row.phash,
         raw_metadata=json.loads(row.raw_metadata_json or "{}"),
     )
 
@@ -131,6 +138,7 @@ class ListingRepo:
                 nearest_transit_line=(
                     listing.nearest_transit.line if listing.nearest_transit is not None else None
                 ),
+                phash=listing.phash,
                 photo_urls_json=json.dumps([str(u) for u in listing.photos]),
                 raw_metadata_json=json.dumps(listing.raw_metadata or {}),
                 created_at=now,
@@ -158,6 +166,15 @@ class ListingRepo:
                 existing.nearest_transit_stop = None
                 existing.nearest_transit_walk_minutes = None
                 existing.nearest_transit_line = None
+            # Don't overwrite an existing phash with None — re-enrichment
+            # may not re-fetch the photo (cache hit / disabled / no URL).
+            if listing.phash is not None:
+                existing.phash = listing.phash
+            # canonical_id is owned by the dedup pass; if the new listing
+            # carries a different canonical_id (e.g. it merged into an
+            # existing cluster), propagate it.
+            if listing.canonical_id is not None:
+                existing.canonical_id = str(listing.canonical_id)
             existing.updated_at = now
             row = existing
 
@@ -449,5 +466,67 @@ class GeocodeCacheRepo:
             cutoff = datetime.fromisoformat(entry.stale_after)
         except ValueError:
             # Unparseable cutoff → treat as stale so we re-fetch.
+            return True
+        return moment >= cutoff
+
+
+# ---------------------------------------------------------------------------
+# PhotoHashCacheRepo (Phase 4 PR-C)
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class PhotoHashCacheEntry:
+    url: str
+    phash: str | None  # hex-encoded 64-bit perceptual hash; None = "fetch failed / not an image"
+    fetched_at: str  # ISO8601
+    stale_after: str  # ISO8601
+
+
+class PhotoHashCacheRepo:
+    """Persistent cache for image perceptual hashes keyed by URL.
+
+    Mirrors :class:`GeocodeCacheRepo`; the difference is the cache key
+    (a photo URL, not a normalized address) and the stored value (a
+    pHash hex string, not lat/lon).
+    """
+
+    def __init__(self, session: AsyncSession) -> None:
+        self.session = session
+
+    async def get(self, url: str) -> PhotoHashCacheEntry | None:
+        row = await self.session.get(PhotoHashCacheRow, url)
+        if row is None:
+            return None
+        return PhotoHashCacheEntry(
+            url=row.url,
+            phash=row.phash,
+            fetched_at=row.fetched_at,
+            stale_after=row.stale_after,
+        )
+
+    async def upsert(self, entry: PhotoHashCacheEntry) -> None:
+        existing = await self.session.get(PhotoHashCacheRow, entry.url)
+        if existing is None:
+            self.session.add(
+                PhotoHashCacheRow(
+                    url=entry.url,
+                    phash=entry.phash,
+                    fetched_at=entry.fetched_at,
+                    stale_after=entry.stale_after,
+                )
+            )
+        else:
+            existing.phash = entry.phash
+            existing.fetched_at = entry.fetched_at
+            existing.stale_after = entry.stale_after
+        await self.session.flush()
+
+    @staticmethod
+    def is_stale(entry: PhotoHashCacheEntry, *, now: datetime | None = None) -> bool:
+        moment = now or datetime.now(UTC)
+        try:
+            cutoff = datetime.fromisoformat(entry.stale_after)
+        except ValueError:
             return True
         return moment >= cutoff

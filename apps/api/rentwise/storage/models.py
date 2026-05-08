@@ -51,6 +51,7 @@ class Listing(Base):
     nearest_transit_stop: Mapped[str | None] = mapped_column(String, nullable=True)
     nearest_transit_walk_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
     nearest_transit_line: Mapped[str | None] = mapped_column(String, nullable=True)
+    phash: Mapped[str | None] = mapped_column(String, nullable=True)
     photo_urls_json: Mapped[str | None] = mapped_column(String, nullable=True)
     raw_metadata_json: Mapped[str | None] = mapped_column(String, nullable=True)
     created_at: Mapped[str] = mapped_column(String, nullable=False)
@@ -124,6 +125,22 @@ class GeocodeCacheRow(Base):
     lat: Mapped[float | None] = mapped_column(Float, nullable=True)
     lon: Mapped[float | None] = mapped_column(Float, nullable=True)
     provider: Mapped[str] = mapped_column(String, nullable=False)
+    fetched_at: Mapped[str] = mapped_column(String, nullable=False)
+    stale_after: Mapped[str] = mapped_column(String, nullable=False)
+
+
+class PhotoHashCacheRow(Base):
+    """Cached perceptual hashes keyed by photo URL.
+
+    See migration 0006 + ``apps/api/rentwise/enrichment/photo_hash.py``.
+    A row exists for every URL we've fetched (positive or negative
+    result), so we don't re-download the same image repeatedly.
+    """
+
+    __tablename__ = "photo_hash_cache"
+
+    url: Mapped[str] = mapped_column(String, primary_key=True)
+    phash: Mapped[str | None] = mapped_column(String, nullable=True)
     fetched_at: Mapped[str] = mapped_column(String, nullable=False)
     stale_after: Mapped[str] = mapped_column(String, nullable=False)
 

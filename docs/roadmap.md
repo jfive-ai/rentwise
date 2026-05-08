@@ -83,8 +83,8 @@
 
 - [x] Address normalization (`pyap`; upgrade to `libpostal` when we go multi-city) — PR-A
 - [x] Geocoding (Nominatim) + persistent geocode cache — PR-A
-- [ ] Photo perceptual hashing (`imagehash`) — PR-C
-- [ ] Dedup matching algorithm + confidence scoring — PR-C
+- [x] Photo perceptual hashing (`imagehash`) — PR-C
+- [x] Dedup matching algorithm + confidence scoring — PR-C
 - [x] School catchment lookup (VSB GeoJSON; `shapely` point-in-polygon) — PR-B
 - [x] Transit lookup (TransLink slim stops; haversine + 5 km/h) — PR-B
 - [x] Filters: `school_catchment` + `transit_max_walk_minutes` wired through `/search` — PR-B

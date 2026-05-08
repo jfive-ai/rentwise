@@ -21,10 +21,16 @@ import structlog
 
 from rentwise.enrichment.address import normalize_address
 from rentwise.enrichment.geocode import GeocodeError, Geocoder
+from rentwise.enrichment.photo_hash import PhotoHasher
 from rentwise.enrichment.school_catchments import SchoolCatchmentLookup
 from rentwise.enrichment.transit import TransitLookup
 from rentwise.models import NormalizedListing, SchoolCatchments, TransitInfo
-from rentwise.storage.repositories import GeocodeCacheEntry, GeocodeCacheRepo
+from rentwise.storage.repositories import (
+    GeocodeCacheEntry,
+    GeocodeCacheRepo,
+    PhotoHashCacheEntry,
+    PhotoHashCacheRepo,
+)
 
 log = structlog.get_logger(__name__)
 
@@ -36,6 +42,8 @@ class EnrichmentConfig:
     provider: str = "nominatim"
     school_catchments_enabled: bool = True
     transit_enabled: bool = True
+    photo_hash_enabled: bool = True
+    photo_hash_cache_ttl_days: int = 90
 
 
 class EnrichmentService:
@@ -47,6 +55,8 @@ class EnrichmentService:
         config: EnrichmentConfig | None = None,
         school_catchments: SchoolCatchmentLookup | None = None,
         transit: TransitLookup | None = None,
+        photo_hasher: PhotoHasher | None = None,
+        photo_hash_cache: PhotoHashCacheRepo | None = None,
     ) -> None:
         self.cache = cache_repo
         self.geocoder = geocoder
@@ -59,6 +69,8 @@ class EnrichmentService:
             school_catchments if school_catchments is not None else SchoolCatchmentLookup()
         )
         self._transit = transit if transit is not None else TransitLookup()
+        self._photo_hasher = photo_hasher
+        self._photo_cache = photo_hash_cache
 
     async def enrich(self, listing: NormalizedListing) -> NormalizedListing:
         """Return a copy of ``listing`` with address + geocode + (PR-B)
@@ -88,6 +100,8 @@ class EnrichmentService:
             else:
                 lat, lon = await self._fetch_and_cache(canonical)
 
+        phash = await self._lookup_phash(listing)
+
         return listing.model_copy(
             update={
                 "address_normalized": canonical,
@@ -95,6 +109,7 @@ class EnrichmentService:
                 "lon": lon,
                 "school_catchments": self._lookup_catchments(lat, lon),
                 "nearest_transit": self._lookup_transit(lat, lon),
+                "phash": phash if phash is not None else listing.phash,
             }
         )
 
@@ -129,3 +144,41 @@ class EnrichmentService:
         if not self.config.transit_enabled:
             return None
         return self._transit.nearest(lat, lon)
+
+    async def _lookup_phash(self, listing: NormalizedListing) -> str | None:
+        """Fetch + hash the listing's primary photo, with cache.
+
+        Returns the existing ``listing.phash`` unchanged if hashing is
+        disabled, the hasher / cache aren't configured, or the listing
+        has no photos.
+        """
+        if not self.config.photo_hash_enabled:
+            return None
+        if self._photo_hasher is None or self._photo_cache is None:
+            return None
+        if not listing.photos:
+            return None
+        url = str(listing.photos[0])
+
+        cached = await self._photo_cache.get(url)
+        if cached is not None and not PhotoHashCacheRepo.is_stale(cached):
+            return cached.phash
+
+        try:
+            new_hash = await self._photo_hasher.hash_url(url)
+        except Exception as exc:
+            log.info("enrichment.photo_hash_failed", url=url, error=str(exc))
+            return None
+
+        now = datetime.now(UTC)
+        await self._photo_cache.upsert(
+            PhotoHashCacheEntry(
+                url=url,
+                phash=new_hash,
+                fetched_at=now.isoformat(),
+                stale_after=(
+                    now + timedelta(days=self.config.photo_hash_cache_ttl_days)
+                ).isoformat(),
+            )
+        )
+        return new_hash
