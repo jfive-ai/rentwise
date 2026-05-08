@@ -267,7 +267,18 @@ export function SearchScreen({ apiBaseUrl }: Props) {
 
 const styles = StyleSheet.create({
   root: { flex: 1, flexDirection: "row", flexWrap: "wrap" },
-  filters: { width: 320, minWidth: 260, borderRightWidth: 1 },
+  // alignSelf:"stretch" → the column inherits the row's cross-axis
+  // height so the inner ScrollView in FilterPanel has a bounded
+  // height to scroll within. maxHeight ties it to the viewport on
+  // web specifically (RN ignores the string units gracefully).
+  filters: {
+    width: 320,
+    minWidth: 260,
+    borderRightWidth: 1,
+    alignSelf: "stretch",
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    maxHeight: ("100vh" as any),
+  },
   modeRow: { padding: 12, borderBottomWidth: 1, borderColor: "transparent" },
   nlPane: { padding: 12, gap: 12 },
   searchBtn: { alignSelf: "flex-end", paddingHorizontal: 18, paddingVertical: 10, borderRadius: 8 },

@@ -89,12 +89,37 @@ describe("FilterPanel", () => {
     expect(state).toContain('"price_max":3000');
   });
 
-  it("toggles neighborhoods", () => {
-    const { getByText, getByTestId } = renderPanel();
+  it("toggles neighborhoods after expanding the section", () => {
+    // Neighborhoods is collapsed by default — open it via the
+    // accessibility-labelled toggle, then click a chip.
+    const { getByLabelText, getByText, getByTestId } = renderPanel();
+    fireEvent.press(getByLabelText(/Choose neighborhoods/));
     fireEvent.press(getByText("Kitsilano"));
     expect(getByTestId("query-state").props.children).toContain('"Kitsilano"');
+  });
+
+  it("collapses by default and shows selected chips inline", () => {
+    const { getByLabelText, getByText, queryByText } = renderPanel();
+    // Expand → select Kitsilano → close.
+    fireEvent.press(getByLabelText(/Choose neighborhoods/));
     fireEvent.press(getByText("Kitsilano"));
-    expect(getByTestId("query-state").props.children).not.toContain('"Kitsilano"');
+    fireEvent.press(getByLabelText("Done editing neighborhoods"));
+
+    // Collapsed view: header reflects the count, the selected chip
+    // is still visible (with an ✕ remove affordance), and the
+    // un-selected list isn't.
+    expect(getByText("Neighborhoods (1 selected)")).toBeTruthy();
+    expect(getByText("Kitsilano ✕")).toBeTruthy();
+    expect(queryByText("Yaletown")).toBeNull();
+  });
+
+  it("collapsed Edit button reopens the full grid", () => {
+    const { getByLabelText, getByText } = renderPanel();
+    fireEvent.press(getByLabelText(/Choose neighborhoods/));
+    fireEvent.press(getByText("Kitsilano"));
+    fireEvent.press(getByLabelText("Done editing neighborhoods"));
+    fireEvent.press(getByLabelText("Edit neighborhoods"));
+    expect(getByText("Yaletown")).toBeTruthy();
   });
 
   it("adds keywords on Enter and removes them on chip press", () => {
