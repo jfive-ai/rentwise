@@ -44,5 +44,7 @@ test("NL flow: type → parse → chips → search", async ({ page }) => {
   // Search — exact:true so Phase 5 PR-A's "Open saved searches" button
   // doesn't also match this selector by name-substring.
   await page.getByRole("button", { name: "Search", exact: true }).click();
-  await expect(page.getByText("5 listings")).toBeVisible();
+  // exact: true so PR-C-1's split-view default doesn't double-match against
+  // MapView's "N listings have no location…" footer.
+  await expect(page.getByText("5 listings", { exact: true })).toBeVisible();
 });

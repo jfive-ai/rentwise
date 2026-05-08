@@ -116,9 +116,9 @@ Originally a standalone phase. As of the Phase 3 pivot to user-driven capture, F
 - [x] School catchment polygon overlay (toggleable) — PR-B
 - [x] SkyTrain station radii overlay (toggleable) — PR-B
 - [x] Split view (map + list, synced hover/selection state) — PR-B
-- [ ] Responsive design pass — list view default on mobile, split view default on wide desktop — PR-C
-- [ ] Filter persistence (URL params) so searches are shareable/bookmarkable — PR-C
-- [ ] PWA install support — PR-C
+- [ ] Responsive design pass — list view default on mobile, split view default on wide desktop — PR-C-1
+- [ ] Filter persistence (URL params) so searches are shareable/bookmarkable — PR-C-2
+- [ ] PWA install support — PR-C-3
 - [ ] **Milestone:** Beautiful experience on iPhone Safari and large desktop alike
 
 ## Phase 8: Personal macOS app — retire the extension, ship direct adapters
