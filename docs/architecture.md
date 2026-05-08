@@ -48,17 +48,19 @@ NL mode calls `POST /api/translate-query` and sets the result. Filter mode mutat
 - **Why Python:** Best ecosystem for Playwright, LLM SDKs, and data parsing.
 - **Modules:**
   - `llm/` — LiteLLM client wrapper, settings, fallback handling
-  - `query_translator/` — LLM-powered NL → structured query (provider-agnostic via LiteLLM)
-  - `aggregator/` — Orchestrates parallel adapter calls, dedup, ranking
-  - `adapters/` — One module per source (livrent, padmapper, etc.)
-  - `enrichment/` — School catchment, transit, walkscore
-  - `storage/` — SQLite + FTS5
-  - `scheduler/` — APScheduler for saved-search refresh
-  - `notifier/` — Email (SMTP) + push (APNs/web push) for alerts
+  - `aggregator/` — Orchestrates per-source adapter calls, post-filter (school catchment, transit walk), search-cache freshness
+  - `adapters/` — One module per source. Today: Craigslist (RSS) + Playwright base. Other sources are TOS-blocked server-side and ship via the user-driven extension instead.
+  - `capture/` — `/capture` endpoint that the browser extension POSTs to, with shared-secret auth bound to localhost.
+  - `enrichment/` — Address normalization (`pyap`), geocoding (Nominatim) with persistent cache, school catchment lookup (VSB GeoJSON via `shapely`), transit lookup (TransLink slim stops, haversine + 5 km/h), photo perceptual hashing (`imagehash.phash`).
+  - `dedup/` — Cross-source duplicate scoring (additive weights: address, price, photo phash, bedrooms; threshold 0.7). Assigns shared `canonical_id`.
+  - `notifications/` — APScheduler `AsyncIOScheduler` (one job per saved search), SMTP notifier over stdlib `smtplib`, alert runner with dedup ledger so the same listing doesn't notify twice.
+  - `storage/` — SQLite (FTS5 + Alembic migrations). Tables: listings, canonical_listings, searches, source_health, geocode_cache, photo_hash_cache, alert_log, capture_pairing, llm_settings.
+  - `http/` — FastAPI routers for `/search`, `/searches` (saved-search CRUD + `/run-now`), `/capture` (extension), `/settings/llm`, etc.
 
-### 3. Browser Extension (`apps/extension`) — for Facebook Marketplace only
-- **Tech:** Plain JS/TS, manifest v3
-- **Function:** Extracts listings from pages the user personally browses on Facebook Marketplace, sends them to the local API.
+### 3. Browser Extension (`apps/extension`) — Phase 3 user-driven capture
+- **Tech:** Chrome MV3 (Vite + React popup/options + zod schemas).
+- **Function:** Reads listing data from pages the user navigates to in their own browser session on Rentals.ca, PadMapper, Zumper, REW.ca, liv.rent, and Facebook Marketplace. Bytes are read from the rendered DOM only — the extension never originates a fetch to a source domain. POSTs to the local `/capture` endpoint with a shared-secret token.
+- **Sideload + fixture refresh** are documented in [`apps/extension/README.md`](../apps/extension/README.md).
 
 ## Data Flow
 
