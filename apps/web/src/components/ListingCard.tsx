@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 import * as Linking from "expo-linking";
 import type { NormalizedListing } from "@/src/api/types";
@@ -9,14 +9,23 @@ interface Props {
   listing: NormalizedListing;
   actions: ListingActions;
   onAction: (flag: ActionFlag, value: boolean) => void;
+  /**
+   * Other listings sharing this card's canonical_id (Phase 4 PR-D).
+   * Renders collapsed under "Also on N source(s)"; the user can expand
+   * for a per-source link list.
+   */
+  alternates?: NormalizedListing[];
 }
 
 const formatPrice = (n: number | null): string =>
   n == null ? "—" : `$${n.toLocaleString("en-CA")}`;
 
-export function ListingCard({ listing, actions, onAction }: Props) {
+export function ListingCard({ listing, actions, onAction, alternates }: Props) {
   const t = useTheme();
+  const [expanded, setExpanded] = useState(false);
   const photo = listing.photos[0];
+  const alts = alternates ?? [];
+  const hasAlts = alts.length > 0;
   return (
     <View style={[styles.card, { backgroundColor: t.surface, borderColor: t.border }]}>
       <View style={[styles.photo, { backgroundColor: t.surfaceAlt }]}>
@@ -39,6 +48,41 @@ export function ListingCard({ listing, actions, onAction }: Props) {
         </View>
         {listing.description_snippet && (
           <Text style={{ color: t.textMuted }} numberOfLines={2}>{listing.description_snippet}</Text>
+        )}
+
+        {hasAlts && (
+          <View style={styles.duplicateBlock}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={
+                expanded
+                  ? "Hide duplicate sources"
+                  : `Show ${alts.length} duplicate source${alts.length === 1 ? "" : "s"}`
+              }
+              onPress={() => setExpanded((v) => !v)}
+            >
+              <Text style={{ color: t.textMuted, fontSize: 12 }}>
+                Also on {alts.length} source{alts.length === 1 ? "" : "s"}
+                {expanded ? " ▴" : " ▾"}
+              </Text>
+            </Pressable>
+            {expanded && (
+              <View style={styles.duplicateList}>
+                {alts.map((alt) => (
+                  <Pressable
+                    key={alt.id}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Open ${alt.source}`}
+                    onPress={() => {
+                      void Linking.openURL(alt.source_url);
+                    }}
+                  >
+                    <Text style={{ color: t.text, fontSize: 12 }}>↗ {alt.source}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            )}
+          </View>
         )}
 
         <View style={styles.actions}>
@@ -80,4 +124,6 @@ const styles = StyleSheet.create({
   price: { fontWeight: "700" },
   actions: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 8 },
   actionBtn: { paddingHorizontal: 10, paddingVertical: 5, borderWidth: 1, borderRadius: 6 },
+  duplicateBlock: { marginTop: 4, gap: 4 },
+  duplicateList: { gap: 4, paddingLeft: 12 },
 });

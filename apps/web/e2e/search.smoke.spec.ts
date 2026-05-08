@@ -18,6 +18,10 @@ test("filter search renders results, switches view, saves a card", async ({ page
   // Set price_max to 3000
   await page.getByPlaceholder("Max").fill("3000");
 
+  // PR-D: school catchment + transit-walk inputs are now enabled.
+  await page.getByLabel("School catchment").fill("Lord Byng");
+  await page.getByLabel("Transit walk minutes").fill("10");
+
   // Search — use exact: true so PR-C's "Search across sources (6 sites)"
   // launcher button doesn't also match this selector.
   await page.getByRole("button", { name: "Search", exact: true }).click();

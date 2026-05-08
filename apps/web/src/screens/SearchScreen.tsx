@@ -10,6 +10,7 @@ import { ParsedQueryChips } from "@/src/components/ParsedQueryChips";
 import { ResultsToolbar, type ViewMode } from "@/src/components/ResultsToolbar";
 import { ListingCard } from "@/src/components/ListingCard";
 import { ListingTable } from "@/src/components/ListingTable";
+import { groupByCanonical } from "@/src/lib/listingClusters";
 import {
   EmptyState,
   ErrorState,
@@ -139,6 +140,10 @@ export function SearchScreen({ apiBaseUrl }: Props) {
   }, []);
 
   const hasMore = listings.length < total;
+  // Phase 4 PR-D: collapse cross-source duplicates into one card per
+  // canonical_id. Sort + pagination still operate on the flat list at
+  // the API layer; clustering is purely a presentation step.
+  const clusters = useMemo(() => groupByCanonical(listings), [listings]);
 
   return (
     <View style={[styles.root, { backgroundColor: t.bg }]}>
@@ -184,12 +189,13 @@ export function SearchScreen({ apiBaseUrl }: Props) {
           <EmptyState message="No listings matched your filters." />
         ) : view === "cards" ? (
           <View style={styles.grid}>
-            {listings.map((l) => (
+            {clusters.map(({ primary, alternates }) => (
               <ListingCard
-                key={l.id}
-                listing={l}
-                actions={actions[l.id] ?? {}}
-                onAction={(f, v) => { void handleAction(l.id, f, v); }}
+                key={primary.id}
+                listing={primary}
+                alternates={alternates}
+                actions={actions[primary.id] ?? {}}
+                onAction={(f, v) => { void handleAction(primary.id, f, v); }}
               />
             ))}
           </View>

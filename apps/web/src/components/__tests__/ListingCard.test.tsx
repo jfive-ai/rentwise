@@ -83,4 +83,42 @@ describe("ListingCard", () => {
     );
     expect(getByText("—")).toBeTruthy();
   });
+
+  it("renders 'Also on N sources' when alternates are present, expands on press", () => {
+    const alt1: NormalizedListing = {
+      ...listing,
+      id: "id-2",
+      source: "rentals_ca",
+      source_url: "https://rentals.ca/p/2",
+    };
+    const alt2: NormalizedListing = {
+      ...listing,
+      id: "id-3",
+      source: "padmapper",
+      source_url: "https://padmapper.com/p/3",
+    };
+    const { getByLabelText, getByText, queryByText } = render(
+      <ListingCard
+        listing={listing}
+        actions={{}}
+        onAction={jest.fn()}
+        alternates={[alt1, alt2]}
+      />
+    );
+    expect(getByText(/Also on 2 sources/)).toBeTruthy();
+    expect(queryByText("↗ rentals_ca")).toBeNull();
+    fireEvent.press(getByLabelText("Show 2 duplicate sources"));
+    expect(getByText("↗ rentals_ca")).toBeTruthy();
+    expect(getByText("↗ padmapper")).toBeTruthy();
+
+    fireEvent.press(getByLabelText("Open rentals_ca"));
+    expect((Linking.openURL as jest.Mock)).toHaveBeenCalledWith("https://rentals.ca/p/2");
+  });
+
+  it("does not render the duplicate block when alternates is empty", () => {
+    const { queryByText } = render(
+      <ListingCard listing={listing} actions={{}} onAction={jest.fn()} alternates={[]} />
+    );
+    expect(queryByText(/Also on/)).toBeNull();
+  });
 });

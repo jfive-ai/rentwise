@@ -74,4 +74,24 @@ describe("ParsedQueryChips", () => {
     const state = JSON.parse(getByTestId("query-state").props.children);
     expect(state.bedrooms_min).toBeNull();
   });
+
+  it("renders school catchment chip and clears it on press", () => {
+    const { getByLabelText, getByTestId } = renderChips({
+      school_catchment: "Lord Byng",
+    });
+    expect(getByLabelText("Remove Lord Byng catchment")).toBeTruthy();
+    fireEvent.press(getByLabelText("Remove Lord Byng catchment"));
+    const state = JSON.parse(getByTestId("query-state").props.children);
+    expect(state.school_catchment).toBeNull();
+  });
+
+  it("renders transit walk chip and clears it on press", () => {
+    const { getByLabelText, getByTestId } = renderChips({
+      transit_max_walk_minutes: 8,
+    });
+    expect(getByLabelText("Remove ≤8 min walk")).toBeTruthy();
+    fireEvent.press(getByLabelText("Remove ≤8 min walk"));
+    const state = JSON.parse(getByTestId("query-state").props.children);
+    expect(state.transit_max_walk_minutes).toBeNull();
+  });
 });

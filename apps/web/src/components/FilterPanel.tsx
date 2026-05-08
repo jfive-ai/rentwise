@@ -135,9 +135,29 @@ export function FilterPanel({ onSearch, onLauncherFired }: Props) {
         </View>
       </Section>
 
-      <DisabledControl label="School catchment" phase="Phase 4 — geocoding">
-        <Text style={{ color: t.textMuted }}>Lord Byng / Kitsilano Secondary / …</Text>
-      </DisabledControl>
+      <Section title="School catchment" theme={t}>
+        <TextInput
+          placeholder="e.g. Lord Byng"
+          placeholderTextColor={t.textMuted}
+          value={query.school_catchment ?? ""}
+          onChangeText={(v) => set({ school_catchment: v.trim() === "" ? null : v })}
+          accessibilityLabel="School catchment"
+          style={[styles.input, { color: t.text, borderColor: t.border }]}
+        />
+      </Section>
+
+      <Section title="Transit walk (max min)" theme={t}>
+        <TextInput
+          placeholder="e.g. 10"
+          placeholderTextColor={t.textMuted}
+          keyboardType="numeric"
+          value={query.transit_max_walk_minutes?.toString() ?? ""}
+          onChangeText={(v) => set({ transit_max_walk_minutes: toClampedMinutes(v) })}
+          accessibilityLabel="Transit walk minutes"
+          style={[styles.input, { color: t.text, borderColor: t.border }]}
+        />
+      </Section>
+
       <DisabledControl label="Pets" phase="Phase 3 — more sources">
         <Text style={{ color: t.textMuted }}>Required · Allowed · Not allowed · Any</Text>
       </DisabledControl>
@@ -146,9 +166,6 @@ export function FilterPanel({ onSearch, onLauncherFired }: Props) {
       </DisabledControl>
       <DisabledControl label="Available after" phase="Phase 3">
         <Text style={{ color: t.textMuted }}>YYYY-MM-DD</Text>
-      </DisabledControl>
-      <DisabledControl label="Transit walk (max min)" phase="Phase 4 — transit data">
-        <Text style={{ color: t.textMuted }}>15</Text>
       </DisabledControl>
 
       <View style={styles.actions}>
@@ -195,6 +212,14 @@ function Section({
 function toIntOrNull(v: string): number | null {
   const n = parseInt(v, 10);
   return Number.isFinite(n) ? n : null;
+}
+
+/** 1-30 minute bound; out-of-range or unparseable input → null. */
+function toClampedMinutes(v: string): number | null {
+  const n = parseInt(v, 10);
+  if (!Number.isFinite(n)) return null;
+  if (n < 1 || n > 30) return null;
+  return n;
 }
 
 const styles = StyleSheet.create({

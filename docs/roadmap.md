@@ -88,8 +88,8 @@
 - [x] School catchment lookup (VSB GeoJSON; `shapely` point-in-polygon) — PR-B
 - [x] Transit lookup (TransLink slim stops; haversine + 5 km/h) — PR-B
 - [x] Filters: `school_catchment` + `transit_max_walk_minutes` wired through `/search` — PR-B
-- [ ] UI polish: school chip, transit slider, "duplicate of …" affordance — PR-D
-- [ ] **Milestone:** "2br in Lord Byng catchment" works correctly
+- [x] UI polish: school chip, transit input, "Also on N sources" cluster affordance — PR-D
+- [x] **Milestone:** "2br in Lord Byng catchment" works correctly
 
 ## Phase 5: Saved Searches & Alerts (Week 8)
 **Goal:** Stop refreshing; let RentWise notify you.

@@ -155,12 +155,27 @@ describe("SearchScreen", () => {
   });
 
   it("Retry after a failed Load more replays append=true and preserves earlier pages", async () => {
-    // Initial Search: total=10, 5 listings returned (page 1)
-    (global.fetch as jest.Mock).mockResolvedValueOnce({
-      ok: true, status: 200,
-      json: async () => ({ ...fixture, total: 20 }),
-      clone: () => ({ text: async () => JSON.stringify({ ...fixture, total: 20 }) }),
+    // Each page is a *re-keyed* copy of the fixture (unique canonical_ids
+    // per call) so PR-D's cluster collapse doesn't merge them — we want
+    // the DOM-count probe to reflect raw appended pages.
+    const rekey = (page: number) => ({
+      ...fixture,
+      total: 20,
+      listings: fixture.listings.map((l) => ({
+        ...l,
+        id: `${l.id}-p${page}`,
+        canonical_id: `${l.canonical_id}-p${page}`,
+      })),
     });
+    const respond = (body: object) => ({
+      ok: true,
+      status: 200,
+      json: async () => body,
+      clone: () => ({ text: async () => JSON.stringify(body) }),
+    });
+
+    // Initial Search: total=20, 5 listings returned (page 1)
+    (global.fetch as jest.Mock).mockResolvedValueOnce(respond(rekey(1)));
     const { getByText, getAllByText } = renderScreen();
     fireEvent.press(getByText("Search"));
     await waitFor(() => expect(getByText("20 listings")).toBeTruthy());
@@ -169,11 +184,7 @@ describe("SearchScreen", () => {
     expect(getAllByText(/Sunny 2br/).length).toBe(1);
 
     // Successful Load more: append 5 more (10 total in DOM)
-    (global.fetch as jest.Mock).mockResolvedValueOnce({
-      ok: true, status: 200,
-      json: async () => ({ ...fixture, total: 20 }),
-      clone: () => ({ text: async () => JSON.stringify({ ...fixture, total: 20 }) }),
-    });
+    (global.fetch as jest.Mock).mockResolvedValueOnce(respond(rekey(2)));
     fireEvent.press(getByText("Load more"));
     await waitFor(() => expect(getAllByText(/Sunny 2br/).length).toBe(2)); // duplicated by append
 
@@ -187,11 +198,7 @@ describe("SearchScreen", () => {
     await waitFor(() => expect(getByText("Retry")).toBeTruthy());
 
     // Retry succeeds — should replay append=true at offset=100, NOT replace existing 10 listings
-    (global.fetch as jest.Mock).mockResolvedValueOnce({
-      ok: true, status: 200,
-      json: async () => ({ ...fixture, total: 20 }),
-      clone: () => ({ text: async () => JSON.stringify({ ...fixture, total: 20 }) }),
-    });
+    (global.fetch as jest.Mock).mockResolvedValueOnce(respond(rekey(3)));
     fireEvent.press(getByText("Retry"));
     await waitFor(() => {
       const lastCall = (global.fetch as jest.Mock).mock.calls.at(-1)!;
@@ -242,6 +249,34 @@ describe("SearchScreen", () => {
     expect(JSON.parse(lastSearch![1].body).query.neighborhoods).toEqual([
       "Kitsilano",
     ]);
+  });
+
+  it("collapses listings sharing a canonical_id into one card with an alternates affordance", async () => {
+    // Two listings, same canonical_id → one cluster.
+    const clustered = {
+      ...fixture,
+      total: 2,
+      listings: [
+        { ...fixture.listings[0], id: "shared-a", canonical_id: "cluster-1", source: "craigslist" },
+        { ...fixture.listings[0], id: "shared-b", canonical_id: "cluster-1", source: "rentals_ca" },
+      ],
+    };
+    (global.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => clustered,
+      clone: () => ({ text: async () => JSON.stringify(clustered) }),
+    });
+
+    const { getByText, getAllByText, queryByText } = renderScreen();
+    fireEvent.press(getByText("Search"));
+
+    await waitFor(() => expect(getByText("2 listings")).toBeTruthy());
+    // Only one card title rendered for the cluster (not two).
+    expect(getAllByText(/Sunny 2br/).length).toBe(1);
+    // Affordance to expand alternates is present.
+    expect(getByText(/Also on 1 source/)).toBeTruthy();
+    expect(queryByText("↗ rentals_ca")).toBeNull();
   });
 
   it("rapid Search clicks: only the latest response wins", async () => {
