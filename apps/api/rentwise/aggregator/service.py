@@ -114,6 +114,17 @@ class AggregatorService:
                     name=adapter.name, status="degraded", last_error=str(exc)
                 )
 
+        # Apply enrichment-dependent filters AFTER ingestion. These can't be
+        # pushed into the adapter URL params because they depend on
+        # geocoded coords + lookup tables, so the adapter strips them and
+        # we filter the post-enriched rows here.
+        all_listings = self._apply_post_filters(all_listings, req.query)
+        # The adapter capability check considers these "unsupported", but
+        # PR-B handles them at the aggregator layer — peel them out of
+        # the response so clients see them as supported.
+        unsupported.discard("school_catchment")
+        unsupported.discard("transit_max_walk_minutes")
+
         if any_succeeded:
             await self.search_repo.upsert(
                 CachedSearch(
@@ -170,6 +181,40 @@ class AggregatorService:
             unsupported_filters=unsupported,
             source_health=health or {},
         )
+
+    @staticmethod
+    def _apply_post_filters(
+        listings: list[NormalizedListing], query: Any
+    ) -> list[NormalizedListing]:
+        """Apply enrichment-dependent filters that no adapter can express
+        in its URL params.
+
+        - ``school_catchment``: case-insensitive substring match against any
+          of the three catchment fields (elementary / middle / secondary).
+        - ``transit_max_walk_minutes``: keep only listings with a
+          ``nearest_transit`` whose ``walk_minutes`` ≤ the configured max.
+          Listings without a transit lookup result are dropped — the user
+          asked for "near transit" and we couldn't confirm.
+        """
+        catchment = getattr(query, "school_catchment", None)
+        max_walk = getattr(query, "transit_max_walk_minutes", None)
+        if not catchment and max_walk is None:
+            return listings
+
+        out: list[NormalizedListing] = []
+        catchment_needle = catchment.casefold().strip() if isinstance(catchment, str) else None
+        for listing in listings:
+            if catchment_needle:
+                sc = listing.school_catchments
+                hay = " ".join(filter(None, [sc.elementary, sc.middle, sc.secondary])).casefold()
+                if catchment_needle not in hay:
+                    continue
+            if max_walk is not None:
+                t = listing.nearest_transit
+                if t is None or t.walk_minutes > max_walk:
+                    continue
+            out.append(listing)
+        return out
 
     def _sorted_paginated(
         self, listings: list[NormalizedListing], req: SearchRequest

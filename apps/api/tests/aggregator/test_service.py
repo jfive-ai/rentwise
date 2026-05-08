@@ -105,12 +105,17 @@ async def test_force_refresh_bypasses_cache(session):
 async def test_unsupported_filters_reported(session):
     adapter = FakeAdapter(listings=[_raw(1)])
     svc = AggregatorService(adapters=[adapter], session=session, cache_ttl_seconds=900)
+    # `pets` is genuinely unsupported (no adapter handles it).
+    # `school_catchment` is handled by the aggregator's post-filter as of
+    # PR-B, so it must NOT appear in unsupported_filters even though no
+    # adapter declares support for it.
     req = SearchRequest(
         query=NormalizedQuery(bedrooms_min=1, pets=PetPolicy.OK, school_catchment="Byng")
     )
     resp = await svc.search(req)
     assert "pets" in resp.unsupported_filters
-    assert "school_catchment" in resp.unsupported_filters
+    assert "school_catchment" not in resp.unsupported_filters
+    assert "transit_max_walk_minutes" not in resp.unsupported_filters
 
 
 @pytest.mark.asyncio

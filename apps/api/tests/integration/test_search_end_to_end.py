@@ -90,8 +90,11 @@ def test_full_search_pipeline(app_client, stubbed_cl):
 
 @pytest.mark.integration
 def test_unsupported_filters_surfaced(app_client):
+    """`pets` is genuinely unsupported by Craigslist; `school_catchment`
+    is handled by the aggregator's post-filter as of PR-B and must
+    *not* appear in `unsupported_filters`."""
     payload = {"query": {"pets": "ok", "school_catchment": "Byng"}}
     r = app_client.post("/search", json=payload)
     body = r.json()
     assert "pets" in body["unsupported_filters"]
-    assert "school_catchment" in body["unsupported_filters"]
+    assert "school_catchment" not in body["unsupported_filters"]
