@@ -1,0 +1,44 @@
+# Operational rules
+
+> **Personal-use tool.** RentWise is a single-user, locally-installed app that helps me search rentals across multiple sources. It is not a hosted service and is not distributed to other users. These rules exist so I don't accidentally hammer a site, get my IP banned, or generate enough noise to draw a complaint — *regardless* of personal-use intent.
+
+## Hard rules every adapter follows
+
+1. **Honor `robots.txt`.** Check at adapter init. If our path is `Disallow`'d for the wildcard or `RentWise` user-agent, the adapter aborts and reports `source_health="blocked"`.
+2. **Throttle aggressively.**
+   - ≤ 1 request per second per source, with 500–1500 ms random jitter.
+   - ≤ 60 requests per hour per source for any background polling.
+   - Exponential backoff on errors.
+   - Never run parallel requests against the same source — `asyncio.Semaphore(1)` per adapter.
+3. **Identify honestly.** Send a real User-Agent that names the project so a sysadmin can grep their logs and email me:
+   ```
+   RentWise/0.1 (+https://github.com/<user>/rentwise; contact@example.com)
+   ```
+4. **Store metadata, not content.**
+   - ✅ Source URL, address, price, bedrooms, photo URLs (not bytes), lat/lon, posted timestamp, ≤200-char description snippet.
+   - ❌ Full verbatim descriptions, downloaded photo bytes, landlord contact details, anything behind a login wall.
+5. **Always link back to the source.** Every result in the UI must show the platform name and a working link to the original listing. RentWise is a *finder*, not a republisher.
+
+## What I will never do
+
+- Bypass paywalls or login walls.
+- Solve CAPTCHAs programmatically.
+- Route requests through proxies / VPNs to evade IP rate limiting.
+- Submit applications, contact landlords, or take any action on the user's behalf without explicit per-action confirmation.
+
+## If a site asks me to stop
+
+Disable the adapter within 7 days; purge that source's cached rows within 14 days. Contact info lives in the User-Agent.
+
+## Source notes
+
+### Craigslist
+RSS feed only — `https://vancouver.craigslist.org/search/apa?format=rss`. Never the HTML pages. Live runs require a residential connection (CL returns HTTP 403 to most datacenter ranges regardless of User-Agent); CI runs against a recorded fixture.
+
+### Vancouver School Board / Open Data / Google Maps
+- VSB catchment GeoJSON — public, attribute properly.
+- Vancouver Open Data — CC-BY, attribute.
+- Google Maps Distance Matrix — bring your own API key, respect Google's quotas.
+
+### Other platforms
+Sources that explicitly prohibit automated access in their TOS or have anti-bot defenses I'd need to bypass to use are out of scope. If I want one of those sources, the right move is to look for an official API or partnership rather than build an adapter that fights the site.

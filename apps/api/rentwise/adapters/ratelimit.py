@@ -37,7 +37,7 @@ class RateLimitedFetcher:
         jitter_ms: tuple[int, int] = (500, 1500),
     ) -> None:
         if rate_per_sec <= 0 or rate_per_sec > 1.0:
-            raise ValueError("rate_per_sec must be in (0, 1.0] per legal.md ceiling")
+            raise ValueError("rate_per_sec must be in (0, 1.0] per operational-rules.md ceiling")
         self.min_interval = 1.0 / rate_per_sec
         self.jitter_ms = jitter_ms
         self.clock = clock or _RealClock()

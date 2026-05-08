@@ -25,7 +25,7 @@ class CaptureListing(BaseModel):
     """One listing extracted from a rendered page in the user's browser.
 
     Mirrors `RawListing` plus `capture_method` + `page_type`. Snippet length
-    is hard-capped at 200 chars per `docs/legal.md`.
+    is hard-capped at 200 chars per `docs/operational-rules.md`.
     """
 
     source_listing_id: str = Field(min_length=1, max_length=200)

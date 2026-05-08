@@ -8,7 +8,7 @@ I'm working on **RentWise**, a natural-language rental search aggregator for Van
 2. `README.md` — quick start
 3. `docs/specifications.md` — what the app does
 4. `docs/architecture.md` — how it's built
-5. `docs/legal.md` — **non-negotiable** rules about scraping, robots.txt, rate limits
+5. `docs/operational-rules.md` — **non-negotiable** rules about scraping, robots.txt, rate limits
 6. `docs/llm-providers.md` — LLM-agnostic strategy (LiteLLM + OpenRouter free tier as default)
 7. `docs/roadmap.md` — what's done vs next
 
@@ -16,7 +16,7 @@ I'm working on **RentWise**, a natural-language rental search aggregator for Van
 
 **Phase 0 is complete:** repo skeleton with FastAPI backend (stub endpoints), Expo Universal frontend (web/iOS/macOS), Docker Compose, CI, all docs. Tests pass, lint passes.
 
-**Next up: Phase 1 — Craigslist adapter via RSS.** This is the easiest, lowest-legal-risk first source. The plan in `docs/roadmap.md`:
+**Next up: Phase 1 — Craigslist adapter via RSS.** This is the easiest, cleanest first source (RSS is explicitly provided for syndication). The plan in `docs/roadmap.md`:
 
 1. DB schema + Alembic migrations (`listings`, `canonical_listings`, `searches`, `alerts`, `users`, `source_health`)
 2. Craigslist adapter using `feedparser` against `vancouver.craigslist.org/search/apa?format=rss&...`
@@ -32,7 +32,7 @@ I'm working on **RentWise**, a natural-language rental search aggregator for Van
 - I appreciate clear explanations of *why*, not just what
 - Conventional Commits (`feat:`, `fix:`, `docs:`, `chore:`, `test:`)
 - Don't `npm install` packages that don't work in both web and React Native
-- Don't increase rate limits, don't bypass robots.txt, don't store verbatim listing content (see `docs/legal.md`)
+- Don't increase rate limits, don't bypass robots.txt, don't store verbatim listing content (see `docs/operational-rules.md`)
 
 ## Where to start
 
