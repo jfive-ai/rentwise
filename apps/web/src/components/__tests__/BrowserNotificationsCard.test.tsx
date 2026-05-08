@@ -19,8 +19,6 @@ function makeClient(overrides: Partial<ApiClient>): ApiClient {
     getSettings: jest.fn(),
     putSettings: jest.fn(),
     testConnection: jest.fn(),
-    getCapturePair: jest.fn(),
-    rotateCapturePair: jest.fn(),
     saveSearch: jest.fn(),
     listSavedSearches: jest.fn(),
     deleteSavedSearch: jest.fn(),

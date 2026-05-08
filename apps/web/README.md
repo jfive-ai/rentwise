@@ -36,7 +36,7 @@ E2E specs live under `e2e/` and run against a Vite-built dev bundle started by P
 ```
 src/
 ├── api/
-│   ├── client.ts          # ApiClient with search / saveSearch / capture / settings
+│   ├── client.ts          # ApiClient with search / saveSearch / settings
 │   └── types.ts           # Mirrors apps/api/rentwise/models.py
 ├── components/
 │   ├── FilterPanel.tsx
@@ -44,7 +44,6 @@ src/
 │   ├── SaveSearchForm.tsx
 │   ├── SavedSearchesDrawer.tsx
 │   └── ...
-├── launcher/              # Phase 3: "Search across sources" + extension pairing
 ├── llm/                   # Provider list + key validation
 ├── lib/                   # Pure helpers (cluster grouping, ...)
 ├── screens/

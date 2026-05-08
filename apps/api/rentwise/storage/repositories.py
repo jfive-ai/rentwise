@@ -122,8 +122,6 @@ class ListingRepo:
                 else None,
                 posted_at=listing.posted_at.isoformat(),
                 last_seen_at=listing.last_seen_at.isoformat(),
-                first_seen_at=listing.posted_at.isoformat(),
-                capture_method="server",
                 catchment_elementary=listing.school_catchments.elementary,
                 catchment_middle=listing.school_catchments.middle,
                 catchment_secondary=listing.school_catchments.secondary,
@@ -179,115 +177,6 @@ class ListingRepo:
                 existing.canonical_id = str(listing.canonical_id)
             existing.updated_at = now
             row = existing
-
-        await self.session.flush()
-        return _to_pydantic(row)
-
-    async def upsert_by_source_url(
-        self,
-        *,
-        source: str,
-        source_listing_id: str,
-        fields: dict,
-        capture_method: str,
-        page_type: str,
-        captured_at: datetime,
-    ) -> NormalizedListing:
-        """Extension-driven upsert. Null-skip; detail-wins for snippet & photos.
-
-        `fields` may contain any subset of: source_url, title, price_cad,
-        bedrooms, bathrooms, neighborhood, posted_at, photos (list[HttpUrl]),
-        thumbnail_url (HttpUrl | None), description_snippet.
-        """
-        existing_stmt = select(Listing).where(
-            Listing.source == source, Listing.source_listing_id == source_listing_id
-        )
-        existing = (await self.session.execute(existing_stmt)).scalar_one_or_none()
-
-        captured_iso = captured_at.isoformat()
-        now = _now_iso()
-
-        if existing is None:
-            seed_photos = list(fields.get("photos") or [])
-            if not seed_photos and fields.get("thumbnail_url") is not None:
-                seed_photos = [fields["thumbnail_url"]]
-
-            posted_at = fields.get("posted_at") or captured_at
-            row = Listing(
-                id=str(uuid4()),
-                canonical_id=None,
-                source=source,
-                source_listing_id=source_listing_id,
-                source_url=str(fields.get("source_url") or ""),
-                title=fields.get("title") or "",
-                snippet=(
-                    fields.get("description_snippet") if page_type == "listing_detail" else None
-                ),
-                address_raw=None,
-                address_normalized=None,
-                neighborhood=fields.get("neighborhood"),
-                lat=None,
-                lon=None,
-                bedrooms=fields.get("bedrooms"),
-                bathrooms=fields.get("bathrooms"),
-                price_cad=fields.get("price_cad"),
-                pets_allowed=None,
-                furnished=None,
-                available_date=None,
-                posted_at=posted_at.isoformat(),
-                last_seen_at=captured_iso,
-                first_seen_at=captured_iso,
-                catchment_elementary=None,
-                catchment_middle=None,
-                catchment_secondary=None,
-                photo_urls_json=json.dumps([str(u) for u in seed_photos]),
-                raw_metadata_json=json.dumps({}),
-                capture_method=capture_method,
-                created_at=now,
-                updated_at=now,
-            )
-            self.session.add(row)
-        else:
-            row = existing
-            if (v := fields.get("source_url")) is not None:
-                row.source_url = str(v)
-            if (v := fields.get("title")) is not None:
-                row.title = v
-            if (v := fields.get("price_cad")) is not None:
-                row.price_cad = v
-            if (v := fields.get("bedrooms")) is not None:
-                row.bedrooms = v
-            if (v := fields.get("bathrooms")) is not None:
-                row.bathrooms = v
-            if (v := fields.get("neighborhood")) is not None:
-                row.neighborhood = v
-            if (v := fields.get("posted_at")) is not None:
-                row.posted_at = v.isoformat()
-
-            # Detail-wins: snippet only on listing_detail captures.
-            if page_type == "listing_detail":
-                snippet = fields.get("description_snippet")
-                if snippet is not None:
-                    row.snippet = snippet
-
-            # Detail-wins for photos: never replace a non-empty list with a
-            # single thumbnail from search_results. On search_results we only
-            # seed photos if the existing list is empty.
-            new_photos = list(fields.get("photos") or [])
-            if page_type == "listing_detail":
-                if new_photos:
-                    row.photo_urls_json = json.dumps([str(u) for u in new_photos])
-            else:  # search_results
-                existing_list = json.loads(row.photo_urls_json or "[]")
-                if not existing_list:
-                    if new_photos:
-                        row.photo_urls_json = json.dumps([str(u) for u in new_photos])
-                    elif fields.get("thumbnail_url") is not None:
-                        row.photo_urls_json = json.dumps([str(fields["thumbnail_url"])])
-
-            row.last_seen_at = captured_iso
-            row.capture_method = capture_method
-            row.updated_at = now
 
         await self.session.flush()
         return _to_pydantic(row)

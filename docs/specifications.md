@@ -179,13 +179,13 @@ class SourceAdapter(Protocol):
 
 | Source | Method | Notes |
 |---|---|---|
-| liv.rent | Browser (no public API) | Respects robots.txt, throttled |
-| PadMapper | Browser | Respects robots.txt, throttled |
-| Zumper | Browser | Respects robots.txt, throttled |
-| Rentals.ca | Browser | Respects robots.txt, throttled |
-| REW.ca | Browser | Respects robots.txt, throttled |
-| Craigslist Vancouver | RSS | Has RSS feeds — preferred |
-| Facebook Marketplace | Browser, opt-in only | User must auth their own session — no automated login |
+| Craigslist Vancouver | RSS, server-side | Preferred — RSS only, no HTML scraping |
+| Rentals.ca | Direct adapter | Server-side; respects robots.txt + 1 req/sec ceiling |
+| PadMapper | Direct adapter | Server-side; respects robots.txt + 1 req/sec ceiling |
+| Zumper | Direct adapter | Server-side; respects robots.txt + 1 req/sec ceiling |
+| REW.ca | Direct adapter | Server-side; respects robots.txt + 1 req/sec ceiling |
+| liv.rent | Direct adapter | Server-side; respects robots.txt + 1 req/sec ceiling |
+| Facebook Marketplace | Out of scope | Login-walled; we never automate logins |
 
 ### 3.4 Deduplication
 
@@ -219,7 +219,7 @@ RentWise is a personal-use tool. To stay a polite citizen of the sites it querie
 
 - **Respect `robots.txt`** for every source.
 - **Throttle requests** — ≤ 1 req/sec per source with 500–1500 ms jitter, no parallel requests against the same source.
-- **No login bypass / no CAPTCHA solving / no proxy hopping.** For sites requiring login (e.g. Facebook Marketplace), the user must provide their own auth session via their own browser cookie.
+- **No login bypass / no CAPTCHA solving / no proxy hopping.** Login-walled sites (e.g. Facebook Marketplace) are out of scope.
 - **No re-display of full listing content** — store metadata + thumbnail link only (≤ 200-char description snippet); full description and photos always link back to the source.
 - **User-Agent honesty** — identify as `RentWise/<version>` with a contact email so a sysadmin can reach me.
 - **Take-down responsiveness** — if a site asks me to stop, the adapter is disabled within 7 days and that source's cached rows are purged within 14.

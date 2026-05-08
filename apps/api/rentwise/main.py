@@ -191,10 +191,6 @@ def create_app() -> FastAPI:
 
     app.include_router(build_router())
 
-    from rentwise.capture.router import build_router as build_capture_router
-
-    app.include_router(build_capture_router())
-
     from rentwise.http.searches import build_router as build_searches_router
 
     app.include_router(build_searches_router())
