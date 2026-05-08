@@ -1,0 +1,42 @@
+<!--
+  Synthetic Rentals.ca search-page fixture.
+
+  This is NOT scraped from live rentals.ca markup — the site returned HTTP
+  403 to our exploratory User-Agent so the live structure is unknown. This
+  fixture exercises the scaffold parser's wiring against a conservative
+  structure (article[data-testid="listing-card"] with data-field tags) and
+  is what the parser's selectors are calibrated against. Selectors must be
+  re-calibrated against live markup before enabling RENTWISE_RENTALSCA_ENABLED
+  in production.
+-->
+<!doctype html>
+<html lang="en">
+  <head><title>Rentals in Vancouver — Rentals.ca (synthetic fixture)</title></head>
+  <body>
+    <main>
+      <article data-testid="listing-card" data-listing-id="abc123">
+        <a class="listing-link" href="/vancouver/abc123-kitsilano-2br">2 BR Kitsilano</a>
+        <img src="https://images.rentals.ca/abc123/cover.jpg" alt="cover" />
+        <h2 data-field="title">Bright 2BR in Kitsilano</h2>
+        <div data-field="address">1234 W 4th Ave, Vancouver, BC</div>
+        <div data-field="price">$2,950 / month</div>
+        <div data-field="bedrooms">2 beds</div>
+        <p data-field="snippet">South-facing unit, in-suite laundry, near 4th Ave shops.</p>
+      </article>
+
+      <article data-testid="listing-card" data-listing-id="def456">
+        <a class="listing-link" href="https://rentals.ca/vancouver/def456-downtown-studio">Studio Downtown</a>
+        <img src="/images/def456/cover.jpg" alt="cover" />
+        <h2 data-field="title">Cozy studio steps from Robson</h2>
+        <div data-field="address">555 Burrard St, Vancouver, BC</div>
+        <div data-field="price">$1,895</div>
+        <div data-field="bedrooms">studio</div>
+        <p data-field="snippet">This unit is absolutely massive for a studio in the heart of downtown Vancouver. Floor-to-ceiling windows offer sweeping views of the North Shore mountains, Burrard Inlet, and even Stanley Park on a clear day. Heat and hot water included. In-suite laundry. Concierge in the lobby 24/7. One block from the SkyTrain. Pet friendly with deposit. Available immediately for a one-year lease.</p>
+      </article>
+
+      <article data-testid="something-else">
+        <p>this is not a listing card and must be ignored</p>
+      </article>
+    </main>
+  </body>
+</html>

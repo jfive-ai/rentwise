@@ -24,12 +24,22 @@ def _build_adapters() -> tuple[SourceAdapter, ...]:
     """Build adapter instances once per process so rate-limit state is shared."""
     from rentwise.adapters.craigslist.adapter import CraigslistAdapter
 
-    return (
+    adapters: list[SourceAdapter] = [
         CraigslistAdapter(
             region=settings.craigslist_region,
             user_agent=settings.user_agent,
         ),
-    )
+    ]
+
+    if settings.rentwise_rentalsca_enabled:
+        # Imported lazily so disabled-by-default deployments never pay the
+        # Playwright import cost. Rentals.ca scaffold; see
+        # docs/operational-rules.md "Source notes — Rentals.ca".
+        from rentwise.adapters.rentalsca.adapter import RentalsCaAdapter
+
+        adapters.append(RentalsCaAdapter(user_agent=settings.user_agent))
+
+    return tuple(adapters)
 
 
 @lru_cache(maxsize=1)
