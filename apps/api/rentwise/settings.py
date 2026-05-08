@@ -26,6 +26,14 @@ class Settings(BaseSettings):
 
     # --- Database ---
     database_url: str = "sqlite+aiosqlite:///./data/rentwise.db"
+    auto_migrate: bool = Field(
+        default=True,
+        validation_alias="RENTWISE_AUTO_MIGRATE",
+        description=(
+            "Run `alembic upgrade head` at app startup. Off-switch for "
+            "advanced users; default on so a fresh clone Just Works."
+        ),
+    )
 
     # --- Search cache & paging ---
     search_cache_ttl_seconds: int = Field(
