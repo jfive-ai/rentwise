@@ -31,13 +31,47 @@ describe("FilterPanel", () => {
 
   it("renders disabled controls with phase badges", () => {
     const { getByText, getAllByText } = renderPanel();
-    expect(getByText("School catchment")).toBeTruthy();
+    // School catchment + transit walk are enabled as of PR-D, so they
+    // no longer appear under DisabledControl. Pets / Furnished /
+    // Available after stay disabled until later phases.
     expect(getByText("Pets")).toBeTruthy();
     expect(getByText("Furnished")).toBeTruthy();
     expect(getByText("Available after")).toBeTruthy();
-    expect(getByText("Transit walk (max min)")).toBeTruthy();
     // multiple controls use "Phase 3"
     expect(getAllByText(/Phase 3/i).length).toBeGreaterThan(0);
+  });
+
+  it("school catchment input updates query.school_catchment", () => {
+    const { getByLabelText, getByTestId } = renderPanel();
+    fireEvent.changeText(getByLabelText("School catchment"), "Lord Byng");
+    expect(getByTestId("query-state").props.children).toContain(
+      '"school_catchment":"Lord Byng"'
+    );
+  });
+
+  it("school catchment empty string clears school_catchment to null", () => {
+    const { getByLabelText, getByTestId } = renderPanel();
+    fireEvent.changeText(getByLabelText("School catchment"), "Lord Byng");
+    fireEvent.changeText(getByLabelText("School catchment"), "");
+    expect(getByTestId("query-state").props.children).toContain(
+      '"school_catchment":null'
+    );
+  });
+
+  it("transit walk input updates transit_max_walk_minutes", () => {
+    const { getByLabelText, getByTestId } = renderPanel();
+    fireEvent.changeText(getByLabelText("Transit walk minutes"), "10");
+    expect(getByTestId("query-state").props.children).toContain(
+      '"transit_max_walk_minutes":10'
+    );
+  });
+
+  it("transit walk input clamps out-of-range values to null", () => {
+    const { getByLabelText, getByTestId } = renderPanel();
+    fireEvent.changeText(getByLabelText("Transit walk minutes"), "999");
+    expect(getByTestId("query-state").props.children).toContain(
+      '"transit_max_walk_minutes":null'
+    );
   });
 
   it("toggles bedrooms_min / bedrooms_max via chips", () => {
