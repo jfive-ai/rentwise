@@ -1,0 +1,1 @@
+"""Zumper adapter tests."""

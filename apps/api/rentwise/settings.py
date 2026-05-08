@@ -68,6 +68,25 @@ class Settings(BaseSettings):
         validation_alias="RENTWISE_PADMAPPER_ENABLED",
     )
 
+    # --- Phase 8 PR-E: Zumper / REW.ca / liv.rent direct adapters ---
+    # All three are scaffolds and disabled by default. See
+    # docs/operational-rules.md "Source notes" for the per-site TOS reality
+    # before flipping any of these on. None of these ship a working
+    # extractor yet — opting in just causes the adapter to be registered
+    # in the aggregator and report `degraded` health.
+    rentwise_zumper_enabled: bool = Field(
+        default=False,
+        validation_alias="RENTWISE_ZUMPER_ENABLED",
+    )
+    rentwise_rew_enabled: bool = Field(
+        default=False,
+        validation_alias="RENTWISE_REW_ENABLED",
+    )
+    rentwise_livrent_enabled: bool = Field(
+        default=False,
+        validation_alias="RENTWISE_LIVRENT_ENABLED",
+    )
+
     # --- LLM (LiteLLM) ---
     # See docs/llm-providers.md for full options.
     rentwise_llm_model: str = "openrouter/qwen/qwen3-next-80b-a3b-instruct:free"

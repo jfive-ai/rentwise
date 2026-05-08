@@ -46,6 +46,26 @@ def _build_adapters() -> tuple[SourceAdapter, ...]:
 
         adapters.append(PadMapperAdapter(user_agent=settings.user_agent))
 
+    # Phase 8 PR-E direct-adapter scaffolds. Each one is disabled by
+    # default and only constructed when its env var is True. Imports are
+    # inside the conditional so disabled-by-default deployments never pay
+    # the Playwright import cost. See docs/operational-rules.md for the
+    # per-site TOS reality.
+    if settings.rentwise_zumper_enabled:
+        from rentwise.adapters.zumper.adapter import ZumperAdapter
+
+        adapters.append(ZumperAdapter(user_agent=settings.user_agent))
+
+    if settings.rentwise_rew_enabled:
+        from rentwise.adapters.rew.adapter import RewAdapter
+
+        adapters.append(RewAdapter(user_agent=settings.user_agent))
+
+    if settings.rentwise_livrent_enabled:
+        from rentwise.adapters.livrent.adapter import LivRentAdapter
+
+        adapters.append(LivRentAdapter(user_agent=settings.user_agent))
+
     return tuple(adapters)
 
 
