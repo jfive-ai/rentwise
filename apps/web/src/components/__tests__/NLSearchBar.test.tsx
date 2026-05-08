@@ -84,22 +84,48 @@ describe("NLSearchBar", () => {
     await findByLabelText("Remove Kitsilano");
   });
 
-  it("falls back to filter mode on 5xx", async () => {
-    mockTranslate({ detail: { error: "llm_transport_error" } }, false, 502);
+  it("surfaces the server error detail on 5xx and stays in NL mode", async () => {
+    mockTranslate(
+      {
+        detail: {
+          error: "llm_transport_error",
+          message:
+            "All LLM providers failed; last error: OpenRouter 401 No cookie auth credentials",
+        },
+      },
+      false,
+      502
+    );
     const { getByLabelText, getByText, getByTestId, findByText } = renderBar("nl");
     fireEvent.changeText(getByLabelText("Search input"), "anything");
     fireEvent.press(getByText("Parse"));
-    await findByText(/LLM unavailable/i);
-    await waitFor(() => expect(getByTestId("probe-mode").props.children).toBe("filters"));
+    await findByText(/All LLM providers failed/);
+    // Mode stays in NL — the user opted into NL and we don't yank them out.
+    expect(getByTestId("probe-mode").props.children).toBe("nl");
+    // But a recovery action is offered.
+    expect(getByText("Use filter mode")).toBeTruthy();
   });
 
-  it("falls back on network error", async () => {
+  it("surfaces the network error message on transport failure", async () => {
     (global.fetch as jest.Mock).mockRejectedValue(new TypeError("Network down"));
     const { getByLabelText, getByText, getByTestId, findByText } = renderBar("nl");
     fireEvent.changeText(getByLabelText("Search input"), "anything");
     fireEvent.press(getByText("Parse"));
-    await findByText(/LLM unavailable/i);
-    await waitFor(() => expect(getByTestId("probe-mode").props.children).toBe("filters"));
+    await findByText(/Network down/);
+    expect(getByTestId("probe-mode").props.children).toBe("nl");
+  });
+
+  it('"Use filter mode" recovery action flips mode and clears the error', async () => {
+    mockTranslate({ detail: { message: "LLM down" } }, false, 502);
+    const { getByLabelText, getByText, getByTestId, findByText, queryByText } = renderBar("nl");
+    fireEvent.changeText(getByLabelText("Search input"), "anything");
+    fireEvent.press(getByText("Parse"));
+    await findByText(/LLM down/);
+    fireEvent.press(getByText("Use filter mode"));
+    await waitFor(() =>
+      expect(getByTestId("probe-mode").props.children).toBe("filters")
+    );
+    expect(queryByText(/LLM down/)).toBeNull();
   });
 
   it("disables Parse while a request is in flight", async () => {
