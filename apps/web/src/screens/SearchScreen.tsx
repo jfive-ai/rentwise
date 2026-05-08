@@ -1,7 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { router, useLocalSearchParams } from "expo-router";
 import { searchClient } from "@/src/api/client";
-import type { NormalizedListing, SearchResponse, SortOrder } from "@/src/api/types";
+import type {
+  NormalizedListing,
+  NormalizedQuery,
+  SearchResponse,
+  SortOrder,
+} from "@/src/api/types";
 import { useQuery } from "@/src/state/QueryProvider";
 import { FilterPanel } from "@/src/components/FilterPanel";
 import { ModeToggle } from "@/src/components/ModeToggle";
@@ -15,6 +21,11 @@ import { SaveSearchForm } from "@/src/components/SaveSearchForm";
 import { SavedSearchesDrawer } from "@/src/components/SavedSearchesDrawer";
 import { groupByCanonical } from "@/src/lib/listingClusters";
 import { defaultViewForWidth, isStacked, useViewportWidth } from "@/src/lib/responsive";
+import {
+  decodeQueryFromParams,
+  encodeQueryToParams,
+  hasAnyParams,
+} from "@/src/lib/queryUrl";
 import {
   EmptyState,
   ErrorState,
@@ -90,8 +101,27 @@ export function SearchScreen({ apiBaseUrl }: Props) {
     void loadActions().then(setActions);
   }, []);
 
+  // Phase 7 PR-C-2: hydrate query state from URL params on first mount and
+  // auto-fire one search if there were any. Mount-only — subsequent URL
+  // changes come from our own onSearch path and shouldn't loop here.
+  const mountParams = useLocalSearchParams<Record<string, string | string[]>>();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    const decoded = decodeQueryFromParams(mountParams);
+    if (hasAnyParams(decoded)) {
+      replace(decoded);
+      void runSearch(0, false, decoded);
+    }
+    // Mount-only: capture mountParams snapshot at first render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const runSearch = useCallback(
-    async (nextOffset: number, append: boolean): Promise<void> => {
+    async (
+      nextOffset: number,
+      append: boolean,
+      queryOverride?: NormalizedQuery,
+    ): Promise<void> => {
       const myId = ++reqIdRef.current;
       hasSearchedRef.current = true;
       setLastCall({ offset: nextOffset, append });
@@ -99,7 +129,10 @@ export function SearchScreen({ apiBaseUrl }: Props) {
       setErrMsg("");
       try {
         const res: SearchResponse = await client.search({
-          query,
+          // queryOverride is for the mount-from-URL path: replace() schedules
+          // a state update but the closure here still captures the stale
+          // empty query, so the caller passes the decoded query explicitly.
+          query: queryOverride ?? query,
           limit: PAGE_SIZE,
           offset: nextOffset,
           sort,
@@ -120,7 +153,20 @@ export function SearchScreen({ apiBaseUrl }: Props) {
     [client, query, sort]
   );
 
-  const onSearch = useCallback(() => { void runSearch(0, false); }, [runSearch]);
+  // Phase 7 PR-C-2: when the user kicks off a search, sync the current
+  // query into the URL so the page is shareable / bookmarkable. Use
+  // router.replace (vs setParams) so removed filters drop out of the URL
+  // instead of merging with the prior set.
+  const onSearch = useCallback(() => {
+    const encoded = encodeQueryToParams(query);
+    router.replace({
+      pathname: "/",
+      // expo-router params is Record<string, string>. Object.fromEntries on a
+      // URLSearchParams gives exactly that.
+      params: Object.fromEntries(encoded),
+    });
+    void runSearch(0, false);
+  }, [query, runSearch]);
   const onLoadMore = useCallback(() => { void runSearch(offset + PAGE_SIZE, true); }, [runSearch, offset]);
   // Retry replays the exact (offset, append) of the failed call so a Load-more
   // failure doesn't drop earlier pages.
