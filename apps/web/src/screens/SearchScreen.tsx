@@ -10,6 +10,7 @@ import { ParsedQueryChips } from "@/src/components/ParsedQueryChips";
 import { ResultsToolbar, type ViewMode } from "@/src/components/ResultsToolbar";
 import { ListingCard } from "@/src/components/ListingCard";
 import { ListingTable } from "@/src/components/ListingTable";
+import { MapView } from "@/src/components/MapView";
 import { SaveSearchForm } from "@/src/components/SaveSearchForm";
 import { SavedSearchesDrawer } from "@/src/components/SavedSearchesDrawer";
 import { groupByCanonical } from "@/src/lib/listingClusters";
@@ -221,6 +222,22 @@ export function SearchScreen({ apiBaseUrl }: Props) {
                 onAction={(f, v) => { void handleAction(primary.id, f, v); }}
               />
             ))}
+          </View>
+        ) : view === "map" ? (
+          <View style={{ minHeight: 480 }}>
+            <MapView
+              listings={listings}
+              onSelectListing={() => {
+                // PR-A: hover/selection sync lands in PR-B's split view.
+                // For now the click is a no-op that PR-B will plug into.
+              }}
+              onSearchBbox={() => {
+                // PR-A: bbox is captured but the backend doesn't yet act
+                // on it. PR-C wires it through URL params + a backend
+                // bbox filter.
+                onSearch();
+              }}
+            />
           </View>
         ) : (
           <View style={{ minHeight: 400 }}>

@@ -25,7 +25,9 @@
       "typedRoutes": true
     },
     "extra": {
-      "apiBaseUrl": "http://localhost:8000"
+      "apiBaseUrl": "http://localhost:8000",
+      "mapTilesUrl": "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+      "mapTilesAttribution": "© OpenStreetMap contributors"
     }
   }
 }

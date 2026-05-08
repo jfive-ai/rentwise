@@ -12,6 +12,12 @@ module.exports = {
     "src/**/*.{ts,tsx}",
     "!src/**/__tests__/**",
     "!src/**/*.d.ts",
+    // MapView.tsx is a thin web-only shell over MapLibre. The mount
+    // useEffect needs a real DOM ref + a WebGL context that jsdom can't
+    // provide, so jest can't exercise it. The pure helpers it calls
+    // (src/lib/mapClusters.ts) are fully covered, and Playwright runs
+    // the real-browser path in Phase 7 PR-C's E2E.
+    "!src/components/MapView.tsx",
   ],
   coverageThreshold: {
     global: {

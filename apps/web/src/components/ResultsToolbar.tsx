@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import type { SortOrder } from "@/src/api/types";
 import { useTheme } from "@/src/theme";
 
-export type ViewMode = "cards" | "list";
+export type ViewMode = "cards" | "list" | "map";
 
 const SORT_LABEL: Record<SortOrder, string> = {
   newest: "Newest",
@@ -81,10 +81,9 @@ export function ResultsToolbar({
         <View style={styles.switcher}>
           <ViewBtn label="Cards" active={view === "cards"} onPress={() => onViewChange("cards")} />
           <ViewBtn label="List" active={view === "list"} onPress={() => onViewChange("list")} />
-          <ViewBtnDisabled label="Map" phase="Phase 7" />
-          <ViewBtnDisabled label="Split" phase="Phase 7" />
+          <ViewBtn label="Map" active={view === "map"} onPress={() => onViewChange("map")} />
+          <ViewBtnDisabled label="Split" phase="Phase 7 PR-B" />
         </View>
-        <Text style={{ color: t.disabled, fontSize: 10, textAlign: "center" }}>Phase 7</Text>
       </View>
     </View>
   );
