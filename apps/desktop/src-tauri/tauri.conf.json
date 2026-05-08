@@ -7,7 +7,7 @@
     "frontendDist": "../../web/dist",
     "devUrl": "http://localhost:8081",
     "beforeDevCommand": "",
-    "beforeBuildCommand": ""
+    "beforeBuildCommand": "cd ../../web && npx expo export -p web"
   },
   "app": {
     "withGlobalTauri": true,

@@ -107,6 +107,34 @@ You can now use the app with **just Craigslist** as a source — that's enough t
 4. Or trigger a manual test run via `POST /searches/{cache_key}/run-now`.
 5. New matching listings → one email per dispatch, deduped via the `alert_log` table so you never get the same listing twice.
 
+## Build the macOS app
+
+Phase 8 packages RentWise as a real `.app` bundle so you can launch it from your dock. The wrapper is a tiny [Tauri v2](https://tauri.app/) shell in [`apps/desktop/`](apps/desktop) that loads the Expo web build — 100% of the TypeScript source is shared with the web app.
+
+### One-time prereqs
+
+- macOS on Apple Silicon.
+- Node 20+.
+- Rust toolchain — `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh` if you don't have it.
+
+### Dev mode
+
+```bash
+make web      # terminal 1 — Expo dev server on :8081
+make macos    # terminal 2 — Tauri window pointing at the dev server
+```
+
+### Production build
+
+```bash
+make setup-desktop    # first time only: ~5 min Rust compile
+cd apps/desktop && npm run tauri build
+```
+
+`tauri build` runs `expo export -p web` automatically (via `beforeBuildCommand` in `src-tauri/tauri.conf.json`), then bundles the static output into `apps/desktop/src-tauri/target/release/bundle/macos/RentWise.app`.
+
+The app expects the FastAPI backend at `http://localhost:8000` (configurable via `extra.apiBaseUrl` in `apps/web/app.json`). Run `make api` or `docker compose up` for the API before launching.
+
 ## Run without Docker
 
 **Backend:**
