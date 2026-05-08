@@ -142,7 +142,9 @@ Results can be displayed in several views, switchable from a single toolbar. All
 
 #### View persistence
 - The chosen view is remembered per-user (in settings).
-- Default view depends on screen width: split on ≥1280px desktop, card grid on tablet, list on mobile.
+- Default view depends on screen width: split on ≥1280px desktop, card grid on tablet, list on mobile (Phase 7 PR-C-1).
+- The active query is encoded into URL query parameters via expo-router (Phase 7 PR-C-2), so any search is bookmarkable / shareable. Round-tripping URL → `NormalizedQuery` is symmetric, which keeps web-target deep-linking and the desktop shell consistent.
+- The web app ships a manifest + service worker (Phase 7 PR-C-3) so iOS Safari "Add to Home Screen" produces a real PWA. The Electron desktop shell loads the same static export, so the same code path drives both.
 
 #### Per-card / per-row controls
 Every listing, regardless of view, shows quick-action buttons:
@@ -198,18 +200,26 @@ A confidence score determines whether two listings are merged into one canonical
 
 ### 3.5 Enrichment
 
-Once ingested, listings are enriched with:
-- **School catchment** — using Vancouver School Board boundary data (public)
-- **Transit** — Google Maps / Mapbox Distance Matrix to nearest SkyTrain/bus
-- **Walkscore** — if free tier API available
-- **Crime stats** — Vancouver Open Data (public)
-- **Estimated commute** — to user's saved work address
+Shipped (Phase 4):
+- **Address normalization** — `pyap` parsing → canonical street + unit (`libpostal` is the multi-city upgrade path).
+- **Geocoding** — Nominatim with a persistent SQLite cache (TTL via `RENTWISE_GEOCODE_CACHE_TTL_DAYS`) so we stay well under the 1 req/sec free-tier limit.
+- **School catchment** — VSB GeoJSON boundary polygons + `shapely` point-in-polygon lookup against the listing's geocoded coords.
+- **Transit** — TransLink slim stops extract + haversine distance + 5 km/h walking speed for nearest-SkyTrain / nearest-bus walk-minute estimates. The frontend exposes `transit_max_walk_minutes` as a post-filter.
+- **Photo perceptual hash** — `imagehash.phash` on the first photo per listing, cached per-URL (TTL via `RENTWISE_PHOTO_HASH_CACHE_TTL_DAYS`). Feeds the Phase 4 PR-C dedup scorer.
+
+Future:
+- **Walkscore** — if/when a free tier is available.
+- **Crime stats** — Vancouver Open Data.
+- **Estimated commute** — to a user-saved work address.
 
 ### 3.6 Saved searches & alerts
 
-- User can save a search query.
-- Background job re-runs saved searches on a schedule (default: every 30 min).
-- New matches trigger email/push notification.
+- User can save any active query (label + alert metadata) via the toolbar's ★ Save button (Phase 5 PR-A).
+- An in-process APScheduler runs each saved search at its configured cadence; each match passes through an `alert_log` dedup ledger so the same listing never notifies twice (Phase 5 PR-B).
+- Notifications (Phase 5 PR-B + PR-C):
+  - **Email** via SMTP (stdlib `smtplib`, configured via `RENTWISE_SMTP_*`).
+  - **Web push** via VAPID + service worker — the frontend registers a `PushSubscription`, the backend dispatches via `pywebpush`. Configure `RENTWISE_VAPID_*` to enable.
+- The scheduler is gated behind `RENTWISE_SCHEDULER_ENABLED` so tests/CI never wake real intervals.
 
 ## 4. Non-Functional Requirements
 

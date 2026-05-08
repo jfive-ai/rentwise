@@ -23,21 +23,20 @@
 - ✅ Phase 2 — Natural-language search (English + Korean) with first-run LLM wizard
 - ⊘ Phase 3 — Browser extension (retired in Phase 8 PR-B; replaced by direct adapters)
 - ✅ Phase 4 — Address normalization + geocoding + school catchments + transit + photo perceptual hashing + cross-source dedup + UI polish
-- ✅ Phase 5 (PR-A + PR-B) — Saved searches + APScheduler + SMTP email alerts + dedup ledger
-- ⏳ Phase 5 PR-C — Web push notifications
-- ⏳ Phase 7 — Map view, split view
-- 🚧 Phase 8 — macOS app + retire extension + direct adapters (Rentals.ca, PadMapper, Zumper, REW.ca, liv.rent)
+- ✅ Phase 5 — Saved searches + APScheduler + SMTP email alerts + dedup ledger + web push notifications
+- ✅ Phase 7 — Map view + clustering + catchment & SkyTrain overlays + split view + viewport-aware default + URL filter persistence + PWA
+- 🚧 Phase 8 — macOS app shipped (Electron at `apps/desktop/`, build via `scripts/build-mac.sh`); browser extension retired; direct adapters for Rentals.ca, PadMapper, Zumper, REW.ca, liv.rent landed as **scaffolds disabled by default** — selectors require live-markup calibration before real results flow
 
 ## Sources
 
 | Source | Method | Status | Notes |
 |---|---|---|---|
 | Craigslist Vancouver | RSS, server-side | ✅ Shipped | RSS-only per [operational-rules.md § Craigslist](docs/operational-rules.md#craigslist) |
-| Rentals.ca | Direct adapter (Phase 8 PR-C) | 🚧 In progress (scaffold) | Server-side adapter following `docs/operational-rules.md` |
-| PadMapper | Direct adapter (Phase 8 PR-D) | 🚧 In progress (scaffold) | Server-side adapter following `docs/operational-rules.md` |
-| Zumper | Direct adapter (Phase 8 PR-E) | 🚧 In progress (scaffold) | Server-side adapter following `docs/operational-rules.md` |
-| REW.ca | Direct adapter (Phase 8 PR-E) | 🚧 In progress (scaffold) | Server-side adapter following `docs/operational-rules.md` |
-| liv.rent | Direct adapter (Phase 8 PR-E) | 🚧 In progress (scaffold) | Server-side adapter following `docs/operational-rules.md` |
+| Rentals.ca | Direct adapter (Phase 8 PR-C) | 🚧 Scaffold, disabled by default | URL builder + robots.txt + selector skeleton land; selectors not yet calibrated to live markup. Set `RENTWISE_RENTALSCA_ENABLED=true` to register the adapter. |
+| PadMapper | Direct adapter (Phase 8 PR-D) | 🚧 Scaffold, disabled by default | URL builder + robots.txt + `box=` guard land; `_extract` is a stub. Set `RENTWISE_PADMAPPER_ENABLED=true` to register. |
+| Zumper | Direct adapter (Phase 8 PR-E) | 🚧 Scaffold, disabled by default | `_extract` returns `[]` until real selectors land. Set `RENTWISE_ZUMPER_ENABLED=true` to register. |
+| REW.ca | Direct adapter (Phase 8 PR-E) | 🚧 Scaffold, disabled by default | TOS is the most explicit anti-scraping language of any source we considered — opting in is a deliberate choice. `RENTWISE_REW_ENABLED=true`. |
+| liv.rent | Direct adapter (Phase 8 PR-E) | 🚧 Scaffold, disabled by default | Vancouver-based; partnership is the preferred long-term path. `RENTWISE_LIVRENT_ENABLED=true`. |
 | Facebook Marketplace | Out of scope | ❌ Login-walled — no automated login per `docs/operational-rules.md` | Use the platform directly |
 
 > **Phase 8 pivot** — the user-driven browser extension that previously covered Rentals.ca, PadMapper, Zumper, REW.ca, liv.rent, and Facebook Marketplace was retired because it was inconvenient in daily personal use. Direct adapters (PR-C/D/E) replace it; Facebook Marketplace stays out of scope because it's login-walled and we never automate logins. See `docs/roadmap.md` Phase 8.
@@ -65,7 +64,9 @@ RentWise solves this by:
 - **LLM:** [LiteLLM](https://docs.litellm.ai/) abstraction — OpenRouter (free tier), Anthropic, OpenAI, Google, Ollama (local), or any other provider. User picks at first run.
 - **Languages supported:** English & Korean (한국어) from day 1.
 - **Enrichment:** [`pyap`](https://github.com/vladimarius/pyap) for address parsing, [Nominatim](https://nominatim.openstreetmap.org/) for geocoding (free; 1 req/sec), [`shapely`](https://shapely.readthedocs.io/) for VSB catchment polygons, haversine over a slim TransLink GTFS extract for transit walk minutes, [`imagehash`](https://github.com/JohannesBuchner/imagehash) `phash` for cross-source photo dedup.
-- **Notifications:** SMTP via stdlib `smtplib`. Web push (Phase 5 PR-C) is in progress.
+- **Notifications:** SMTP via stdlib `smtplib`; web push via VAPID + service worker (`pywebpush` + `apps/web/public/sw.js`).
+- **Map:** [MapLibre GL JS](https://maplibre.org/) + OpenStreetMap tiles, client-side clustering via [`supercluster`](https://github.com/mapbox/supercluster).
+- **Desktop:** Electron shell at `apps/desktop/` that wraps the Expo web export as a real macOS `.app`.
 
 ## Quick Start
 
@@ -180,23 +181,27 @@ npx playwright test       # E2E
 rentwise/
 ├── apps/
 │   ├── api/                       # Python + FastAPI backend
-│   │   ├── alembic/               # DB migrations (head: 0010)
+│   │   ├── alembic/               # DB migrations (head: 0010_drop_capture)
 │   │   └── rentwise/
-│   │       ├── adapters/          # Source adapters (Craigslist + Playwright base)
-│   │       ├── aggregator/        # /search orchestration
-│   │       ├── dedup/              # Cross-source duplicate scoring (Phase 4)
+│   │       ├── adapters/          # Craigslist (RSS) + Playwright base + Phase 8 scaffolds
+│   │       │                        # (rentalsca, padmapper, zumper, rew, livrent —
+│   │       │                        #  all gated behind per-source RENTWISE_*_ENABLED flags)
+│   │       ├── aggregator/        # /search orchestration + freshness / cache
+│   │       ├── dedup/             # Cross-source duplicate scoring (Phase 4)
 │   │       ├── enrichment/        # Address, geocode, catchment, transit, phash
-│   │       ├── http/              # FastAPI routers
+│   │       ├── http/              # FastAPI routers (search, searches, web_push, map_overlays)
 │   │       ├── llm/               # LiteLLM wrapper + tool-use schema
-│   │       ├── notifications/     # APScheduler + email + alert runner
+│   │       ├── notifications/     # APScheduler + email + web push + alert runner
 │   │       └── storage/           # ORM + repos
-│   └── web/                       # React + Expo Router (universal: web/iOS/macOS)
-│       ├── app/                   # expo-router screens
-│       └── src/
-│           ├── api/               # ApiClient + types
-│           ├── components/        # FilterPanel, ListingCard, SaveSearchForm, ...
-│           ├── screens/           # SearchScreen, SettingsScreen, FirstRunWizard
-│           └── state/             # QueryProvider
+│   ├── web/                       # React + Expo Router (universal: web/iOS/macOS)
+│   │   ├── app/                   # expo-router screens
+│   │   ├── public/                # PWA manifest + service worker
+│   │   └── src/
+│   │       ├── api/               # ApiClient + types
+│   │       ├── components/        # FilterPanel, ListingCard, MapView, SaveSearchForm, ...
+│   │       ├── screens/           # SearchScreen, SettingsScreen, FirstRunWizard
+│   │       └── state/             # QueryProvider
+│   └── desktop/                   # Electron shell that wraps apps/web/dist as RentWise.app
 ├── docs/
 │   ├── architecture.md
 │   ├── operational-rules.md      # Rate limits, robots.txt, snippet caps. Read before adding adapters.
