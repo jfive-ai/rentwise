@@ -25,6 +25,9 @@ beforeAll(() => {
 
 beforeEach(() => {
   (global.fetch as jest.Mock).mockReset();
+  // History persists in localStorage; clear so each test starts clean and
+  // the on-mount restore can't bleed a previous test's query into the input.
+  window.localStorage.clear();
 });
 
 // Mode-only probe so failure-path tests can assert on mode via testID.
@@ -126,6 +129,96 @@ describe("NLSearchBar", () => {
       expect(getByTestId("probe-mode").props.children).toBe("filters")
     );
     expect(queryByText(/LLM down/)).toBeNull();
+  });
+
+  it("appends successful parses to recent searches and supports remove + clear", async () => {
+    mockTranslate({
+      query: {
+        neighborhoods: ["Kitsilano"],
+        pets: "any",
+        furnished: "any",
+        free_text_keywords: [],
+        bedrooms_min: 2,
+        price_max: 3000,
+      },
+      unsupported_filters: [],
+      lang_detected: "en",
+      model_used: "m",
+    });
+    const { getByLabelText, getByText, findByLabelText, queryByLabelText } =
+      renderBar();
+    fireEvent.changeText(getByLabelText("Search input"), "2br Kits under 3000");
+    fireEvent.press(getByText("Parse"));
+    // Wait for history toggle to appear (i.e. the parse succeeded + persisted).
+    const toggle = await findByLabelText("Show recent searches");
+    fireEvent.press(toggle);
+    // Row exposes both pick + remove affordances.
+    await findByLabelText("Use search: 2br Kits under 3000");
+    fireEvent.press(getByLabelText("Remove search: 2br Kits under 3000"));
+    await waitFor(() =>
+      expect(
+        queryByLabelText("Use search: 2br Kits under 3000"),
+      ).toBeNull(),
+    );
+    // Empty list collapses the whole panel — the toggle disappears too.
+    await waitFor(() => {
+      expect(queryByLabelText("Show recent searches")).toBeNull();
+      expect(queryByLabelText("Hide recent searches")).toBeNull();
+    });
+  });
+
+  it("does not record history on a failed parse", async () => {
+    mockTranslate({ detail: { message: "LLM down" } }, false, 502);
+    const { getByLabelText, getByText, findByText, queryByLabelText } =
+      renderBar("nl");
+    fireEvent.changeText(getByLabelText("Search input"), "anything");
+    fireEvent.press(getByText("Parse"));
+    await findByText(/LLM down/);
+    expect(queryByLabelText("Show recent searches")).toBeNull();
+  });
+
+  it("restores the most recent query into the input on mount", async () => {
+    window.localStorage.setItem(
+      "rentwise.nlSearchHistory.v1",
+      JSON.stringify(["latest one", "older one"]),
+    );
+    const { findByDisplayValue } = renderBar();
+    await findByDisplayValue("latest one");
+  });
+
+  it("mount restore does not clobber text the user already typed", async () => {
+    // Pre-seed history so the restore path *would* fire if not guarded.
+    window.localStorage.setItem(
+      "rentwise.nlSearchHistory.v1",
+      JSON.stringify(["restored value"]),
+    );
+    const { getByLabelText, findByLabelText, queryByDisplayValue } = renderBar();
+    // Type synchronously, before loadHistory()'s .then() microtask drains.
+    // Without the nlTextRef guard, the captured-empty closure would overwrite
+    // this value with "restored value".
+    fireEvent.changeText(getByLabelText("Search input"), "user typed first");
+    // Wait until the history panel renders — signals the restore effect ran.
+    await findByLabelText("Show recent searches");
+    expect(
+      (getByLabelText("Search input") as unknown as { props: { value: string } })
+        .props.value,
+    ).toBe("user typed first");
+    expect(queryByDisplayValue("restored value")).toBeNull();
+  });
+
+  it("Clear all wipes the recent-searches list", async () => {
+    window.localStorage.setItem(
+      "rentwise.nlSearchHistory.v1",
+      JSON.stringify(["a query", "another"]),
+    );
+    const { findByLabelText, getByLabelText, queryByLabelText } = renderBar();
+    const toggle = await findByLabelText("Show recent searches");
+    fireEvent.press(toggle);
+    fireEvent.press(getByLabelText("Clear all recent searches"));
+    await waitFor(() => {
+      expect(queryByLabelText("Use search: a query")).toBeNull();
+      expect(queryByLabelText("Show recent searches")).toBeNull();
+    });
   });
 
   it("disables Parse while a request is in flight", async () => {
