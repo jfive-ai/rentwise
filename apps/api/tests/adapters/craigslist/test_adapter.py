@@ -18,17 +18,21 @@ def adapter() -> CraigslistAdapter:
 
 @pytest.mark.asyncio
 async def test_search_returns_listings(adapter):
-    feed = (FIX / "sample_feed.rss").read_bytes()
+    body = (FIX / "sample_jsonsearch.json").read_bytes()
     with respx.mock(assert_all_called=False) as mock:
         mock.get("https://vancouver.craigslist.org/robots.txt").mock(
             return_value=Response(200, text=(FIX / "robots_txt_allowed.txt").read_text())
         )
-        mock.get(url__regex=r"https://vancouver\.craigslist\.org/search/apa.*").mock(
-            return_value=Response(200, content=feed)
+        mock.get(url__regex=r"https://vancouver\.craigslist\.org/jsonsearch/apa.*").mock(
+            return_value=Response(200, content=body)
         )
         results = [r async for r in adapter.search(NormalizedQuery(bedrooms_min=2))]
     assert len(results) >= 1
     assert all(r.source == "craigslist" for r in results)
+    # The JSON endpoint provides structured `bedrooms` + `price`,
+    # which we now propagate verbatim instead of leaning on the title regex.
+    assert any(r.bedrooms == 2.0 for r in results)
+    assert any(r.price_cad is not None and r.price_cad > 0 for r in results)
 
 
 @pytest.mark.asyncio
@@ -56,31 +60,47 @@ async def test_capabilities_match_spec(adapter):
 
 
 @pytest.mark.asyncio
-async def test_health_check_ok_on_good_feed(adapter):
-    feed = (FIX / "sample_feed.rss").read_bytes()
+async def test_health_check_ok_on_good_payload(adapter):
+    body = (FIX / "sample_jsonsearch.json").read_bytes()
     with respx.mock(assert_all_called=False) as mock:
         mock.get("https://vancouver.craigslist.org/robots.txt").mock(
             return_value=Response(200, text=(FIX / "robots_txt_allowed.txt").read_text())
         )
-        mock.get(url__regex=r"https://vancouver\.craigslist\.org/search/apa.*").mock(
-            return_value=Response(200, content=feed)
+        mock.get(url__regex=r"https://vancouver\.craigslist\.org/jsonsearch/apa.*").mock(
+            return_value=Response(200, content=body)
         )
         h = await adapter.health_check()
     assert h.status == "ok"
 
 
 @pytest.mark.asyncio
-async def test_health_check_degraded_on_empty_feed(adapter):
-    feed = (FIX / "empty_feed.rss").read_bytes()
+async def test_health_check_degraded_on_empty_payload(adapter):
+    body = (FIX / "empty_jsonsearch.json").read_bytes()
     with respx.mock(assert_all_called=False) as mock:
         mock.get("https://vancouver.craigslist.org/robots.txt").mock(
             return_value=Response(200, text=(FIX / "robots_txt_allowed.txt").read_text())
         )
-        mock.get(url__regex=r"https://vancouver\.craigslist\.org/search/apa.*").mock(
-            return_value=Response(200, content=feed)
+        mock.get(url__regex=r"https://vancouver\.craigslist\.org/jsonsearch/apa.*").mock(
+            return_value=Response(200, content=body)
         )
         h = await adapter.health_check()
     assert h.status == "degraded"
+
+
+@pytest.mark.asyncio
+async def test_health_check_blocked_on_403(adapter):
+    """403 is what user-visible Craigslist abuse looks like in 2026 — pin
+    that the adapter reports it as blocked, not 'degraded', so the
+    aggregator can decide to skip the source entirely."""
+    with respx.mock(assert_all_called=False) as mock:
+        mock.get("https://vancouver.craigslist.org/robots.txt").mock(
+            return_value=Response(200, text=(FIX / "robots_txt_allowed.txt").read_text())
+        )
+        mock.get(url__regex=r"https://vancouver\.craigslist\.org/jsonsearch/apa.*").mock(
+            return_value=Response(403)
+        )
+        h = await adapter.health_check()
+    assert h.status == "blocked"
 
 
 @pytest.mark.asyncio
@@ -89,8 +109,24 @@ async def test_health_check_blocked_on_429(adapter):
         mock.get("https://vancouver.craigslist.org/robots.txt").mock(
             return_value=Response(200, text=(FIX / "robots_txt_allowed.txt").read_text())
         )
-        mock.get(url__regex=r"https://vancouver\.craigslist\.org/search/apa.*").mock(
+        mock.get(url__regex=r"https://vancouver\.craigslist\.org/jsonsearch/apa.*").mock(
             return_value=Response(429)
         )
         h = await adapter.health_check()
     assert h.status == "blocked"
+
+
+@pytest.mark.asyncio
+async def test_health_check_degraded_on_malformed_payload(adapter):
+    """If Craigslist changes the JSON shape (wouldn't be the first time)
+    we shouldn't crash — degrade gracefully so source_health surfaces it."""
+    body = (FIX / "malformed_jsonsearch.json").read_bytes()
+    with respx.mock(assert_all_called=False) as mock:
+        mock.get("https://vancouver.craigslist.org/robots.txt").mock(
+            return_value=Response(200, text=(FIX / "robots_txt_allowed.txt").read_text())
+        )
+        mock.get(url__regex=r"https://vancouver\.craigslist\.org/jsonsearch/apa.*").mock(
+            return_value=Response(200, content=body)
+        )
+        h = await adapter.health_check()
+    assert h.status == "degraded"
