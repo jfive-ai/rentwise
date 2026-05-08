@@ -58,6 +58,16 @@ class Settings(BaseSettings):
         validation_alias="RENTWISE_RENTALSCA_ENABLED",
     )
 
+    # --- Phase 8 PR-D: PadMapper direct adapter ---
+    # Disabled by default. PadMapper TOS § 8.4 prohibits scraping; their
+    # robots.txt is more permissive but explicitly disallows /api,
+    # /backlinks, /external, /static, cost-calculator paths, and any URL
+    # with a `box=` query param. See docs/operational-rules.md.
+    rentwise_padmapper_enabled: bool = Field(
+        default=False,
+        validation_alias="RENTWISE_PADMAPPER_ENABLED",
+    )
+
     # --- LLM (LiteLLM) ---
     # See docs/llm-providers.md for full options.
     rentwise_llm_model: str = "openrouter/qwen/qwen3-next-80b-a3b-instruct:free"

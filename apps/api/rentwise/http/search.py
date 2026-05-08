@@ -39,6 +39,13 @@ def _build_adapters() -> tuple[SourceAdapter, ...]:
 
         adapters.append(RentalsCaAdapter(user_agent=settings.user_agent))
 
+    if settings.rentwise_padmapper_enabled:
+        # Imported lazily so disabled-by-default deployments never pay the
+        # Playwright import cost. PadMapper scaffold; see docs/operational-rules.md.
+        from rentwise.adapters.padmapper.adapter import PadMapperAdapter
+
+        adapters.append(PadMapperAdapter(user_agent=settings.user_agent))
+
     return tuple(adapters)
 
 
