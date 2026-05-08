@@ -134,6 +134,21 @@ class Settings(BaseSettings):
         default=None, validation_alias="RENTWISE_SMTP_PASSWORD"
     )
 
+    # --- Phase 5 PR-C: web push ---
+    rentwise_web_push_enabled: bool = Field(
+        default=False, validation_alias="RENTWISE_WEB_PUSH_ENABLED"
+    )
+    rentwise_vapid_public_key: str | None = Field(
+        default=None, validation_alias="RENTWISE_VAPID_PUBLIC_KEY"
+    )
+    rentwise_vapid_private_key: str | None = Field(
+        default=None, validation_alias="RENTWISE_VAPID_PRIVATE_KEY"
+    )
+    rentwise_vapid_contact: str = Field(
+        default="mailto:noreply@rentwise.local",
+        validation_alias="RENTWISE_VAPID_CONTACT",
+    )
+
     # --- CORS ---
     cors_origins: list[str] = ["http://localhost:3000", "http://localhost:8081"]
 

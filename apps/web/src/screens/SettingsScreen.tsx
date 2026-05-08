@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { searchClient } from "@/src/api/client";
+import { BrowserNotificationsCard } from "@/src/components/BrowserNotificationsCard";
 import { ExtensionPairingCard } from "@/src/launcher/ExtensionPairingCard";
 import {
   PROVIDERS,
@@ -268,6 +269,9 @@ export function SettingsScreen({ apiBaseUrl }: Props) {
 
       <View style={{ height: 8 }} />
       <ExtensionPairingCard apiBaseUrl={apiBaseUrl} client={client} />
+
+      <View style={{ height: 8 }} />
+      <BrowserNotificationsCard client={client} />
     </ScrollView>
   );
 }

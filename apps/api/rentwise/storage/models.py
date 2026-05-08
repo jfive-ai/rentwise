@@ -117,20 +117,42 @@ class CapturePairingRow(Base):
 
 
 class AlertLogRow(Base):
-    """Dedup ledger for saved-search alert dispatches (Phase 5 PR-B).
+    """Dedup ledger for saved-search alert dispatches.
 
-    Composite PK on (cache_key, listing_id) — re-running the same
-    saved search against the same listing must produce zero new
-    alerts. ``channel`` lets PR-C's web-push share the same table
-    without conflicting with email.
+    Composite PK on (cache_key, listing_id, channel) — re-running the
+    same saved search on the same listing must produce zero new alerts
+    for any channel that already notified, but enabling a new channel
+    later (e.g. adding web push to a saved search that previously only
+    emailed) does fire that channel for the existing backlog.
     """
 
     __tablename__ = "alert_log"
 
     cache_key: Mapped[str] = mapped_column(String, primary_key=True)
     listing_id: Mapped[str] = mapped_column(String, primary_key=True)
+    channel: Mapped[str] = mapped_column(String, primary_key=True, default="email")
     alerted_at: Mapped[str] = mapped_column(String, nullable=False)
-    channel: Mapped[str] = mapped_column(String, nullable=False, default="email")
+
+
+class WebPushSubscriptionRow(Base):
+    """One row per browser/origin web-push subscription (Phase 5 PR-C).
+
+    See ``apps/api/alembic/versions/0009_web_push.py`` for the table
+    definition. ``endpoint`` is the natural unique key the browser's
+    push service hands us at subscribe time. ``alert_email`` routes
+    the subscription to whichever saved searches share that address.
+    """
+
+    __tablename__ = "web_push_subscriptions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    endpoint: Mapped[str] = mapped_column(String, nullable=False, unique=True)
+    p256dh: Mapped[str] = mapped_column(String, nullable=False)
+    auth: Mapped[str] = mapped_column(String, nullable=False)
+    alert_email: Mapped[str | None] = mapped_column(String, nullable=True)
+    label: Mapped[str | None] = mapped_column(String, nullable=True)
+    created_at: Mapped[str] = mapped_column(String, nullable=False)
+    last_seen_at: Mapped[str] = mapped_column(String, nullable=False)
 
 
 class GeocodeCacheRow(Base):
