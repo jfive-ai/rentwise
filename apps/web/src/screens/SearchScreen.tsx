@@ -27,6 +27,7 @@ import {
   hasAnyParams,
 } from "@/src/lib/queryUrl";
 import {
+  AdapterFailureBanner,
   EmptyState,
   ErrorState,
   LoadingSkeleton,
@@ -70,6 +71,9 @@ export function SearchScreen({ apiBaseUrl }: Props) {
   const [listings, setListings] = useState<NormalizedListing[]>([]);
   const [total, setTotal] = useState<number>(0);
   const [unsupported, setUnsupported] = useState<string[]>([]);
+  const [sourceHealth, setSourceHealth] = useState<
+    SearchResponse["source_health"]
+  >({});
   const [actions, setActions] = useState<ListingActionMap>({});
   const [status, setStatus] = useState<"idle" | "loading" | "error" | "ok">("idle");
   const [errMsg, setErrMsg] = useState<string>("");
@@ -142,6 +146,7 @@ export function SearchScreen({ apiBaseUrl }: Props) {
         setListings((prev) => (append ? [...prev, ...res.listings] : res.listings));
         setTotal(res.total);
         setUnsupported(res.unsupported_filters);
+        setSourceHealth(res.source_health);
         setOffset(nextOffset);
         setStatus("ok");
       } catch (e) {
@@ -271,6 +276,7 @@ export function SearchScreen({ apiBaseUrl }: Props) {
         />
 
         <UnsupportedFiltersBanner filters={unsupported} />
+        <AdapterFailureBanner sourceHealth={sourceHealth} />
 
         {status === "idle" ? (
           <EmptyState message="Set filters and press Search to find listings." />
@@ -279,7 +285,17 @@ export function SearchScreen({ apiBaseUrl }: Props) {
         ) : status === "error" ? (
           <ErrorState message={errMsg} onRetry={onRetry} />
         ) : listings.length === 0 ? (
-          <EmptyState message="No listings matched your filters." />
+          // If every queried source failed, the empty result isn't really
+          // "no matches" — it's "no data to match against". Use a clearer
+          // copy so the user knows to retry / check the banner above.
+          <EmptyState
+            message={
+              Object.values(sourceHealth).length > 0 &&
+              Object.values(sourceHealth).every((h) => h.status !== "ok")
+                ? "Couldn't reach any source. See the banner above for details."
+                : "No listings matched your filters."
+            }
+          />
         ) : view === "cards" ? (
           <View style={styles.grid}>
             {clusters.map(({ primary, alternates }) => (
@@ -391,8 +407,14 @@ const styles = StyleSheet.create({
     borderRightWidth: 0,
     borderBottomWidth: 1,
     alignSelf: "auto",
+    // Bound the height so FilterPanel's inner ScrollView has something
+    // finite to scroll within. Without this, the panel grew to its
+    // content height and the Search button at the bottom was below the
+    // viewport with no way to scroll to it (the page itself isn't
+    // scrollable). 100vh - header keeps the toggle visible at the top
+    // of the viewport while scrolling the filter body.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    maxHeight: ("none" as any),
+    maxHeight: ("calc(100vh - 56px)" as any),
   },
   filtersToggle: {
     paddingHorizontal: 12,
