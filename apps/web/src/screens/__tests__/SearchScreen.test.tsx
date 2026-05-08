@@ -25,6 +25,21 @@ import { QueryProvider } from "@/src/state/QueryProvider";
 // eslint-disable-next-line import/first
 import fixture from "@/__fixtures__/search_response.json";
 
+// useViewportWidth is the only hook SearchScreen consults for layout. Mock
+// it here so tests can pin a viewport size without patching react-native.
+let mockedViewportWidth = 1024;
+jest.mock("@/src/lib/responsive", () => {
+  const actual = jest.requireActual("@/src/lib/responsive");
+  return {
+    ...actual,
+    useViewportWidth: () => mockedViewportWidth,
+  };
+});
+
+function mockViewport(width: number, _height = 800) {
+  mockedViewportWidth = width;
+}
+
 beforeAll(() => {
   // Force the storage backend onto the web (localStorage) branch in tests.
   (Platform as { OS: string }).OS = "web";
@@ -55,6 +70,10 @@ describe("SearchScreen", () => {
     window.localStorage.clear();
     mockSearchParams = {};
     mockReplace.mockReset();
+    // Default to a desktop width so the responsive layout (PR-C-1) renders
+    // its non-stacked branch — which is what most existing tests assert on.
+    // Specific tests below call mockViewport() to override.
+    mockViewport(1024, 768);
   });
 
   afterEach(() => {
@@ -296,6 +315,33 @@ describe("SearchScreen", () => {
     // Affordance to expand alternates is present.
     expect(getByText(/Also on 1 source/)).toBeTruthy();
     expect(queryByText("↗ rentals_ca")).toBeNull();
+  });
+
+  it("narrow viewport: defaults view to 'list' and collapses the filter pane", async () => {
+    mockViewport(375, 812);
+    const { findByLabelText, getByLabelText, queryByText } = renderScreen();
+    // The toggle is the only filter UI rendered while collapsed.
+    const toggle = await findByLabelText("Show filters");
+    expect(toggle).toBeTruthy();
+    expect(toggle.props.accessibilityState).toMatchObject({ expanded: false });
+    // Mode selector and Search button are NOT rendered while collapsed.
+    expect(queryByText(/^Search$/)).toBeNull();
+    // Tap to expand → mode/filter UI mounts.
+    fireEvent.press(toggle);
+    expect(getByLabelText("Hide filters").props.accessibilityState).toMatchObject({
+      expanded: true,
+    });
+  });
+
+  it("wide viewport: defaults view to 'split' (no toggle, filters always visible)", async () => {
+    mockViewport(1440, 900);
+    const { getByText, queryByLabelText, getByLabelText } = renderScreen();
+    expect(queryByLabelText("Show filters")).toBeNull();
+    // Toolbar's Split button is rendered active (no need for fireEvent — the
+    // initial state is what we're verifying).
+    expect(getByLabelText("Split view")).toBeTruthy();
+    // Filters Section header is visible (Search button is part of FilterPanel)
+    expect(getByText(/^Search$/)).toBeTruthy();
   });
 
   it("Split view renders both the map pane and the list rows", async () => {

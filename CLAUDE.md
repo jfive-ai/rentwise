@@ -6,7 +6,7 @@ This file gives Claude Code the context it needs to work effectively on RentWise
 
 RentWise is a **natural-language rental search aggregator** for Vancouver, BC. Users type "2br Kitsilano under $3000 pet-friendly" (English or Korean) and get unified results from liv.rent, PadMapper, Zumper, Rentals.ca, REW.ca, Craigslist, and Facebook Marketplace.
 
-It's a personal-use, self-hosted tool today. May become a hosted service later.
+**Personal-use tool, not a service.** RentWise runs locally on a single machine for the person who installed it. It is not hosted for other users, sold, or redistributed. The legal-compliance scaffolding for a hosted service was retired in the Phase 8 pivot; what's left in `docs/operational-rules.md` is the practical playbook (rate limits, robots.txt, snippet caps) that keeps the tool a polite citizen of the sites it queries — even at one user.
 
 ## Read these first
 
@@ -14,7 +14,7 @@ Before making non-trivial changes, read:
 
 1. **`docs/specifications.md`** — what the app does
 2. **`docs/architecture.md`** — how it's built
-3. **`docs/legal.md`** — **non-negotiable** rules about scraping, rate limits, robots.txt
+3. **`docs/operational-rules.md`** — **non-negotiable** rules about rate limits, robots.txt, snippet caps
 4. **`docs/llm-providers.md`** — the LLM-agnostic strategy
 5. **`docs/roadmap.md`** — what's done, what's next
 
@@ -70,7 +70,7 @@ Conventional Commits: `feat:`, `fix:`, `docs:`, `chore:`, `test:`, `refactor:`.
 
 Every rental source is an adapter implementing the `SourceAdapter` Protocol in `apps/api/rentwise/adapters/base.py`. Rules — these are **non-negotiable**:
 
-1. **Read `docs/legal.md` first.** It tells you what each source allows.
+1. **Read `docs/operational-rules.md` first.** It defines the rate-limit / robots.txt / snippet rules every adapter must follow.
 2. **Honor `robots.txt`.** Always.
 3. **Rate limit:** `rate_limit_per_second <= 1.0`, with random 500–1500ms jitter between requests. Never parallel requests against the same source.
 4. **Identify honestly** via the `User-Agent` from `settings.user_agent`.
@@ -81,7 +81,7 @@ When adding a new adapter:
 1. Create `apps/api/rentwise/adapters/<name>/` with `__init__.py`, `adapter.py`, optionally `selectors.yaml`.
 2. Implement `SourceAdapter` (search, fetch_listing, health_check).
 3. Add tests with recorded fixtures.
-4. Update `docs/legal.md` with per-source notes.
+4. Update `docs/operational-rules.md`'s "Source notes" section with anything quirky about the site (e.g. CL's 403 from datacenter IPs).
 5. Update README's source list.
 6. Register the adapter in the aggregator's source registry.
 

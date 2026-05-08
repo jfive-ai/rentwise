@@ -5,6 +5,7 @@ import Constants from "expo-constants";
 import { QueryProvider } from "@/src/state/QueryProvider";
 import { FirstRunWizard } from "@/src/screens/FirstRunWizard";
 import { searchClient } from "@/src/api/client";
+import { installPwaHooks } from "@/src/lib/pwa";
 
 const API_BASE_URL =
   (Constants.expoConfig?.extra?.apiBaseUrl as string | undefined) ??
@@ -35,6 +36,14 @@ export default function RootLayout() {
   const [phase, setPhase] = useState<"checking" | "wizard" | "ready">(() =>
     readFlag() ? "ready" : "checking"
   );
+
+  // Phase 7 PR-C-3: attach manifest, theme-color, and register the service
+  // worker on first mount. installPwaHooks is idempotent and platform-safe
+  // (no-op outside the browser).
+  useEffect(() => {
+    if (Platform.OS !== "web") return;
+    installPwaHooks();
+  }, []);
 
   useEffect(() => {
     if (phase !== "checking") return;

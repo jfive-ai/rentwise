@@ -26,7 +26,9 @@ test("filter search renders results, switches view, saves a card", async ({ page
   // launcher button doesn't also match this selector.
   await page.getByRole("button", { name: "Search", exact: true }).click();
 
-  await expect(page.getByText("5 listings")).toBeVisible();
+  // exact: true so PR-C-1's split-view default doesn't double-match against
+  // MapView's "N listings have no location…" footer.
+  await expect(page.getByText("5 listings", { exact: true })).toBeVisible();
 
   // 5 cards visible
   await expect(page.getByText("Sunny 2br in Kitsilano with view")).toBeVisible();

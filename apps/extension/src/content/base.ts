@@ -2,7 +2,7 @@
  * Shared content-script utilities. Pure functions where possible so the
  * per-site scripts are testable in jsdom without the chrome.runtime stub.
  *
- * Per `docs/legal.md`: snippets are capped at 200 chars, photo URLs are
+ * Per `docs/operational-rules.md`: snippets are capped at 200 chars, photo URLs are
  * stored but bytes are not, no contact info. The cap is enforced at the
  * schema layer too — this keeps the over-the-wire payload small.
  */

@@ -10,7 +10,7 @@ Thanks for your interest! RentWise is in early development as a personal-use, se
 
 ## Before contributing
 
-1. **Read [`docs/legal.md`](docs/legal.md) carefully.** Any new adapter must follow these rules. PRs that don't will be closed.
+1. **Read [`docs/operational-rules.md`](docs/operational-rules.md) carefully.** Any new adapter must follow these rate-limit / robots.txt / snippet rules. PRs that don't will be closed.
 2. **Open a GitHub issue first**, then a PR. Describe scope + acceptance criteria in the issue; reference it in the PR (`Closes #N`). Even small chores get an issue — keeps the audit trail clean.
 3. **Skim [`docs/roadmap.md`](docs/roadmap.md)** to find where your change fits.
 
@@ -46,13 +46,13 @@ For per-app run / test commands without Docker, see:
 
 The contract is `apps/api/rentwise/adapters/base.py` (`SourceAdapter` Protocol).
 
-### Server-side adapter (RSS / public API only — see `docs/legal.md` first)
+### Server-side adapter (RSS / public API only — see `docs/operational-rules.md` first)
 
-1. **Verify the source's TOS.** Document your verbatim findings + a verdict in [`docs/legal.md`](docs/legal.md). If scraping is prohibited, the adapter can't ship — file a research issue tagged `tos-blocked` and consider an extension content script instead.
+1. **Read [`docs/operational-rules.md`](docs/operational-rules.md).** It defines the rules every adapter follows. If a source actively blocks bots or requires you to bypass anti-automation defenses to use it, don't add an adapter — use the extension capture path instead.
 2. **Create** `apps/api/rentwise/adapters/<name>/` with `__init__.py` and `adapter.py`.
 3. **Implement** the `SourceAdapter` Protocol (`name`, `base_url`, `method`, `rate_limit_per_second`, `capabilities`, `search`, `fetch_listing`, `health_check`).
 4. **Tests** in `apps/api/tests/adapters/test_<name>.py`. Use recorded fixtures (`vcrpy` / `respx`) — never hit the live source from CI.
-5. **Honor `robots.txt`** and the rate-limit ceiling in [`docs/legal.md`](docs/legal.md) (≤ 1 req/sec, with random 500-1500 ms jitter, no parallel requests against the same source, honest `User-Agent`).
+5. **Honor `robots.txt`** and the rate-limit ceiling in [`docs/operational-rules.md`](docs/operational-rules.md) (≤ 1 req/sec, with random 500-1500 ms jitter, no parallel requests against the same source, honest `User-Agent`).
 6. **Register** the adapter in `apps/api/rentwise/http/search.py::_build_adapters()`.
 7. **Update** the README's Sources table and tick the matching row in `docs/roadmap.md`.
 
