@@ -301,3 +301,83 @@ async def test_translate_query_system_message_includes_today(patch_acompletion) 
     msgs = mock.call_args.kwargs["messages"]
     assert msgs[0]["role"] == "system"
     assert msgs[0]["content"].startswith("Today's date is ")
+
+
+async def test_translate_query_uses_override_model_and_key(patch_acompletion, monkeypatch) -> None:
+    """When `/translate-query` passes the saved DB row as override, the
+    user-chosen model + key win — env values must be ignored. This is the
+    fix for users who configured an LLM via the Settings UI but were silently
+    routed through the env-default OpenRouter model."""
+    from pydantic import SecretStr
+
+    from rentwise.llm.settings_models import LLMSettings
+
+    # Env says OpenRouter; override says OpenAI with a key. Override must win.
+    monkeypatch.setattr(
+        "rentwise.llm.client.settings.rentwise_llm_model",
+        "openrouter/qwen/qwen3-next-80b-a3b-instruct:free",
+    )
+    monkeypatch.setattr("rentwise.llm.client.settings.openrouter_api_key", "env-or-key")
+    monkeypatch.setattr("rentwise.llm.client.settings.openai_api_key", None)
+
+    mock = patch_acompletion(_tool_call_response({"bedrooms_min": 1}, model="openai/gpt-5-nano"))
+    override = LLMSettings(
+        primary_model="openai/gpt-5-nano",
+        primary_api_key=SecretStr("user-saved-openai-key"),
+        timeout_seconds=42,
+    )
+    result = await LLMClient().translate_query("1br anywhere", override=override)
+
+    assert mock.await_count == 1
+    kwargs = mock.call_args.kwargs
+    assert kwargs["model"] == "openai/gpt-5-nano"
+    assert kwargs["api_key"] == "user-saved-openai-key"
+    assert kwargs["timeout"] == 42
+    assert result.model_used == "openai/gpt-5-nano"
+
+
+async def test_translate_query_override_falls_back_to_override_fallback(
+    patch_acompletion,
+) -> None:
+    """Override's fallback_model is what gets retried — not the env one."""
+    from pydantic import SecretStr
+
+    from rentwise.llm.settings_models import LLMSettings
+
+    mock = patch_acompletion(
+        [
+            RuntimeError("primary down"),
+            _tool_call_response({"bedrooms_min": 1}, model="anthropic/claude-sonnet-4"),
+        ]
+    )
+    override = LLMSettings(
+        primary_model="openai/gpt-5-nano",
+        primary_api_key=SecretStr("openai-key"),
+        fallback_model="anthropic/claude-sonnet-4",
+        fallback_api_key=SecretStr("anthropic-key"),
+    )
+    result = await LLMClient().translate_query("1br anywhere", override=override)
+
+    assert mock.await_count == 2
+    assert mock.call_args_list[0].kwargs["model"] == "openai/gpt-5-nano"
+    assert mock.call_args_list[0].kwargs["api_key"] == "openai-key"
+    assert mock.call_args_list[1].kwargs["model"] == "anthropic/claude-sonnet-4"
+    assert mock.call_args_list[1].kwargs["api_key"] == "anthropic-key"
+    assert result.model_used == "anthropic/claude-sonnet-4"
+
+
+async def test_translate_query_override_custom_base_url_threads_through(
+    patch_acompletion,
+) -> None:
+    from pydantic import SecretStr
+
+    from rentwise.llm.settings_models import LLMSettings
+
+    mock = patch_acompletion(_tool_call_response({"bedrooms_min": 1}))
+    override = LLMSettings(
+        primary_model="openai/local-proxy",
+        primary_api_key=SecretStr("k"),
+        custom_base_url="http://my-proxy.local/v1",
+    )
+    await LLMClient().translate_query("1br", override=override)
+    assert mock.call_args.kwargs["api_base"] == "http://my-proxy.local/v1"
