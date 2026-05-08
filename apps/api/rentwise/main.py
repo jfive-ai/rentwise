@@ -59,6 +59,16 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
+    # Registered first so it runs before any other startup hook touches the DB
+    # (e.g. _start_scheduler reads SearchRepo.list_saved on a fresh checkout).
+    @app.on_event("startup")
+    async def _auto_migrate() -> None:
+        if not settings.auto_migrate:
+            return
+        from rentwise.storage.migrate import run_migrations
+
+        await run_migrations()
+
     @app.get("/")
     async def root() -> dict:
         return {
