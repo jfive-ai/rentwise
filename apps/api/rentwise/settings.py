@@ -88,6 +88,28 @@ class Settings(BaseSettings):
         validation_alias="RENTWISE_GEOCODE_CACHE_TTL_DAYS",
     )
 
+    # --- Phase 4 PR-C: photo hashing + dedup ---
+    rentwise_photo_hash_enabled: bool = Field(
+        default=True,
+        validation_alias="RENTWISE_PHOTO_HASH_ENABLED",
+    )
+    rentwise_photo_hash_timeout_seconds: float = Field(
+        default=5.0,
+        validation_alias="RENTWISE_PHOTO_HASH_TIMEOUT_SECONDS",
+    )
+    rentwise_photo_hash_cache_ttl_days: int = Field(
+        default=90,
+        validation_alias="RENTWISE_PHOTO_HASH_CACHE_TTL_DAYS",
+    )
+    rentwise_dedup_enabled: bool = Field(
+        default=True,
+        validation_alias="RENTWISE_DEDUP_ENABLED",
+    )
+    rentwise_dedup_confidence_threshold: float = Field(
+        default=0.7,
+        validation_alias="RENTWISE_DEDUP_CONFIDENCE_THRESHOLD",
+    )
+
     # --- CORS ---
     cors_origins: list[str] = ["http://localhost:3000", "http://localhost:8081"]
 

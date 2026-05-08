@@ -66,10 +66,10 @@ class _FakeGeocoder:
         return GeocodeResult(lat=49.2661, lon=-123.1525)
 
 
-def _raw(idx: int, address: str) -> RawListing:
+def _raw(idx: int, address: str, *, source: str = "fake_geo_source") -> RawListing:
     return RawListing(
-        source="fake_geo_source",
-        source_url=HttpUrl(f"https://example.com/listing/{idx}"),
+        source=source,
+        source_url=HttpUrl(f"https://example.com/{source}/listing/{idx}"),
         source_listing_id=str(idx),
         title=f"Listing {idx}",
         address=address,
@@ -249,3 +249,90 @@ def test_transit_max_walk_post_filter(app_client_post_filter) -> None:
     ids = {lst["source_listing_id"] for lst in body["listings"]}
     assert "102" not in ids
     assert "transit_max_walk_minutes" not in body["unsupported_filters"]
+
+
+# ---------------------------------------------------------------------------
+# Cross-source dedup (Phase 4 PR-C)
+# ---------------------------------------------------------------------------
+
+
+class _SecondFakeAdapter(_FakeAdapter):
+    """Same as _FakeAdapter but advertised under a different source name
+    so cross-source merging is exercised."""
+
+    name = "fake_geo_source_b"
+
+
+@pytest.fixture
+def app_client_dedup(monkeypatch, tmp_sqlite_url):
+    """Two adapters yielding the same building under different
+    (source, source_listing_id) pairs — dedup should collapse them."""
+    monkeypatch.setenv("DATABASE_URL", tmp_sqlite_url)
+
+    from alembic.config import Config
+
+    from alembic import command
+
+    cfg = Config(str(Path(__file__).resolve().parents[2] / "alembic.ini"))
+    cfg.set_main_option("sqlalchemy.url", tmp_sqlite_url)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+        pool.submit(command.upgrade, cfg, "head").result()
+
+    from rentwise.storage import db as dbmod
+
+    dbmod.get_engine.cache_clear()
+    dbmod.get_sessionmaker.cache_clear()
+
+    from rentwise.settings import settings
+
+    settings.database_url = tmp_sqlite_url
+
+    from rentwise.http.search import (
+        get_adapters,
+        get_geocoder,
+        get_photo_hasher,
+    )
+    from rentwise.main import create_app
+
+    # Same address, similar price, identical bedrooms — should merge.
+    # Each adapter yields its listing under its own `source` so the
+    # (source, source_listing_id) unique constraint doesn't collapse
+    # them into one row before dedup gets a look in.
+    adapter_a = _FakeAdapter([_raw(1, "1234 W 8th Ave, Vancouver, BC", source="fake_geo_source")])
+    adapter_b = _SecondFakeAdapter(
+        [_raw(1, "1234 W 8th Ave, Vancouver, BC", source="fake_geo_source_b")]
+    )
+
+    class _OneCoordsGeocoder:
+        async def geocode(self, query: str):
+            return GeocodeResult(lat=49.275, lon=-123.180)
+
+    class _NoOpHasher:
+        async def hash_url(self, url: str) -> str | None:
+            return None
+
+    app = create_app()
+    app.dependency_overrides[get_adapters] = lambda: [adapter_a, adapter_b]
+    app.dependency_overrides[get_geocoder] = lambda: _OneCoordsGeocoder()
+    app.dependency_overrides[get_photo_hasher] = lambda: _NoOpHasher()
+
+    with TestClient(app) as client:
+        yield client
+
+
+@pytest.mark.integration
+def test_cross_source_listings_collapse_to_one_canonical(app_client_dedup) -> None:
+    """Two adapters yielding the same building → two listings, one canonical_id."""
+    client = app_client_dedup
+    # First call ingests both. Both have address+price+bedrooms in common,
+    # so the second one merges into the first under the dedup threshold.
+    r = client.post("/search", json={"query": {"bedrooms_min": 1}, "limit": 50})
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["total"] == 2  # both listings come back
+    canonical_ids = {item["canonical_id"] for item in body["listings"]}
+    assert len(canonical_ids) == 1, (
+        f"expected one canonical_id across the two cross-source rows, got {canonical_ids}"
+    )
+    sources = {item["source"] for item in body["listings"]}
+    assert sources == {"fake_geo_source", "fake_geo_source_b"}

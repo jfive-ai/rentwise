@@ -20,6 +20,7 @@ from rentwise.aggregator.freshness import (
     canonical_query_json,
     is_fresh,
 )
+from rentwise.dedup.service import DedupService
 from rentwise.enrichment.service import EnrichmentService
 from rentwise.models import (
     AdapterHealth,
@@ -47,6 +48,7 @@ class AggregatorService:
         session: AsyncSession,
         cache_ttl_seconds: int,
         enrichment: EnrichmentService | None = None,
+        dedup: DedupService | None = None,
     ) -> None:
         self.adapters = adapters
         self.session = session
@@ -57,6 +59,8 @@ class AggregatorService:
         # Optional so tests / boot orderings without the geocoder don't
         # have to construct one. None = enrichment is a no-op.
         self.enrichment = enrichment
+        # Optional dedup. None = every listing stays self-canonical.
+        self.dedup = dedup
 
     async def search(self, req: SearchRequest) -> SearchResponse:
         key = _cache_key(req.query)
@@ -99,6 +103,17 @@ class AggregatorService:
                             # let the un-enriched listing through.
                             log.info(
                                 "enrichment.unhandled_error",
+                                source=adapter.name,
+                                error=str(exc),
+                            )
+                    if self.dedup is not None:
+                        try:
+                            listing = await self.dedup.assign_canonical(listing)
+                        except Exception as exc:
+                            # Dedup is best-effort. Failure → listing stays
+                            # self-canonical, ingestion continues.
+                            log.info(
+                                "dedup.unhandled_error",
                                 source=adapter.name,
                                 error=str(exc),
                             )

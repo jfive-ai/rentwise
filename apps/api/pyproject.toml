@@ -21,6 +21,8 @@ dependencies = [
     "structlog>=24.4.0",
     "pyap>=0.3.1",
     "shapely>=2.0.0",
+    "imagehash>=4.3.1",
+    "pillow>=10.4.0",
 ]
 
 [project.optional-dependencies]
@@ -61,7 +63,18 @@ warn_unused_ignores = true
 disallow_untyped_defs = true
 
 [[tool.mypy.overrides]]
-module = ["feedparser", "respx", "alembic.*", "pyap", "pyap.*", "shapely", "shapely.*"]
+module = [
+    "feedparser",
+    "respx",
+    "alembic.*",
+    "pyap",
+    "pyap.*",
+    "shapely",
+    "shapely.*",
+    "imagehash",
+    "PIL",
+    "PIL.*",
+]
 ignore_missing_imports = true
 
 [build-system]

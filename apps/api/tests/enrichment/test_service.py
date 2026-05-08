@@ -278,3 +278,108 @@ async def test_enrich_skips_transit_when_disabled(make_service):
 
     out = await svc.enrich(listing)
     assert out.nearest_transit is None
+
+
+@pytest.mark.asyncio
+async def test_enrich_populates_phash_when_photo_url_present(make_service, session):
+    """Service composes a photo hasher: first photo URL → phash via the cache."""
+    from pydantic import HttpUrl
+
+    from rentwise.storage.repositories import PhotoHashCacheRepo
+
+    class _StaticHasher:
+        async def hash_url(self, url: str) -> str | None:
+            return "deadbeefcafebabe"
+
+    geocoder = FakeGeocoder(result=GeocodeResult(lat=49.275, lon=-123.180))
+    svc = EnrichmentService(
+        cache_repo=GeocodeCacheRepo(session),
+        geocoder=geocoder,
+        config=EnrichmentConfig(),
+        photo_hasher=_StaticHasher(),
+        photo_hash_cache=PhotoHashCacheRepo(session),
+    )
+    listing = _listing()
+    listing = listing.model_copy(
+        update={
+            "photos": [
+                HttpUrl("https://example.com/photo1.jpg"),
+                HttpUrl("https://example.com/photo2.jpg"),
+            ]
+        }
+    )
+
+    out = await svc.enrich(listing)
+    assert out.phash == "deadbeefcafebabe"
+
+    # Cache row written for the first photo only.
+    cached = await PhotoHashCacheRepo(session).get("https://example.com/photo1.jpg")
+    assert cached is not None
+    assert cached.phash == "deadbeefcafebabe"
+
+
+@pytest.mark.asyncio
+async def test_enrich_uses_phash_cache(make_service, session):
+    from datetime import UTC, datetime, timedelta
+
+    from pydantic import HttpUrl
+
+    from rentwise.storage.repositories import PhotoHashCacheEntry, PhotoHashCacheRepo
+
+    class _CountingHasher:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        async def hash_url(self, url: str) -> str | None:
+            self.calls += 1
+            return "0000000000000000"
+
+    hasher = _CountingHasher()
+    repo = PhotoHashCacheRepo(session)
+    now = datetime.now(UTC)
+    await repo.upsert(
+        PhotoHashCacheEntry(
+            url="https://example.com/photo1.jpg",
+            phash="cafedeadbeef0000",
+            fetched_at=now.isoformat(),
+            stale_after=(now + timedelta(days=10)).isoformat(),
+        )
+    )
+
+    geocoder = FakeGeocoder(result=GeocodeResult(lat=49.275, lon=-123.180))
+    svc = EnrichmentService(
+        cache_repo=GeocodeCacheRepo(session),
+        geocoder=geocoder,
+        config=EnrichmentConfig(),
+        photo_hasher=hasher,
+        photo_hash_cache=repo,
+    )
+    listing = _listing().model_copy(update={"photos": [HttpUrl("https://example.com/photo1.jpg")]})
+
+    out = await svc.enrich(listing)
+    assert out.phash == "cafedeadbeef0000"
+    assert hasher.calls == 0  # cache hit
+
+
+@pytest.mark.asyncio
+async def test_enrich_skips_phash_when_disabled(make_service, session):
+    from pydantic import HttpUrl
+
+    from rentwise.storage.repositories import PhotoHashCacheRepo
+
+    class _ShouldNotCallHasher:
+        async def hash_url(self, url: str) -> str | None:
+            raise AssertionError("must not be called")
+
+    geocoder = FakeGeocoder(result=GeocodeResult(lat=49.275, lon=-123.180))
+    svc = EnrichmentService(
+        cache_repo=GeocodeCacheRepo(session),
+        geocoder=geocoder,
+        config=EnrichmentConfig(photo_hash_enabled=False),
+        photo_hasher=_ShouldNotCallHasher(),
+        photo_hash_cache=PhotoHashCacheRepo(session),
+    )
+    listing = _listing().model_copy(update={"photos": [HttpUrl("https://example.com/photo1.jpg")]})
+
+    out = await svc.enrich(listing)
+    assert out.phash is None
