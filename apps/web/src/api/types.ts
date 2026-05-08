@@ -139,3 +139,28 @@ export interface CapturePairResponse {
   token: string;
   server_url: string;
 }
+
+// --- Phase 5 PR-A: saved searches ---
+
+export interface SaveSearchRequest {
+  query: NormalizedQuery;
+  label?: string | null;
+  alert_enabled?: boolean;
+  alert_email?: string | null;
+  cadence_minutes?: number | null;
+}
+
+export interface SavedSearchResponse {
+  cache_key: string;
+  query: NormalizedQuery;
+  label: string | null;
+  alert_enabled: boolean;
+  alert_email: string | null;
+  cadence_minutes: number;
+  last_run_at: string;
+  total_count: number;
+}
+
+export interface SavedSearchListResponse {
+  items: SavedSearchResponse[];
+}

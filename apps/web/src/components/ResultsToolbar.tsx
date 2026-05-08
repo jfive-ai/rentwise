@@ -24,9 +24,24 @@ interface Props {
   onSortChange: (s: SortOrder) => void;
   view: ViewMode;
   onViewChange: (v: ViewMode) => void;
+  /** Phase 5 PR-A: opens the saved-searches drawer. */
+  onOpenSaved?: () => void;
+  /** Phase 5 PR-A: opens the inline "Save this search" form. */
+  onSave?: () => void;
+  /** Hide Save when there are no results yet (no search row to save). */
+  canSave?: boolean;
 }
 
-export function ResultsToolbar({ total, sort, onSortChange, view, onViewChange }: Props) {
+export function ResultsToolbar({
+  total,
+  sort,
+  onSortChange,
+  view,
+  onViewChange,
+  onOpenSaved,
+  onSave,
+  canSave = false,
+}: Props) {
   const t = useTheme();
   return (
     <View style={[styles.row, { borderColor: t.border, backgroundColor: t.surface }]}>
@@ -40,6 +55,27 @@ export function ResultsToolbar({ total, sort, onSortChange, view, onViewChange }
       >
         <Text style={{ color: t.text }}>Sort: {SORT_LABEL[sort]} ▾</Text>
       </Pressable>
+
+      {onSave && canSave && (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Save this search"
+          onPress={onSave}
+          style={[styles.btn, { borderColor: t.border }]}
+        >
+          <Text style={{ color: t.text }}>★ Save</Text>
+        </Pressable>
+      )}
+      {onOpenSaved && (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Open saved searches"
+          onPress={onOpenSaved}
+          style={[styles.btn, { borderColor: t.border }]}
+        >
+          <Text style={{ color: t.text }}>Saved</Text>
+        </Pressable>
+      )}
 
       <View style={styles.switcherWrap}>
         <View style={styles.switcher}>

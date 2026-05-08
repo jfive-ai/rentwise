@@ -306,6 +306,20 @@ class CachedSearch:
     is_saved: bool = False
 
 
+@dataclass
+class SavedSearch:
+    """One row of the saved-search list returned to the user."""
+
+    cache_key: str
+    query_json: str
+    user_label: str | None
+    alert_enabled: bool
+    alert_email: str | None
+    alert_cadence_minutes: int
+    last_run_at: str
+    total_count: int
+
+
 class SearchRepo:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
@@ -345,6 +359,75 @@ class SearchRepo:
             existing.total_count = cs.total_count
             existing.is_saved = int(cs.is_saved)
         await self.session.flush()
+
+    # ---- Phase 5 PR-A: saved-search CRUD ----
+
+    async def save(
+        self,
+        cache_key: str,
+        *,
+        label: str | None,
+        alert_enabled: bool = False,
+        alert_email: str | None = None,
+        cadence_minutes: int | None = None,
+    ) -> SavedSearch | None:
+        """Mark an existing search row as saved + attach alert metadata.
+
+        Returns ``None`` if no search row exists for ``cache_key`` yet —
+        saves piggyback on the existing search cache, so the user must
+        run a search at least once before saving it.
+
+        ``cadence_minutes`` is optional: when omitted the existing
+        column value is preserved (so re-saving a previously-deleted
+        saved search keeps the user's cadence choice).
+        """
+        row = await self.session.get(Search, cache_key)
+        if row is None:
+            return None
+        row.is_saved = 1
+        row.user_label = label
+        row.alert_enabled = 1 if alert_enabled else 0
+        row.alert_email = alert_email
+        if cadence_minutes is not None:
+            row.alert_cadence_minutes = cadence_minutes
+        await self.session.flush()
+        return _to_saved(row)
+
+    async def list_saved(self) -> list[SavedSearch]:
+        stmt = select(Search).where(Search.is_saved == 1).order_by(Search.last_run_at.desc())
+        rows = (await self.session.execute(stmt)).scalars().all()
+        return [_to_saved(r) for r in rows]
+
+    async def delete_saved(self, cache_key: str) -> bool:
+        """Clear the saved-search flags. Returns True if a row was updated.
+
+        We don't physically delete the search row — the cache row may
+        still be useful for non-saved use. Just unset the saved flags.
+        """
+        row = await self.session.get(Search, cache_key)
+        if row is None or not row.is_saved:
+            return False
+        row.is_saved = 0
+        row.user_label = None
+        row.alert_enabled = 0
+        row.alert_email = None
+        # Leave cadence at whatever the user picked; if they save again
+        # later it preserves their preferred frequency.
+        await self.session.flush()
+        return True
+
+
+def _to_saved(row: Search) -> SavedSearch:
+    return SavedSearch(
+        cache_key=row.cache_key,
+        query_json=row.query_json,
+        user_label=row.user_label,
+        alert_enabled=bool(row.alert_enabled),
+        alert_email=row.alert_email,
+        alert_cadence_minutes=row.alert_cadence_minutes,
+        last_run_at=row.last_run_at,
+        total_count=row.total_count,
+    )
 
 
 # ---------------------------------------------------------------------------

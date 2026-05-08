@@ -84,6 +84,11 @@ class Search(Base):
     total_count: Mapped[int] = mapped_column(Integer, nullable=False)
     is_saved: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     user_label: Mapped[str | None] = mapped_column(String, nullable=True)
+    # Phase 5 PR-A: alert wiring. PR-B reads these to schedule jobs +
+    # deliver notifications.
+    alert_enabled: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    alert_email: Mapped[str | None] = mapped_column(String, nullable=True)
+    alert_cadence_minutes: Mapped[int] = mapped_column(Integer, nullable=False, default=60)
 
 
 class SourceHealthRow(Base):
