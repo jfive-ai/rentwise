@@ -107,6 +107,41 @@ You can now use the app with **just Craigslist** as a source — that's enough t
 4. Or trigger a manual test run via `POST /searches/{cache_key}/run-now`.
 5. New matching listings → one email per dispatch, deduped via the `alert_log` table so you never get the same listing twice.
 
+## Build the macOS app
+
+Phase 8 packages RentWise as a real `.app` bundle so you can launch it from your dock instead of running `make dev` and opening a browser tab. The build wraps the existing Expo web export (`expo export -p web`) in a tiny Electron shell that lives in [`apps/desktop/`](apps/desktop). 100% of the TypeScript source is shared with the web app — no fork, no parallel UI tree.
+
+> **Why Electron and not Mac Catalyst?** The issue's preferred path was `expo run:ios --device "Mac"`. We tried it. The Expo + RN 0.76 + Pods stack only produces "Designed for iPad" iOS-platform `.app` bundles, which Finder refuses to launch on macOS ("incorrect executable format"). True Mac Catalyst would require enabling `SUPPORTS_MACCATALYST=YES` in the Pods project and re-jigging hermes-engine and several pods that don't ship Catalyst-compatible binaries — far more invasive than the issue's "lightest lift" remit. Electron costs us ~150 MB on disk for a personal-use install in exchange for a real `.app`, zero React Native iOS coupling, and a build that runs in ~30 seconds.
+
+### One-time prereqs
+
+- macOS on Apple Silicon (the script refuses to run on Linux/Windows).
+- Node 20+.
+- That's it. Electron pulls its own runtime via `npm install` inside `apps/desktop/`.
+
+### Build
+
+```bash
+./scripts/build-mac.sh             # build the .app under apps/desktop/build
+./scripts/build-mac.sh --install   # build, then copy to /Applications/RentWise.app
+./scripts/build-mac.sh --clean     # remove apps/desktop/build and apps/web/dist first
+```
+
+What it does:
+
+1. Installs JS deps in `apps/web` and `apps/desktop` if missing.
+2. Runs `npx expo export -p web` to produce the static bundle in `apps/web/dist/`.
+3. Runs `electron-builder --mac --arm64 --dir` from `apps/desktop`, which copies that bundle into the `.app`'s `Contents/Resources/web/dist/` and produces `RentWise.app` under `apps/desktop/build/mac-arm64/`.
+4. With `--install`, copies the `.app` to `/Applications/RentWise.app`.
+
+`apps/web/dist/` and `apps/desktop/build/` (and `apps/desktop/node_modules/`) are `.gitignored` — they're regenerated on every run.
+
+### First launch
+
+The app is unsigned (we skip the App Store dance for a personal-use tool). On first launch macOS will refuse to open it and offer to move it to the Trash. Dismiss that, then **right-click `/Applications/RentWise.app` → Open → Open Anyway**. macOS will remember the exemption for subsequent launches.
+
+The app expects the FastAPI backend at `http://localhost:8000` (configurable via `extra.apiBaseUrl` in `apps/web/app.json`). Run `make dev` or `docker compose up` for the API before launching the Mac app. Listing links open in your default browser, not inside the Electron window.
+
 ## Run without Docker
 
 **Backend:**

@@ -1,0 +1,43 @@
+{
+  "name": "rentwise-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Electron shell that packages the RentWise Expo web build as a personal-use macOS app (Phase 8 PR-A).",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build:mac": "electron-builder --mac --arm64 --dir"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.ylee89.rentwise",
+    "productName": "RentWise",
+    "asar": true,
+    "files": [
+      "main.js",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../web/dist",
+        "to": "web/dist",
+        "filter": ["**/*"]
+      }
+    ],
+    "directories": {
+      "output": "build"
+    },
+    "mac": {
+      "target": [
+        { "target": "dir", "arch": ["arm64"] }
+      ],
+      "category": "public.app-category.utilities",
+      "identity": null,
+      "hardenedRuntime": false,
+      "gatekeeperAssess": false
+    }
+  }
+}
