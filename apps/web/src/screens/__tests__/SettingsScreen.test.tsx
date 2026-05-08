@@ -37,18 +37,10 @@ const existingSettings = {
   timeout_seconds: 30,
 };
 
-const stubCapturePair = {
-  token: "abcdef0123456789abcdef0123456789",
-  server_url: "http://api.test",
-};
-
 /**
- * URL-dispatching fetch mock. SettingsScreen now also mounts
- * ExtensionPairingCard, which fires its own GET /capture/pair on
- * mount; so a strict `mockResolvedValueOnce` chain by call order
- * gets brittle. The dispatcher answers /capture/pair with a stub and
- * lets each test inject overrides for the specific endpoint(s) it
- * cares about.
+ * URL-dispatching fetch mock. Each test injects overrides for the
+ * specific endpoint(s) it cares about; unmocked URLs throw so an
+ * unexpected request immediately fails the test.
  */
 function setupFetchMock(
   overrides: Partial<{
@@ -60,9 +52,6 @@ function setupFetchMock(
   const mock = jest.fn(async (input: string, init?: { method?: string }) => {
     const url = String(input);
     const method = init?.method ?? "GET";
-    if (url.endsWith("/capture/pair") && method === "GET") {
-      return mockResponse(stubCapturePair);
-    }
     if (url.endsWith("/settings/llm") && method === "GET") {
       return mockResponse(overrides.settings ?? existingSettings);
     }

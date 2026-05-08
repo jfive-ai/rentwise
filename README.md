@@ -21,26 +21,26 @@
 - ✅ Phase 0 — Foundations
 - ✅ Phase 1 — Craigslist adapter + filter UI + card / list views
 - ✅ Phase 2 — Natural-language search (English + Korean) with first-run LLM wizard
-- ✅ Phase 3 — User-driven browser extension capturing 6 sources
+- ⊘ Phase 3 — Browser extension (retired in Phase 8 PR-B; replaced by direct adapters)
 - ✅ Phase 4 — Address normalization + geocoding + school catchments + transit + photo perceptual hashing + cross-source dedup + UI polish
 - ✅ Phase 5 (PR-A + PR-B) — Saved searches + APScheduler + SMTP email alerts + dedup ledger
 - ⏳ Phase 5 PR-C — Web push notifications
 - ⏳ Phase 7 — Map view, split view
-- ⏳ Phase 8 — macOS / iOS native via Expo
+- 🚧 Phase 8 — macOS app + retire extension + direct adapters (Rentals.ca, PadMapper, Zumper, REW.ca, liv.rent)
 
 ## Sources
 
 | Source | Method | Status | Notes |
 |---|---|---|---|
 | Craigslist Vancouver | RSS, server-side | ✅ Shipped | RSS-only per [operational-rules.md § Craigslist](docs/operational-rules.md#craigslist) |
-| Rentals.ca | Browser extension (user-driven) | ✅ Shipped | Captures pages the user already views in their own session |
-| PadMapper | Browser extension (user-driven) | ✅ Shipped | Captures pages the user already views in their own session |
-| Zumper | Browser extension (user-driven) | ✅ Shipped | Captures pages the user already views in their own session |
-| REW.ca | Browser extension (user-driven) | ✅ Shipped | Captures pages the user already views in their own session |
-| liv.rent | Browser extension (user-driven) | ✅ Shipped | Captures pages the user already views in their own session |
-| Facebook Marketplace | Browser extension (user-driven) | ✅ Shipped | Login-walled; extension reads pages the user already views |
+| Rentals.ca | Direct adapter (Phase 8 PR-C) | 🚧 In progress (scaffold) | Server-side adapter following `docs/operational-rules.md` |
+| PadMapper | Direct adapter (Phase 8 PR-D) | 🚧 In progress (scaffold) | Server-side adapter following `docs/operational-rules.md` |
+| Zumper | Direct adapter (Phase 8 PR-E) | 🚧 In progress (scaffold) | Server-side adapter following `docs/operational-rules.md` |
+| REW.ca | Direct adapter (Phase 8 PR-E) | 🚧 In progress (scaffold) | Server-side adapter following `docs/operational-rules.md` |
+| liv.rent | Direct adapter (Phase 8 PR-E) | 🚧 In progress (scaffold) | Server-side adapter following `docs/operational-rules.md` |
+| Facebook Marketplace | Out of scope | ❌ Login-walled — no automated login per `docs/operational-rules.md` | Use the platform directly |
 
-> **Phase 8 pivot in progress** — the browser extension is being retired in favor of direct adapters that run inside the macOS app, since the extension was inconvenient in practice for a personal-use install. See `docs/roadmap.md` Phase 8.
+> **Phase 8 pivot** — the user-driven browser extension that previously covered Rentals.ca, PadMapper, Zumper, REW.ca, liv.rent, and Facebook Marketplace was retired because it was inconvenient in daily personal use. Direct adapters (PR-C/D/E) replace it; Facebook Marketplace stays out of scope because it's login-walled and we never automate logins. See `docs/roadmap.md` Phase 8.
 
 ## Why RentWise?
 
@@ -56,13 +56,12 @@ RentWise solves this by:
 3. **Enriching** with practical info — school catchments (VSB), nearest SkyTrain stop, walking minutes.
 4. **Deduplicating** the same listing posted on multiple sites via address + price + photo perceptual hash.
 5. **Notifying** you by email when a new matching listing appears (saved searches + APScheduler).
-6. **Respecting platform Terms of Service** — only scrape what's legally permissible, capture the rest in the user's own browser.
+6. **Respecting platform rate limits + robots.txt** per [`docs/operational-rules.md`](docs/operational-rules.md) — login-walled sites stay out of scope.
 
 ## Tech Stack
 
 - **Backend:** Python 3.12 + FastAPI + Pydantic + SQLite (FTS5 + Alembic) + APScheduler.
 - **Frontend:** React + Expo Router (universal: web, iOS, macOS) + TypeScript strict.
-- **Browser extension:** Chrome MV3 (Vite + React + zod). One content script per site; passive capture only.
 - **LLM:** [LiteLLM](https://docs.litellm.ai/) abstraction — OpenRouter (free tier), Anthropic, OpenAI, Google, Ollama (local), or any other provider. User picks at first run.
 - **Languages supported:** English & Korean (한국어) from day 1.
 - **Enrichment:** [`pyap`](https://github.com/vladimarius/pyap) for address parsing, [Nominatim](https://nominatim.openstreetmap.org/) for geocoding (free; 1 req/sec), [`shapely`](https://shapely.readthedocs.io/) for VSB catchment polygons, haversine over a slim TransLink GTFS extract for transit walk minutes, [`imagehash`](https://github.com/JohannesBuchner/imagehash) `phash` for cross-source photo dedup.
@@ -97,27 +96,7 @@ The default is a free OpenRouter model that works without a paid account; you ca
 
 You can now use the app with **just Craigslist** as a source — that's enough to verify the end-to-end pipeline.
 
-### 4. Browser extension (optional, but unlocks 6 more sources)
-
-To pull listings from Rentals.ca, PadMapper, Zumper, REW.ca, liv.rent, and Facebook Marketplace, sideload the capture extension:
-
-```bash
-cd apps/extension
-npm install
-npm run build
-```
-
-Then in Chrome / Brave / Edge:
-
-1. Open `chrome://extensions`, toggle **Developer mode** on.
-2. **Load unpacked** → pick `apps/extension/dist`.
-3. Pin **RentWise Capture** from the puzzle icon, right-click → **Options**.
-4. In the web app, open **Settings → Browser extension**, copy the API URL + token, paste into the extension's options page, click **Save & validate**.
-5. Browse any of the six sites normally — listings land in RentWise's results within seconds.
-
-Full extension docs (sideload steps, fixture refresh, what's never captured): [`apps/extension/README.md`](apps/extension/README.md).
-
-### 5. Saved searches + email alerts (optional)
+### 4. Saved searches + email alerts (optional)
 
 1. Run a search you'd like to keep tracking.
 2. Click ★ **Save** on the results toolbar, fill in a label and (optionally) an email address, toggle **Email me when new listings match**.
@@ -167,43 +146,29 @@ npx playwright install    # one-time: download browsers for E2E
 npx playwright test       # E2E
 ```
 
-**Extension:**
-
-```bash
-cd apps/extension
-npm install
-npm run typecheck
-npm test            # vitest + jsdom
-npm run build
-```
-
 ## Repo Structure
 
 ```
 rentwise/
 ├── apps/
 │   ├── api/                       # Python + FastAPI backend
-│   │   ├── alembic/               # DB migrations (head: 0008)
+│   │   ├── alembic/               # DB migrations (head: 0010)
 │   │   └── rentwise/
 │   │       ├── adapters/          # Source adapters (Craigslist + Playwright base)
 │   │       ├── aggregator/        # /search orchestration
-│   │       ├── capture/           # /capture endpoint for the extension
 │   │       ├── dedup/              # Cross-source duplicate scoring (Phase 4)
 │   │       ├── enrichment/        # Address, geocode, catchment, transit, phash
 │   │       ├── http/              # FastAPI routers
 │   │       ├── llm/               # LiteLLM wrapper + tool-use schema
 │   │       ├── notifications/     # APScheduler + email + alert runner
 │   │       └── storage/           # ORM + repos
-│   ├── web/                       # React + Expo Router (universal: web/iOS/macOS)
-│   │   ├── app/                   # expo-router screens
-│   │   └── src/
-│   │       ├── api/               # ApiClient + types
-│   │       ├── components/        # FilterPanel, ListingCard, SaveSearchForm, ...
-│   │       ├── launcher/          # "Search across sources" launcher (Phase 3)
-│   │       ├── screens/           # SearchScreen, SettingsScreen, FirstRunWizard
-│   │       └── state/             # QueryProvider
-│   └── extension/                 # Chrome MV3 capture extension (Phase 3)
-│       └── src/                   # background worker, popup, options, content scripts
+│   └── web/                       # React + Expo Router (universal: web/iOS/macOS)
+│       ├── app/                   # expo-router screens
+│       └── src/
+│           ├── api/               # ApiClient + types
+│           ├── components/        # FilterPanel, ListingCard, SaveSearchForm, ...
+│           ├── screens/           # SearchScreen, SettingsScreen, FirstRunWizard
+│           └── state/             # QueryProvider
 ├── docs/
 │   ├── architecture.md
 │   ├── operational-rules.md      # Rate limits, robots.txt, snippet caps. Read before adding adapters.
@@ -222,7 +187,6 @@ rentwise/
 - [Architecture](docs/architecture.md) — system design.
 - [LLM Providers](docs/llm-providers.md) — provider-agnostic LLM strategy.
 - [Specifications](docs/specifications.md) — full feature spec.
-- [Browser extension](apps/extension/README.md) — sideload, fixture refresh, capture rules.
 - [Contributing](CONTRIBUTING.md) — workflow rules + how to add a source.
 
 ## License
@@ -231,4 +195,4 @@ MIT — see [LICENSE](LICENSE).
 
 ## Disclaimer
 
-RentWise is an independent project, not affiliated with Rentals.ca, PadMapper, Zumper, REW.ca, liv.rent, Craigslist, Facebook, or any other listing platform. All listings remain the property of their original posters and the platforms hosting them. RentWise stores only public metadata + URLs (never photo bytes, never landlord contact info beyond a link), and only ever captures pages the user themselves caused the browser to load.
+RentWise is an independent project, not affiliated with Rentals.ca, PadMapper, Zumper, REW.ca, liv.rent, Craigslist, Facebook, or any other listing platform. All listings remain the property of their original posters and the platforms hosting them. RentWise stores only public metadata + URLs (never photo bytes, never landlord contact info beyond a link) and follows the rate-limit / robots.txt rules in [`docs/operational-rules.md`](docs/operational-rules.md).

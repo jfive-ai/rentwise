@@ -31,6 +31,21 @@ def _build_adapters() -> tuple[SourceAdapter, ...]:
         ),
     ]
 
+    if settings.rentwise_rentalsca_enabled:
+        # Imported lazily so disabled-by-default deployments never pay the
+        # Playwright import cost. Rentals.ca scaffold; see
+        # docs/operational-rules.md "Source notes — Rentals.ca".
+        from rentwise.adapters.rentalsca.adapter import RentalsCaAdapter
+
+        adapters.append(RentalsCaAdapter(user_agent=settings.user_agent))
+
+    if settings.rentwise_padmapper_enabled:
+        # Imported lazily so disabled-by-default deployments never pay the
+        # Playwright import cost. PadMapper scaffold; see docs/operational-rules.md.
+        from rentwise.adapters.padmapper.adapter import PadMapperAdapter
+
+        adapters.append(PadMapperAdapter(user_agent=settings.user_agent))
+
     # Phase 8 PR-E direct-adapter scaffolds. Each one is disabled by
     # default and only constructed when its env var is True. Imports are
     # inside the conditional so disabled-by-default deployments never pay

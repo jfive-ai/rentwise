@@ -49,18 +49,15 @@ NL mode calls `POST /api/translate-query` and sets the result. Filter mode mutat
 - **Modules:**
   - `llm/` — LiteLLM client wrapper, settings, fallback handling
   - `aggregator/` — Orchestrates per-source adapter calls, post-filter (school catchment, transit walk), search-cache freshness
-  - `adapters/` — One module per source. Today: Craigslist (RSS) + Playwright base. Other sources are TOS-blocked server-side and ship via the user-driven extension instead.
-  - `capture/` — `/capture` endpoint that the browser extension POSTs to, with shared-secret auth bound to localhost.
+  - `adapters/` — One module per source. Today: Craigslist (RSS) + Playwright base. Phase 8 PR-C/D/E adds direct adapters for Rentals.ca, PadMapper, Zumper, REW.ca, and liv.rent (each subject to `docs/operational-rules.md`).
   - `enrichment/` — Address normalization (`pyap`), geocoding (Nominatim) with persistent cache, school catchment lookup (VSB GeoJSON via `shapely`), transit lookup (TransLink slim stops, haversine + 5 km/h), photo perceptual hashing (`imagehash.phash`).
   - `dedup/` — Cross-source duplicate scoring (additive weights: address, price, photo phash, bedrooms; threshold 0.7). Assigns shared `canonical_id`.
   - `notifications/` — APScheduler `AsyncIOScheduler` (one job per saved search), SMTP notifier over stdlib `smtplib`, alert runner with dedup ledger so the same listing doesn't notify twice.
-  - `storage/` — SQLite (FTS5 + Alembic migrations). Tables: listings, canonical_listings, searches, source_health, geocode_cache, photo_hash_cache, alert_log, capture_pairing, llm_settings.
-  - `http/` — FastAPI routers for `/search`, `/searches` (saved-search CRUD + `/run-now`), `/capture` (extension), `/settings/llm`, etc.
+  - `storage/` — SQLite (FTS5 + Alembic migrations). Tables: listings, canonical_listings, searches, source_health, geocode_cache, photo_hash_cache, alert_log, llm_settings, web_push_subscriptions.
+  - `http/` — FastAPI routers for `/search`, `/searches` (saved-search CRUD + `/run-now`), `/settings/llm`, `/notifications/web-push`, etc.
 
-### 3. Browser Extension (`apps/extension`) — Phase 3 user-driven capture
-- **Tech:** Chrome MV3 (Vite + React popup/options + zod schemas).
-- **Function:** Reads listing data from pages the user navigates to in their own browser session on Rentals.ca, PadMapper, Zumper, REW.ca, liv.rent, and Facebook Marketplace. Bytes are read from the rendered DOM only — the extension never originates a fetch to a source domain. POSTs to the local `/capture` endpoint with a shared-secret token.
-- **Sideload + fixture refresh** are documented in [`apps/extension/README.md`](../apps/extension/README.md).
+### 3. Browser extension — retired in Phase 8 PR-B
+The Phase 3 Chrome MV3 extension that read listings from pages the user already had open is no longer part of the system. The five sources it covered (Rentals.ca, PadMapper, Zumper, REW.ca, liv.rent) are now picked up by direct server-side adapters in PR-C/D/E. Facebook Marketplace, the sixth, is out of scope because we never automate logins. The historical Phase 3 design lives in `docs/roadmap.md`.
 
 ## Data Flow
 

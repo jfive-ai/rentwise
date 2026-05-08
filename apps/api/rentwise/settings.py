@@ -47,6 +47,27 @@ class Settings(BaseSettings):
         validation_alias="RENTWISE_CRAIGSLIST_REGION",
     )
 
+    # --- Phase 8 PR-C: Rentals.ca direct adapter ---
+    # Disabled by default. Rentals.ca TOS § 3.16 prohibits automated
+    # extraction; opting in is a deliberate personal-use choice. robots.txt
+    # is permissive on listing pages but disallows *-feed.json, *-feed.xml,
+    # and pages with `bbox=`/`amenities=`/`types=` query params. See
+    # docs/operational-rules.md "Source notes — Rentals.ca".
+    rentwise_rentalsca_enabled: bool = Field(
+        default=False,
+        validation_alias="RENTWISE_RENTALSCA_ENABLED",
+    )
+
+    # --- Phase 8 PR-D: PadMapper direct adapter ---
+    # Disabled by default. PadMapper TOS § 8.4 prohibits scraping; their
+    # robots.txt is more permissive but explicitly disallows /api,
+    # /backlinks, /external, /static, cost-calculator paths, and any URL
+    # with a `box=` query param. See docs/operational-rules.md.
+    rentwise_padmapper_enabled: bool = Field(
+        default=False,
+        validation_alias="RENTWISE_PADMAPPER_ENABLED",
+    )
+
     # --- Phase 8 PR-E: Zumper / REW.ca / liv.rent direct adapters ---
     # All three are scaffolds and disabled by default. See
     # docs/operational-rules.md "Source notes" for the per-site TOS reality

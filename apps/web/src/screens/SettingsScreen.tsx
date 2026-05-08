@@ -2,7 +2,6 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { searchClient } from "@/src/api/client";
 import { BrowserNotificationsCard } from "@/src/components/BrowserNotificationsCard";
-import { ExtensionPairingCard } from "@/src/launcher/ExtensionPairingCard";
 import {
   CUSTOM_MODEL_ID,
   inferProviderFromModelId,
@@ -303,9 +302,6 @@ export function SettingsScreen({ apiBaseUrl }: Props) {
           Save failed: {save.message}
         </Text>
       ) : null}
-
-      <View style={{ height: 8 }} />
-      <ExtensionPairingCard apiBaseUrl={apiBaseUrl} client={client} />
 
       <View style={{ height: 8 }} />
       <BrowserNotificationsCard client={client} />
