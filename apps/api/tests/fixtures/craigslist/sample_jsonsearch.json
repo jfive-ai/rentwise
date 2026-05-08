@@ -1,0 +1,69 @@
+[
+  [
+    {
+      "CategoryID": 1,
+      "ImageThumb": "https://images.craigslist.org/00404_b0iz2k3ubzC_0630ae_50x50c.jpg",
+      "Latitude": 49.310626,
+      "Longitude": -123.061471,
+      "PostedDate": 1778261303,
+      "PostingID": 7932994841,
+      "PostingTitle": "2 bedroom basement Grand Boulevard Moodyville short walk Lonsdale",
+      "PostingURL": "https://vancouver.craigslist.org/nvn/apa/d/north-vancouver-bedroom-basement-grand/7932994841.html",
+      "bedrooms": 2,
+      "price": 2450
+    },
+    {
+      "CategoryID": 1,
+      "Latitude": 49.293403,
+      "Longitude": -122.804909,
+      "PostedDate": 1778261301,
+      "PostingID": 7929835739,
+      "PostingTitle": "coquitlam whole house for rent",
+      "PostingURL": "https://vancouver.craigslist.org/pml/apa/d/coquitlam-coquitlam-whole-house-for-rent/7929835739.html",
+      "bedrooms": 4,
+      "price": 3600
+    },
+    {
+      "CategoryID": 1,
+      "Latitude": 49.286566,
+      "Longitude": -122.796028,
+      "PostedDate": 1778261298,
+      "PostingID": 7929274967,
+      "PostingTitle": "Coquitlam 2 bedrooms apartment for rent",
+      "PostingURL": "https://vancouver.craigslist.org/pml/apa/d/coquitlam-coquitlam-bedrooms-apartment/7929274967.html",
+      "bedrooms": 2,
+      "price": 2700
+    },
+    {
+      "CategoryID": 1,
+      "Latitude": 49.293178,
+      "Longitude": -122.743553,
+      "PostedDate": 1778261295,
+      "PostingID": 7923909650,
+      "PostingTitle": "1331 Olmsted St Burke mountain Brand new 3 bedrooms townhouse for rent",
+      "PostingURL": "https://vancouver.craigslist.org/pml/apa/d/coquitlam-1331-olmsted-st-burke/7923909650.html",
+      "bedrooms": 3,
+      "price": 3600
+    },
+    {
+      "CategoryID": 1,
+      "Latitude": 49.1572,
+      "Longitude": -123.190698,
+      "PostedDate": 1778261291,
+      "PostingID": 7925455044,
+      "PostingTitle": "Richmond 2 bedrooms for rent",
+      "PostingURL": "https://vancouver.craigslist.org/rch/apa/d/richmond-richmond-bedrooms-for-rent/7925455044.html",
+      "bedrooms": 2,
+      "price": 2000
+    }
+  ],
+  {
+    "NonGeocoded": 0,
+    "baseurl": "//vancouver.craigslist.org",
+    "clat": 49.2271953920369,
+    "clng": -123.000850350741,
+    "clustered": 9232,
+    "geocoded": 2899,
+    "zoom": 11
+  }
+]

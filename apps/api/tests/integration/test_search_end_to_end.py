@@ -23,8 +23,10 @@ def stubbed_cl():
         mock.get("https://vancouver.craigslist.org/robots.txt").mock(
             return_value=Response(200, text=(FIX / "robots_txt_allowed.txt").read_text())
         )
-        mock.get(url__regex=r"https://vancouver\.craigslist\.org/search/apa.*").mock(
-            return_value=Response(200, content=(FIX / "sample_feed.rss").read_bytes())
+        # Adapter switched from /search/apa?format=rss (now 403'd by CL)
+        # to /jsonsearch/apa. Same fixture concept, different shape.
+        mock.get(url__regex=r"https://vancouver\.craigslist\.org/jsonsearch/apa.*").mock(
+            return_value=Response(200, content=(FIX / "sample_jsonsearch.json").read_bytes())
         )
         yield mock
 

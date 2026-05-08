@@ -8,12 +8,15 @@ def _parse(url: str) -> dict[str, list[str]]:
     return parse_qs(urlparse(url).query)
 
 
-def test_default_url_has_format_rss_and_haspic():
+def test_default_url_is_jsonsearch_path_with_no_query():
+    # The RSS-era defaults (`format=rss`, `hasPic=1`) are gone; the JSON
+    # endpoint always returns the same shape and `hasPic` filtering at
+    # the API level was hiding listings that lacked thumbnails.
     urls = build_search_urls(NormalizedQuery(), region="vancouver")
     assert len(urls) == 1
-    q = _parse(urls[0])
-    assert q["format"] == ["rss"]
-    assert q["hasPic"] == ["1"]
+    parsed = urlparse(urls[0])
+    assert parsed.path == "/jsonsearch/apa"
+    assert parsed.query == ""
 
 
 def test_price_and_bedroom_filters_set_correctly():
@@ -56,3 +59,10 @@ def test_multi_neighborhood_yields_multiple_urls_capped_at_three():
 def test_region_changes_subdomain():
     url = build_search_urls(NormalizedQuery(), region="seattle")[0]
     assert urlparse(url).netloc == "seattle.craigslist.org"
+
+
+def test_path_targets_jsonsearch():
+    """Pin the endpoint switch — RSS (now 403'd) → JSON. Future
+    refactors must not silently revert this."""
+    url = build_search_urls(NormalizedQuery(neighborhoods=["Kitsilano"]), region="vancouver")[0]
+    assert urlparse(url).path == "/jsonsearch/apa"
