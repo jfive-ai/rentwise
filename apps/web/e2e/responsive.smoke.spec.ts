@@ -43,6 +43,31 @@ test.describe("Responsive layout", () => {
     ).toBeVisible();
   });
 
+  test("phone viewport: filter pane scrolls so the Search button is reachable", async ({
+    page,
+  }) => {
+    // Bug today: filtersStacked.maxHeight was "none", so the inner
+    // ScrollView grew to its content height, the page itself didn't scroll,
+    // and the Search button at the bottom of FilterPanel was below the
+    // viewport with no way to reach it. Reproduces at the same 414×800 the
+    // user was using.
+    await page.setViewportSize({ width: 414, height: 800 });
+    await page.goto("/");
+    await page.getByRole("button", { name: "Show filters" }).click();
+
+    const search = page.getByRole("button", { name: "Search", exact: true });
+    // The Search button is in the DOM but, before scrolling, sits below
+    // the viewport. `scrollIntoViewIfNeeded` walks up to the *scrollable*
+    // ancestor and scrolls it — which only succeeds when one exists with a
+    // bounded height. (With maxHeight:"none" the chain has no scrollable
+    // ancestor and this would time out.)
+    await search.scrollIntoViewIfNeeded();
+    await expect(search).toBeVisible();
+    const box = await search.boundingBox();
+    expect(box).not.toBeNull();
+    expect(box!.y + box!.height).toBeLessThanOrEqual(800);
+  });
+
   test("desktop viewport: split view is the default; no toggle", async ({
     page,
   }) => {
