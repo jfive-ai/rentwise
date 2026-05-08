@@ -14,7 +14,7 @@ from rentwise.settings import settings
 
 
 def _tool_call_response(
-    arguments: dict[str, Any], model: str = "openrouter/qwen/qwen-2.5-72b-instruct:free"
+    arguments: dict[str, Any], model: str = "openrouter/qwen/qwen3-next-80b-a3b-instruct:free"
 ) -> Any:
     """Shape of the LiteLLM response object we care about."""
 
@@ -98,7 +98,7 @@ async def test_translate_query_falls_back_on_primary_failure(
     # Pin both models so the test is hermetic regardless of env / .env overrides.
     monkeypatch.setattr(
         "rentwise.llm.client.settings.rentwise_llm_model",
-        "openrouter/qwen/qwen-2.5-72b-instruct:free",
+        "openrouter/qwen/qwen3-next-80b-a3b-instruct:free",
     )
     monkeypatch.setattr(
         "rentwise.llm.client.settings.rentwise_llm_fallback_model",
@@ -121,7 +121,7 @@ async def test_translate_query_falls_back_on_primary_failure(
     # First call was the primary; second call was the fallback.
     first_kwargs = mock.call_args_list[0].kwargs
     second_kwargs = mock.call_args_list[1].kwargs
-    assert first_kwargs["model"] == "openrouter/qwen/qwen-2.5-72b-instruct:free"
+    assert first_kwargs["model"] == "openrouter/qwen/qwen3-next-80b-a3b-instruct:free"
     assert second_kwargs["model"] == "openrouter/meta-llama/llama-3.3-70b-instruct:free"
     assert result.model_used == "openrouter/meta-llama/llama-3.3-70b-instruct:free"
     assert result.query.bedrooms_min == 1
@@ -220,8 +220,13 @@ async def test_translate_query_raises_malformed_on_validation_error(patch_acompl
 @pytest.mark.parametrize(
     ("model", "key_attr", "key_value", "expected"),
     [
-        ("openrouter/qwen/qwen-2.5-72b-instruct:free", "openrouter_api_key", "sk-or-v1-x", True),
-        ("openrouter/qwen/qwen-2.5-72b-instruct:free", "openrouter_api_key", None, False),
+        (
+            "openrouter/qwen/qwen3-next-80b-a3b-instruct:free",
+            "openrouter_api_key",
+            "sk-or-v1-x",
+            True,
+        ),
+        ("openrouter/qwen/qwen3-next-80b-a3b-instruct:free", "openrouter_api_key", None, False),
         ("anthropic/claude-sonnet-4", "anthropic_api_key", "sk-ant-x", True),
         ("anthropic/claude-sonnet-4", "anthropic_api_key", None, False),
         ("openai/gpt-4o-mini", "openai_api_key", "sk-x", True),
@@ -263,7 +268,7 @@ async def test_translate_query_raises_malformed_when_response_shape_unexpected(
 async def test_translate_query_threads_openrouter_api_key(patch_acompletion, monkeypatch) -> None:
     monkeypatch.setattr(
         "rentwise.llm.client.settings.rentwise_llm_model",
-        "openrouter/qwen/qwen-2.5-72b-instruct:free",
+        "openrouter/qwen/qwen3-next-80b-a3b-instruct:free",
     )
     monkeypatch.setattr("rentwise.llm.client.settings.rentwise_llm_fallback_model", None)
     monkeypatch.setattr("rentwise.llm.client.settings.openrouter_api_key", "sk-or-test")

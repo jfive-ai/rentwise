@@ -32,7 +32,7 @@ OpenRouter Anthropic OpenAI Google Ollama  ...
 | Want best quality for production | Switch to Claude/GPT-4 with one config change |
 | Want privacy / no third-party | Use Ollama for local inference |
 | Want to swap providers later | LiteLLM uses OpenAI-compatible format — no rewrites needed |
-| Want to support Korean well | Qwen 2.5 72B (free) handles Korean excellently; Claude/GPT for highest quality |
+| Want to support Korean well | Qwen3 Next 80B (free) handles Korean excellently; Claude/GPT for highest quality |
 
 ## Configuration Priority
 
@@ -51,9 +51,9 @@ When a user opens RentWise for the first time without an LLM configured, the app
 │ Welcome to RentWise! Pick an AI model:         │
 │                                                 │
 │ ⦿ Free (recommended for trying it out)         │
-│   - Qwen 2.5 72B (great at Korean)  [DEFAULT]   │
+│   - Qwen3 Next 80B (great at Korean) [DEFAULT]  │
 │   - Llama 3.3 70B                               │
-│   - Gemma 3 27B                                 │
+│   - Gemma 4 26B                                 │
 │   → Uses OpenRouter free tier (signup required) │
 │                                                 │
 │ ⦾ Bring my own API key                          │
@@ -82,7 +82,7 @@ If they bring their own:
 # .env
 
 # LLM provider configuration
-RENTWISE_LLM_MODEL=openrouter/qwen/qwen-2.5-72b-instruct:free
+RENTWISE_LLM_MODEL=openrouter/qwen/qwen3-next-80b-a3b-instruct:free
 OPENROUTER_API_KEY=sk-or-v1-...
 
 # OR — bring your own
@@ -103,7 +103,7 @@ The app settings store this in SQLite (encrypted at rest):
 
 ```python
 class LLMSettings(BaseModel):
-    primary_model: str            # e.g. "openrouter/qwen/qwen-2.5-72b-instruct:free"
+    primary_model: str            # e.g. "openrouter/qwen/qwen3-next-80b-a3b-instruct:free"
     primary_api_key: SecretStr    # encrypted
     fallback_model: str | None
     fallback_api_key: SecretStr | None
@@ -124,9 +124,9 @@ Tested for RentWise's specific use case (NL → structured rental query):
 
 | Model | Korean Quality | English Quality | Tool Use | Notes |
 |---|---|---|---|---|
-| `qwen/qwen-2.5-72b-instruct:free` | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ | ✅ Solid | **Default recommendation** |
+| `qwen/qwen3-next-80b-a3b-instruct:free` | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ | ✅ Solid | **Default recommendation** |
 | `meta-llama/llama-3.3-70b-instruct:free` | ⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ | ✅ Solid | Strong fallback |
-| `google/gemma-3-27b-it:free` | ⭐⭐⭐⭐ | ⭐⭐⭐⭐ | ⚠️ Limited | Good for explanations, weaker tool use |
+| `google/gemma-4-26b-a4b-it:free` | ⭐⭐⭐⭐ | ⭐⭐⭐⭐ | ⚠️ Limited | Good for explanations, weaker tool use |
 | `deepseek/deepseek-r1:free` | ⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ | ⚠️ No native | Reasoning model — slower but accurate |
 
 ## Recommended Paid Models (for production / hosted use)

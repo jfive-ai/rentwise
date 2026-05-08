@@ -30,7 +30,7 @@ async def test_get_returns_none_when_empty(session: AsyncSession) -> None:
 async def test_upsert_creates_row(session: AsyncSession) -> None:
     repo = LLMSettingsRepo(session)
     settings_in = LLMSettings(
-        primary_model="openrouter/qwen/qwen-2.5-72b-instruct:free",
+        primary_model="openrouter/qwen/qwen3-next-80b-a3b-instruct:free",
         primary_api_key=SecretStr("sk-or-v1-test"),
         fallback_model="openrouter/meta-llama/llama-3.3-70b-instruct:free",
         fallback_api_key=SecretStr("sk-or-v1-fb"),

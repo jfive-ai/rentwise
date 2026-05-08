@@ -17,7 +17,7 @@ test("NL flow: type → parse → chips → search", async ({ page }) => {
         },
         unsupported_filters: [],
         lang_detected: "en",
-        model_used: "openrouter/qwen/qwen-2.5-72b-instruct:free",
+        model_used: "openrouter/qwen/qwen3-next-80b-a3b-instruct:free",
       }),
     });
   });

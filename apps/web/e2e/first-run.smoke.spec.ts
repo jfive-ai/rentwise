@@ -19,7 +19,7 @@ test("first-run wizard: 404 → wizard → save → search reachable", async ({ 
         status: 200,
         contentType: "application/json",
         body: JSON.stringify({
-          primary_model: "openrouter/qwen/qwen-2.5-72b-instruct:free",
+          primary_model: "openrouter/qwen/qwen3-next-80b-a3b-instruct:free",
           primary_api_key_masked: "sk-or-...test",
           fallback_model: null,
           fallback_api_key_masked: null,
