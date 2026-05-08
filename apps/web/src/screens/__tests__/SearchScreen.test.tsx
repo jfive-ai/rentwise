@@ -376,44 +376,45 @@ describe("SearchScreen", () => {
     });
   });
 
-  it("Search updates the URL with the encoded query (router.replace)", async () => {
+  it("Search updates the URL via history.replaceState (no expo-router unmount)", async () => {
+    // We bypass expo-router's `router.replace` to update the URL because it
+    // unmounts and remounts SearchScreen mid-search, which discards the
+    // in-flight setState calls. Pin both behaviors in this test: URL updates
+    // (history.replaceState fires) AND router.replace is NOT called.
+    const replaceStateSpy = jest.spyOn(window.history, "replaceState");
     const { getByText } = renderScreen();
     fireEvent.press(getByText("Search"));
     await waitFor(() => expect(getByText("5 listings")).toBeTruthy());
-    expect(mockReplace).toHaveBeenCalledWith({
-      pathname: "/",
-      params: expect.any(Object),
-    });
+    expect(replaceStateSpy).toHaveBeenCalled();
+    expect(mockReplace).not.toHaveBeenCalled();
   });
 
-  it("rapid Search clicks: only the latest response wins", async () => {
-    // First call: slow, returns total=99 (stale)
+  it("Search button is disabled while a request is in flight", async () => {
+    // Previously the suite asserted runSearch's reqIdRef race guard by
+    // firing two overlapping clicks. With the new "Searching…" feedback
+    // (disabled during loading), the second click can't reach the
+    // handler in the first place — the protection is now *structural*.
+    // Pin that behavior here.
     let resolveFirst: ((v: unknown) => void) | undefined;
     const firstPromise = new Promise((resolve) => { resolveFirst = resolve; });
     const fetchSpy = global.fetch as jest.Mock;
     fetchSpy.mockReset();
     fetchSpy.mockImplementationOnce(() => firstPromise as never);
-    // Second call: fast, returns total=5 (fresh, from default fixture)
-    fetchSpy.mockImplementationOnce(() =>
-      Promise.resolve(okResponse() as never)
-    );
 
-    const { getByText, queryByText } = renderScreen();
+    const { getByText, getByLabelText, queryByText } = renderScreen();
     fireEvent.press(getByText("Search"));
-    fireEvent.press(getByText("Search")); // overlapping click
 
-    // Resolve the first (stale) one AFTER the second
+    // Mid-flight: button text flips to "Searching…" and is disabled.
+    await waitFor(() => expect(getByLabelText("Searching…")).toBeTruthy());
+    expect(queryByText("Search")).toBeNull();
+
+    // A second click during this window must be a no-op (no second
+    // /search request fires).
+    fireEvent.press(getByLabelText("Searching…"));
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+
+    // Resolve the in-flight response → state transitions back to idle.
+    resolveFirst!(okResponse());
     await waitFor(() => expect(getByText("5 listings")).toBeTruthy());
-    resolveFirst!({
-      ok: true, status: 200,
-      json: async () => ({ ...fixture, total: 99 }),
-      clone: () => ({ text: async () => JSON.stringify({ ...fixture, total: 99 }) }),
-    });
-    // Allow the now-superseded handler to run
-    await new Promise((r) => setTimeout(r, 0));
-
-    // The stale "99 listings" must NOT appear; the fresh "5 listings" stays
-    expect(queryByText("99 listings")).toBeNull();
-    expect(getByText("5 listings")).toBeTruthy();
   });
 });
