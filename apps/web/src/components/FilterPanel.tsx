@@ -40,8 +40,14 @@ export function FilterPanel({ onSearch, onLauncherFired }: Props) {
   const t = useTheme();
   const [kw, setKw] = useState("");
 
+  const selectedNeighborhoods = query.neighborhoods;
+  const [neighborhoodsOpen, setNeighborhoodsOpen] = useState(false);
+
   return (
-    <ScrollView contentContainerStyle={[styles.wrap, { backgroundColor: t.bg }]}>
+    <ScrollView
+      style={styles.scroll}
+      contentContainerStyle={[styles.wrap, { backgroundColor: t.bg }]}
+    >
       <Section title="Bedrooms" theme={t}>
         <View style={styles.chipRow}>
           {BEDROOM_CHIPS.map((c) => {
@@ -86,25 +92,83 @@ export function FilterPanel({ onSearch, onLauncherFired }: Props) {
         </View>
       </Section>
 
-      <Section title="Neighborhoods" theme={t}>
-        <View style={styles.chipRow}>
-          {NEIGHBORHOODS.map((n) => {
-            const selected = query.neighborhoods.includes(n);
-            return (
+      <Section
+        title={
+          selectedNeighborhoods.length > 0
+            ? `Neighborhoods (${selectedNeighborhoods.length} selected)`
+            : "Neighborhoods"
+        }
+        theme={t}
+      >
+        {/* Collapsed state: show selected chips inline (each click clears
+            it) plus an "Edit" affordance. The full grid appears only
+            when the user explicitly opens it, so the panel doesn't
+            blow up to 24 chips by default. */}
+        {!neighborhoodsOpen && (
+          <View style={styles.chipRow}>
+            {selectedNeighborhoods.map((n) => (
               <Pressable
                 key={n}
                 accessibilityRole="button"
+                accessibilityLabel={`Remove ${n}`}
                 onPress={() => toggleNeighborhood(n)}
-                style={[
-                  styles.chip,
-                  { borderColor: t.border, backgroundColor: selected ? t.accent : t.surface },
-                ]}
+                style={[styles.chip, { borderColor: t.border, backgroundColor: t.accent }]}
               >
-                <Text style={{ color: selected ? "#fff" : t.text }}>{n}</Text>
+                <Text style={{ color: "#fff" }}>{n} ✕</Text>
               </Pressable>
-            );
-          })}
-        </View>
+            ))}
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={
+                selectedNeighborhoods.length > 0
+                  ? "Edit neighborhoods"
+                  : "Choose neighborhoods"
+              }
+              onPress={() => setNeighborhoodsOpen(true)}
+              style={[styles.chip, { borderColor: t.border, backgroundColor: t.surface }]}
+            >
+              <Text style={{ color: t.text }}>
+                {selectedNeighborhoods.length > 0
+                  ? "Edit"
+                  : `Choose (${NEIGHBORHOODS.length})`}
+              </Text>
+            </Pressable>
+          </View>
+        )}
+
+        {neighborhoodsOpen && (
+          <>
+            <View style={styles.chipRow}>
+              {NEIGHBORHOODS.map((n) => {
+                const selected = selectedNeighborhoods.includes(n);
+                return (
+                  <Pressable
+                    key={n}
+                    accessibilityRole="button"
+                    onPress={() => toggleNeighborhood(n)}
+                    style={[
+                      styles.chip,
+                      {
+                        borderColor: t.border,
+                        backgroundColor: selected ? t.accent : t.surface,
+                      },
+                    ]}
+                  >
+                    <Text style={{ color: selected ? "#fff" : t.text }}>{n}</Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Done editing neighborhoods"
+              onPress={() => setNeighborhoodsOpen(false)}
+              style={[styles.doneBtn, { borderColor: t.border }]}
+            >
+              <Text style={{ color: t.text }}>Done</Text>
+            </Pressable>
+          </>
+        )}
       </Section>
 
       <Section title="Keywords" theme={t}>
@@ -223,6 +287,10 @@ function toClampedMinutes(v: string): number | null {
 }
 
 const styles = StyleSheet.create({
+  // flex: 1 → the ScrollView fills its bounded parent height (set by
+  // SearchScreen's `filters` style). Without this, the ScrollView
+  // sizes to its content and there's nothing to scroll within.
+  scroll: { flex: 1 },
   wrap: { padding: 16, gap: 16 },
   section: { gap: 8 },
   sectionLabel: { fontSize: 12, fontWeight: "600", textTransform: "uppercase", letterSpacing: 0.6 },
@@ -230,6 +298,14 @@ const styles = StyleSheet.create({
   chipRow: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
   chip: { paddingHorizontal: 12, paddingVertical: 6, borderWidth: 1, borderRadius: 999 },
   input: { flex: 1, borderWidth: 1, borderRadius: 8, padding: 10 },
+  doneBtn: {
+    alignSelf: "flex-start",
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderWidth: 1,
+    borderRadius: 6,
+    marginTop: 4,
+  },
   actions: { flexDirection: "row", gap: 8, marginTop: 8 },
   primary: { paddingHorizontal: 18, paddingVertical: 12, borderRadius: 8 },
   primaryText: { color: "#fff", fontWeight: "600" },
