@@ -125,6 +125,58 @@ describe("SettingsScreen", () => {
     });
   });
 
+  it("loads a saved primary_model that's not in any curated list into the Custom branch", async () => {
+    const customSettings = {
+      ...existingSettings,
+      primary_model: "openai/gpt-5.5-pro",
+      primary_api_key_masked: "sk-...zzzz",
+    };
+    setupFetchMock({ settings: customSettings });
+
+    const { getByLabelText, getByText } = render(
+      <SettingsScreen apiBaseUrl="http://api.test" />,
+    );
+
+    // The Custom TextInput is mounted (proves Custom radio is selected) and
+    // pre-filled with the saved string. Provider was inferred from the
+    // "openai/" prefix, so the OpenAI radio is the active one.
+    await waitFor(() => expect(getByLabelText("Custom model ID")).toBeTruthy());
+    expect(getByLabelText("Custom model ID").props.value).toBe("openai/gpt-5.5-pro");
+    expect(getByText("sk-...zzzz")).toBeTruthy();
+  });
+
+  it("Save with edited Custom model sends the typed value in the PUT body", async () => {
+    const startedCustom = {
+      ...existingSettings,
+      primary_model: "openai/gpt-5.5-pro",
+    };
+    const mock = setupFetchMock({
+      settings: startedCustom,
+      putSettings: { ...startedCustom, primary_model: "openai/gpt-5.5" },
+    });
+
+    const { getByLabelText, getByText } = render(
+      <SettingsScreen apiBaseUrl="http://api.test" />,
+    );
+
+    await waitFor(() => expect(getByLabelText("Custom model ID")).toBeTruthy());
+    fireEvent.changeText(getByLabelText("Custom model ID"), "openai/gpt-5.5");
+    fireEvent.press(getByText("Save"));
+
+    await waitFor(() => {
+      const putCall = mock.mock.calls.find(
+        (c) => (c[1] as { method: string }).method === "PUT",
+      );
+      expect(putCall).toBeTruthy();
+    });
+    const putCall = mock.mock.calls.find(
+      (c) => (c[1] as { method: string }).method === "PUT",
+    )!;
+    expect(JSON.parse((putCall[1] as { body: string }).body)).toMatchObject({
+      primary_model: "openai/gpt-5.5",
+    });
+  });
+
   it("test connection shows ok latency", async () => {
     setupFetchMock();
 

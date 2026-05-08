@@ -1,7 +1,12 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { searchClient } from "@/src/api/client";
-import { PROVIDERS, type ModelOption, type ProviderOption } from "@/src/llm/providers";
+import {
+  CUSTOM_MODEL_ID,
+  PROVIDERS,
+  type ModelOption,
+  type ProviderOption,
+} from "@/src/llm/providers";
 import { useTheme, type Theme } from "@/src/theme";
 
 interface Props {
@@ -25,6 +30,9 @@ export function FirstRunWizard({ apiBaseUrl, onComplete }: Props) {
     [providerId]
   );
   const [modelId, setModelId] = useState<string>(provider.models[0].id);
+  // Free-form model string used when modelId === CUSTOM_MODEL_ID. Empty
+  // string disables Test/Finish until the user types something.
+  const [customModel, setCustomModel] = useState<string>("");
   const [apiKey, setApiKey] = useState<string>("");
   const [test, setTest] = useState<TestState>({ kind: "idle" });
   const [saving, setSaving] = useState(false);
@@ -33,14 +41,19 @@ export function FirstRunWizard({ apiBaseUrl, onComplete }: Props) {
   useEffect(() => {
     const p = PROVIDERS.find((x) => x.id === providerId)!;
     setModelId(p.models[0].id);
+    setCustomModel("");
     setTest({ kind: "idle" });
   }, [providerId]);
 
+  const effectiveModel = modelId === CUSTOM_MODEL_ID ? customModel.trim() : modelId;
+  const customMissing = modelId === CUSTOM_MODEL_ID && effectiveModel.length === 0;
+
   const onTest = async () => {
+    if (customMissing) return;
     setTest({ kind: "running" });
     try {
       const result = await client.testConnection({
-        primary_model: modelId,
+        primary_model: effectiveModel,
         primary_api_key: provider.needsKey ? apiKey : null,
       });
       if (result.ok) {
@@ -54,10 +67,11 @@ export function FirstRunWizard({ apiBaseUrl, onComplete }: Props) {
   };
 
   const onFinish = async () => {
+    if (customMissing) return;
     setSaving(true);
     try {
       await client.putSettings({
-        primary_model: modelId,
+        primary_model: effectiveModel,
         primary_api_key: provider.needsKey ? apiKey : null,
       });
       onComplete();
@@ -66,7 +80,10 @@ export function FirstRunWizard({ apiBaseUrl, onComplete }: Props) {
     }
   };
 
-  const canFinish = test.kind === "ok" || test.kind === "error"; /* allow skip */
+  // Allow skip after a test result OR — if no test was run — once a non-empty
+  // custom string has been typed (or a curated model is selected).
+  const canFinish =
+    !customMissing && (test.kind === "ok" || test.kind === "error");
 
   return (
     <ScrollView contentContainerStyle={[styles.wrap, { backgroundColor: t.bg }]}>
@@ -119,6 +136,21 @@ export function FirstRunWizard({ apiBaseUrl, onComplete }: Props) {
             </Text>
           </Pressable>
         ))}
+        {modelId === CUSTOM_MODEL_ID ? (
+          <TextInput
+            accessibilityLabel="Custom model ID"
+            placeholder="e.g. openai/gpt-5.5-pro"
+            placeholderTextColor={t.textMuted}
+            value={customModel}
+            onChangeText={(v) => {
+              setCustomModel(v);
+              setTest({ kind: "idle" });
+            }}
+            autoCapitalize="none"
+            autoCorrect={false}
+            style={[styles.input, { color: t.text, borderColor: t.border }]}
+          />
+        ) : null}
       </Section>
 
       {provider.needsKey ? (
