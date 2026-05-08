@@ -1,0 +1,1 @@
+"""REW.ca adapter tests."""

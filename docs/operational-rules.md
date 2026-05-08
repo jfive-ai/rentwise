@@ -35,6 +35,15 @@ Disable the adapter within 7 days; purge that source's cached rows within 14 day
 ### Craigslist
 RSS feed only — `https://vancouver.craigslist.org/search/apa?format=rss`. Never the HTML pages. Live runs require a residential connection (CL returns HTTP 403 to most datacenter ranges regardless of User-Agent); CI runs against a recorded fixture.
 
+### Zumper (Phase 8 PR-E — scaffold, disabled by default)
+TOS § 11 mirrors PadMapper § 8.4 (same parent — Zumper Inc.) and prohibits scraping. The adapter is a scaffold gated behind `RENTWISE_ZUMPER_ENABLED=true`; default is `false` and must stay `false` in shipped configs. Re-check robots.txt at adapter init (the `PlaywrightFetcher` does this automatically) before flipping the flag on for personal use. Rate ceiling 0.5 req/sec, identifying User-Agent. The current `_extract` is a stub returning `[]`; do not claim coverage of this source until real selectors land in a follow-up PR.
+
+### REW.ca (Phase 8 PR-E — scaffold, disabled by default)
+REW.ca's TOS forbids "robot, spider, or other automatic device, process, or means" *and* names "screen scraping" / "database scraping" by name — the most explicit anti-scraping language of any source we've considered. The adapter is a scaffold gated behind `RENTWISE_REW_ENABLED=true`; default is `false`. Even for personal-use, opting in here is a deliberate choice. Re-check robots.txt at adapter init. Rate ceiling 0.5 req/sec, identifying User-Agent. The current `_extract` is a stub returning `[]`. If REW.ca asks us to stop, we disable within 7 days and purge cached rows within 14 days — see "If a site asks me to stop" above.
+
+### liv.rent (Phase 8 PR-E — scaffold, disabled by default)
+liv.rent § 7.1(v)/(w) prohibits scraping/indexing/data-mining and bot use. The adapter is a scaffold gated behind `RENTWISE_LIVRENT_ENABLED=true`; default is `false`. liv.rent is a Vancouver-based startup; an explicit partnership is likely a more durable long-term path than an adversarial adapter, but that work is non-engineering and tracked separately. Re-check robots.txt at adapter init. Rate ceiling 0.5 req/sec, identifying User-Agent. The current `_extract` is a stub returning `[]`.
+
 ### Vancouver School Board / Open Data / Google Maps
 - VSB catchment GeoJSON — public, attribute properly.
 - Vancouver Open Data — CC-BY, attribute.
