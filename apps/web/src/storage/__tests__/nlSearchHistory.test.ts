@@ -9,6 +9,7 @@ import {
   loadHistory,
   MAX_ENTRIES,
   removeEntry,
+  subscribe,
 } from "@/src/storage/nlSearchHistory";
 
 beforeAll(() => {
@@ -80,6 +81,27 @@ describe("nlSearchHistory (web/jsdom path)", () => {
   it("survives a corrupted localStorage payload", async () => {
     window.localStorage.setItem("rentwise.nlSearchHistory.v1", "{not json");
     expect(await loadHistory()).toEqual([]);
+  });
+
+  it("notifies subscribers on add/remove/clear with the new list", async () => {
+    const calls: string[][] = [];
+    const unsubscribe = subscribe((next) => calls.push(next));
+    await addEntry("a");
+    await addEntry("b");
+    await removeEntry("a");
+    await clearHistory();
+    expect(calls).toEqual([["a"], ["b", "a"], ["b"], []]);
+    unsubscribe();
+    await addEntry("after-unsubscribe");
+    expect(calls).toHaveLength(4);
+  });
+
+  it("does not notify when removeEntry was a no-op", async () => {
+    const calls: string[][] = [];
+    const unsubscribe = subscribe((next) => calls.push(next));
+    await removeEntry("never-added");
+    expect(calls).toEqual([]);
+    unsubscribe();
   });
 
   it("ignores non-string entries inside a stored array", async () => {

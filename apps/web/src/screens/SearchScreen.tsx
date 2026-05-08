@@ -26,6 +26,7 @@ import {
   encodeQueryToParams,
   hasAnyParams,
 } from "@/src/lib/queryUrl";
+import { addEntry as addNlHistoryEntry } from "@/src/storage/nlSearchHistory";
 import {
   AdapterFailureBanner,
   EmptyState,
@@ -49,7 +50,7 @@ interface Props {
 
 export function SearchScreen({ apiBaseUrl }: Props) {
   const t = useTheme();
-  const { query, mode, replace } = useQuery();
+  const { query, mode, nlText, replace } = useQuery();
   const client = useMemo(() => searchClient(apiBaseUrl), [apiBaseUrl]);
 
   // Phase 7 PR-C-1: viewport-aware initial view. Mount-only so a user
@@ -175,8 +176,14 @@ export function SearchScreen({ apiBaseUrl }: Props) {
       const next = qs ? `${path}?${qs}` : path;
       window.history.replaceState(null, "", next);
     }
+    // Record the NL draft to history on Search too, not just on Parse —
+    // many users will type and hit Search without ever pressing Parse,
+    // and the original "remember last query" ask covers that flow.
+    if (mode === "nl" && nlText.trim().length > 0) {
+      void addNlHistoryEntry(nlText);
+    }
     void runSearch(0, false);
-  }, [query, runSearch]);
+  }, [query, runSearch, mode, nlText]);
   const onLoadMore = useCallback(() => { void runSearch(offset + PAGE_SIZE, true); }, [runSearch, offset]);
   // Retry replays the exact (offset, append) of the failed call so a Load-more
   // failure doesn't drop earlier pages.
@@ -212,6 +219,13 @@ export function SearchScreen({ apiBaseUrl }: Props) {
         style={[
           styles.filters,
           stacked && styles.filtersStacked,
+          // FilterPanel's outer/actions split (commit 252e73d) needs a
+          // *definite* parent height so its flex:1 ScrollView can compress
+          // and leave the actions row visible. maxHeight alone doesn't
+          // count — without an explicit height the ScrollView grows to
+          // content and pushes Search below the viewport. Only apply when
+          // expanded; collapsed mode should hug the toggle.
+          stacked && filtersOpen && styles.filtersStackedOpen,
           { borderColor: t.border, backgroundColor: t.surface },
         ]}
       >
@@ -428,14 +442,17 @@ const styles = StyleSheet.create({
     borderRightWidth: 0,
     borderBottomWidth: 1,
     alignSelf: "auto",
-    // Bound the height so FilterPanel's inner ScrollView has something
-    // finite to scroll within. Without this, the panel grew to its
-    // content height and the Search button at the bottom was below the
-    // viewport with no way to scroll to it (the page itself isn't
-    // scrollable). 100vh - header keeps the toggle visible at the top
-    // of the viewport while scrolling the filter body.
+    // maxHeight is the belt: caps the wrapper at viewport-height-minus-
+    // header even if explicit height is somehow ignored.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     maxHeight: ("calc(100vh - 56px)" as any),
+  },
+  // Suspenders: FilterPanel's flex:1 ScrollView needs a *definite* parent
+  // height to actually compress, otherwise the pinned action row sits
+  // beyond the viewport. Applied only in stacked+open mode.
+  filtersStackedOpen: {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    height: ("calc(100vh - 56px)" as any),
   },
   filtersToggle: {
     paddingHorizontal: 12,

@@ -14,6 +14,7 @@ import {
   clearHistory as clearHistoryEntries,
   loadHistory,
   removeEntry as removeHistoryEntry,
+  subscribe as subscribeHistory,
 } from "@/src/storage/nlSearchHistory";
 import { useTheme } from "@/src/theme";
 
@@ -64,8 +65,13 @@ export function NLSearchBar({ apiBaseUrl }: Props) {
       restoredRef.current = true;
       if (list[0] && !nlTextRef.current) setNlText(list[0]);
     });
+    // Subscribe so writes from elsewhere (e.g. SearchScreen.onSearch
+    // recording the NL draft on Search press) are reflected here without
+    // requiring a remount.
+    const unsubscribe = subscribeHistory((next) => setHistory(next));
+    return unsubscribe;
     // Mount-only: restore is a one-shot. Subsequent updates flow through
-    // setHistory in onParse / onRemoveHistory.
+    // the subscriber and through onParse / onRemoveHistory.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -74,14 +80,19 @@ export function NLSearchBar({ apiBaseUrl }: Props) {
     if (!text) return;
     setBusy(true);
     setError(null);
+    // Record before the LLM call: pressing Parse is the user's commit
+    // ("remember this query"). Whether the LLM succeeds shouldn't decide
+    // whether their typed query survives in history — failed parses are
+    // often ones the user will tweak and retry, so they need to be
+    // findable in the recent list.
+    const next = await addHistoryEntry(text);
+    setHistory(next);
     try {
       const result = await client.translateQuery({ text });
       // Replace structured query with the LLM's interpretation; chips reflect
       // only what the LLM parsed, not stale filters from a previous mode.
       reset();
       set(result.query);
-      const next = await addHistoryEntry(text);
-      setHistory(next);
     } catch (e) {
       setError(`LLM unavailable: ${extractErrorDetail(e)}`);
     } finally {

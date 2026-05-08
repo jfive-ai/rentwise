@@ -59,6 +59,24 @@ export async function loadHistory(): Promise<string[]> {
   }
 }
 
+// Same-tab change notification. localStorage's `storage` event only fires
+// for *other* tabs/windows, so when SearchScreen.onSearch writes through
+// addEntry the NL bar in the same tab wouldn't see it. We keep a tiny
+// in-memory subscriber list and notify after every write.
+type Listener = (next: string[]) => void;
+const listeners = new Set<Listener>();
+
+export function subscribe(fn: Listener): () => void {
+  listeners.add(fn);
+  return () => {
+    listeners.delete(fn);
+  };
+}
+
+function notify(next: string[]): void {
+  for (const fn of listeners) fn(next);
+}
+
 /**
  * Add an entry to the history. Most-recent-first; duplicates promote to top
  * (case-sensitive after trim) rather than repeating; capped at MAX_ENTRIES.
@@ -71,6 +89,7 @@ export async function addEntry(text: string): Promise<string[]> {
   const without = current.filter((entry) => entry !== trimmed);
   const next = [trimmed, ...without].slice(0, MAX_ENTRIES);
   await backend().setItem(KEY, JSON.stringify(next));
+  notify(next);
   return next;
 }
 
@@ -79,9 +98,11 @@ export async function removeEntry(text: string): Promise<string[]> {
   const next = current.filter((entry) => entry !== text);
   if (next.length === current.length) return current;
   await backend().setItem(KEY, JSON.stringify(next));
+  notify(next);
   return next;
 }
 
 export async function clearHistory(): Promise<void> {
   await backend().removeItem(KEY);
+  notify([]);
 }
