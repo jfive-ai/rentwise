@@ -7,6 +7,7 @@ import { fireEvent, render, waitFor } from "@testing-library/react-native";
 import { NLSearchBar } from "@/src/components/NLSearchBar";
 import { ParsedQueryChips } from "@/src/components/ParsedQueryChips";
 import { QueryProvider, useQuery } from "@/src/state/QueryProvider";
+import { addEntry as addHistoryEntry } from "@/src/storage/nlSearchHistory";
 
 // CI's GitHub Actions Linux runners can take 6-9s for the happy-path async
 // flow (changeText → re-render → press → fetch microtask → state update →
@@ -167,14 +168,30 @@ describe("NLSearchBar", () => {
     });
   });
 
-  it("does not record history on a failed parse", async () => {
+  it("records history on Parse press even when the LLM call fails", async () => {
+    // A failed parse is still a meaningful commit — the user typed something
+    // and pressed Parse, and they often want to retrieve and tweak that text
+    // afterward. Pinning the LLM outcome to history visibility was a UX bug.
     mockTranslate({ detail: { message: "LLM down" } }, false, 502);
-    const { getByLabelText, getByText, findByText, queryByLabelText } =
+    const { getByLabelText, getByText, findByText, findByLabelText } =
       renderBar("nl");
     fireEvent.changeText(getByLabelText("Search input"), "anything");
     fireEvent.press(getByText("Parse"));
     await findByText(/LLM down/);
-    expect(queryByLabelText("Show recent searches")).toBeNull();
+    // Despite the LLM error, the typed text is in history.
+    await findByLabelText("Show recent searches");
+  });
+
+  it("reflects writes from other callers via the subscribe channel", async () => {
+    // Prove the cross-component sync: SearchScreen.onSearch persists the NL
+    // draft on Search press. NLSearchBar (already mounted in NL mode) needs
+    // to render the new entry without remounting. The storage module's
+    // subscribe() bridge is what makes that happen.
+    const { findByLabelText } = renderBar("nl");
+    await addHistoryEntry("written from elsewhere");
+    const toggle = await findByLabelText("Show recent searches");
+    fireEvent.press(toggle);
+    await findByLabelText("Use search: written from elsewhere");
   });
 
   it("restores the most recent query into the input on mount", async () => {
