@@ -116,6 +116,39 @@ def test_test_connection_success_does_not_persist(
     assert get.status_code == 404
 
 
+def test_test_connection_uses_max_tokens_large_enough_for_reasoning_models(
+    http_client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Regression for #59: a 1-token ping fails on gpt-5.x / o-series because
+    reasoning consumes the budget before any visible output. The endpoint
+    must send a max_tokens generous enough for current reasoning models."""
+    fake_response = type(
+        "R",
+        (),
+        {
+            "model": "openai/gpt-5.5",
+            "choices": [type("C", (), {"message": type("M", (), {"content": "ok"})()})()],
+        },
+    )()
+    mock = AsyncMock(return_value=fake_response)
+    monkeypatch.setattr("rentwise.main.acompletion", mock)
+
+    resp = http_client.post(
+        "/settings/llm/test",
+        json={"primary_model": "openai/gpt-5.5", "primary_api_key": "sk-test"},
+    )
+    assert resp.status_code == 200, resp.text
+
+    assert mock.await_count == 1
+    kwargs = mock.await_args.kwargs
+    # 64 is the loose lower bound: a future "let's make it cheaper" change
+    # that pushes max_tokens below this trips the regression. Current value
+    # is 256.
+    assert kwargs["max_tokens"] >= 64, (
+        f"max_tokens={kwargs['max_tokens']} is too small for reasoning models"
+    )
+
+
 def test_test_connection_failure_returns_ok_false(
     http_client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:

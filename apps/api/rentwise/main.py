@@ -157,7 +157,12 @@ def create_app() -> FastAPI:
         kwargs: dict[str, object] = {
             "model": body.primary_model,
             "messages": [{"role": "user", "content": "ping"}],
-            "max_tokens": 1,
+            # Reasoning models (gpt-5.x, o-series) consume max_tokens with
+            # internal reasoning before any visible output, so a tiny budget
+            # like 1 returns "max_tokens reached" before they finish thinking.
+            # 256 is enough for any current reasoning model's ping; trivial
+            # for non-reasoning ones. LiteLLM normalizes the param name.
+            "max_tokens": 256,
             "timeout": body.timeout_seconds,
         }
         if body.primary_api_key is not None:
