@@ -20,6 +20,7 @@ from rentwise.aggregator.freshness import (
     canonical_query_json,
     is_fresh,
 )
+from rentwise.enrichment.service import EnrichmentService
 from rentwise.models import (
     AdapterHealth,
     NormalizedListing,
@@ -45,6 +46,7 @@ class AggregatorService:
         adapters: list[SourceAdapter],
         session: AsyncSession,
         cache_ttl_seconds: int,
+        enrichment: EnrichmentService | None = None,
     ) -> None:
         self.adapters = adapters
         self.session = session
@@ -52,6 +54,9 @@ class AggregatorService:
         self.listing_repo = ListingRepo(session)
         self.search_repo = SearchRepo(session)
         self.health_repo = SourceHealthRepo(session)
+        # Optional so tests / boot orderings without the geocoder don't
+        # have to construct one. None = enrichment is a no-op.
+        self.enrichment = enrichment
 
     async def search(self, req: SearchRequest) -> SearchResponse:
         key = _cache_key(req.query)
@@ -86,6 +91,17 @@ class AggregatorService:
                         continue
                     seen.add(raw.source_listing_id)
                     listing = self._raw_to_normalized(raw)
+                    if self.enrichment is not None:
+                        try:
+                            listing = await self.enrichment.enrich(listing)
+                        except Exception as exc:
+                            # Enrichment must never block ingestion. Log and
+                            # let the un-enriched listing through.
+                            log.info(
+                                "enrichment.unhandled_error",
+                                source=adapter.name,
+                                error=str(exc),
+                            )
                     saved = await self.listing_repo.upsert(listing)
                     all_listings.append(saved)
                 await self.health_repo.set(adapter.name, "ok", error=None)

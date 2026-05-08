@@ -107,6 +107,24 @@ class CapturePairingRow(Base):
     rotated_at: Mapped[str | None] = mapped_column(String, nullable=True)
 
 
+class GeocodeCacheRow(Base):
+    """One row per normalized address; lat/lon nullable for negative results.
+
+    See ``apps/api/alembic/versions/0004_geocode_cache.py`` for the table
+    definition. ``stale_after`` is an ISO8601 timestamp at which a cached
+    miss/hit becomes stale and should be re-fetched.
+    """
+
+    __tablename__ = "geocode_cache"
+
+    address_key: Mapped[str] = mapped_column(String, primary_key=True)
+    lat: Mapped[float | None] = mapped_column(Float, nullable=True)
+    lon: Mapped[float | None] = mapped_column(Float, nullable=True)
+    provider: Mapped[str] = mapped_column(String, nullable=False)
+    fetched_at: Mapped[str] = mapped_column(String, nullable=False)
+    stale_after: Mapped[str] = mapped_column(String, nullable=False)
+
+
 class LLMSettingsRow(Base):
     """Single-row table holding the user's LLM provider configuration.
 

@@ -70,6 +70,24 @@ class Settings(BaseSettings):
     # --- HTTP client identity (for adapters) ---
     user_agent: str = "RentWise/0.1 (+https://github.com/ylee89/rentwise; contact@example.com)"
 
+    # --- Phase 4 enrichment (geocoding) ---
+    rentwise_geocode_enabled: bool = Field(
+        default=True,
+        validation_alias="RENTWISE_GEOCODE_ENABLED",
+    )
+    rentwise_geocode_timeout_seconds: float = Field(
+        default=5.0,
+        validation_alias="RENTWISE_GEOCODE_TIMEOUT_SECONDS",
+    )
+    rentwise_nominatim_base_url: str = Field(
+        default="https://nominatim.openstreetmap.org",
+        validation_alias="RENTWISE_NOMINATIM_BASE_URL",
+    )
+    rentwise_geocode_cache_ttl_days: int = Field(
+        default=30,
+        validation_alias="RENTWISE_GEOCODE_CACHE_TTL_DAYS",
+    )
+
     # --- CORS ---
     cors_origins: list[str] = ["http://localhost:3000", "http://localhost:8081"]
 
