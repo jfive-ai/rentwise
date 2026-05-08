@@ -95,11 +95,11 @@
 **Goal:** Stop refreshing; let RentWise notify you.
 
 - [x] Save search UI (CRUD: drawer, save form, label + alert metadata) — PR-A
-- [ ] Background job runner (APScheduler) — PR-B
-- [ ] Email notifier (SMTP) — PR-B
+- [x] Background job runner (APScheduler) — PR-B
+- [x] Email notifier (SMTP) — PR-B
 - [ ] Web push notifications — PR-C
-- [ ] Alert dedup (don't notify twice for same listing) — PR-B
-- [ ] **Milestone:** Get an email when a new matching listing appears — PR-B
+- [x] Alert dedup (don't notify twice for same listing) — PR-B
+- [x] **Milestone:** Get an email when a new matching listing appears — PR-B
 
 ## Phase 6: ~~Facebook Marketplace via Browser Extension~~ — folded into Phase 3
 

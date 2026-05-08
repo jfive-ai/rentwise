@@ -116,6 +116,23 @@ class CapturePairingRow(Base):
     rotated_at: Mapped[str | None] = mapped_column(String, nullable=True)
 
 
+class AlertLogRow(Base):
+    """Dedup ledger for saved-search alert dispatches (Phase 5 PR-B).
+
+    Composite PK on (cache_key, listing_id) — re-running the same
+    saved search against the same listing must produce zero new
+    alerts. ``channel`` lets PR-C's web-push share the same table
+    without conflicting with email.
+    """
+
+    __tablename__ = "alert_log"
+
+    cache_key: Mapped[str] = mapped_column(String, primary_key=True)
+    listing_id: Mapped[str] = mapped_column(String, primary_key=True)
+    alerted_at: Mapped[str] = mapped_column(String, nullable=False)
+    channel: Mapped[str] = mapped_column(String, nullable=False, default="email")
+
+
 class GeocodeCacheRow(Base):
     """One row per normalized address; lat/lon nullable for negative results.
 

@@ -110,6 +110,30 @@ class Settings(BaseSettings):
         validation_alias="RENTWISE_DEDUP_CONFIDENCE_THRESHOLD",
     )
 
+    # --- Phase 5 PR-B: alerts + scheduler + SMTP ---
+    rentwise_scheduler_enabled: bool = Field(
+        default=False,
+        validation_alias="RENTWISE_SCHEDULER_ENABLED",
+        description="Off in CI/tests. Set to True to start the alert scheduler at app startup.",
+    )
+    rentwise_alerts_from: str = Field(
+        default="RentWise <noreply@rentwise.local>",
+        validation_alias="RENTWISE_ALERTS_FROM",
+    )
+    rentwise_alerts_app_base_url: str = Field(
+        default="http://localhost:8081",
+        validation_alias="RENTWISE_ALERTS_APP_BASE_URL",
+    )
+    rentwise_smtp_host: str | None = Field(default=None, validation_alias="RENTWISE_SMTP_HOST")
+    rentwise_smtp_port: int = Field(default=587, validation_alias="RENTWISE_SMTP_PORT")
+    rentwise_smtp_starttls: bool = Field(default=True, validation_alias="RENTWISE_SMTP_STARTTLS")
+    rentwise_smtp_username: str | None = Field(
+        default=None, validation_alias="RENTWISE_SMTP_USERNAME"
+    )
+    rentwise_smtp_password: str | None = Field(
+        default=None, validation_alias="RENTWISE_SMTP_PASSWORD"
+    )
+
     # --- CORS ---
     cors_origins: list[str] = ["http://localhost:3000", "http://localhost:8081"]
 

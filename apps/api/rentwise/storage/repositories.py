@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from rentwise.models import AdapterHealth, NormalizedListing, SchoolCatchments, TransitInfo
 from rentwise.storage.models import (
+    AlertLogRow,
     GeocodeCacheRow,
     Listing,
     PhotoHashCacheRow,
@@ -613,3 +614,54 @@ class PhotoHashCacheRepo:
         except ValueError:
             return True
         return moment >= cutoff
+
+
+# ---------------------------------------------------------------------------
+# AlertLogRepo (Phase 5 PR-B)
+# ---------------------------------------------------------------------------
+
+
+class AlertLogRepo:
+    """Dedup ledger for saved-search alert dispatches.
+
+    The runner consults ``get_alerted_ids`` to subtract listings already
+    notified-on, and calls ``record_alerted`` after a *successful*
+    notification dispatch. A failed dispatch must NOT call
+    ``record_alerted`` — otherwise we'd silently drop the user's first
+    alert for that listing.
+    """
+
+    def __init__(self, session: AsyncSession) -> None:
+        self.session = session
+
+    async def get_alerted_ids(self, cache_key: str) -> set[str]:
+        stmt = select(AlertLogRow.listing_id).where(AlertLogRow.cache_key == cache_key)
+        rows = (await self.session.execute(stmt)).scalars().all()
+        return set(rows)
+
+    async def record_alerted(
+        self,
+        cache_key: str,
+        listing_ids: list[str],
+        *,
+        channel: str = "email",
+    ) -> None:
+        if not listing_ids:
+            return
+        now = _now_iso()
+        # Use a per-row insert with skip-on-conflict semantics. SQLite has
+        # `INSERT OR IGNORE`; SQLAlchemy's higher-level API doesn't expose
+        # that portably, so we filter against the existing set first.
+        existing = await self.get_alerted_ids(cache_key)
+        for lid in listing_ids:
+            if lid in existing:
+                continue
+            self.session.add(
+                AlertLogRow(
+                    cache_key=cache_key,
+                    listing_id=lid,
+                    alerted_at=now,
+                    channel=channel,
+                )
+            )
+        await self.session.flush()

@@ -194,7 +194,94 @@ def create_app() -> FastAPI:
 
     app.include_router(build_searches_router())
 
+    # Phase 5 PR-B: alert scheduler. Off by default — tests / CI never
+    # start a real interval. Production sets RENTWISE_SCHEDULER_ENABLED=1.
+    _wire_alert_scheduler(app)
+
     return app
+
+
+def _wire_alert_scheduler(app: FastAPI) -> None:
+    if not settings.rentwise_scheduler_enabled:
+        return
+
+    from rentwise.notifications.scheduler import AlertScheduler
+
+    scheduler_holder: dict[str, AlertScheduler] = {}
+
+    from collections.abc import Callable, Coroutine
+    from typing import Any
+
+    def job_factory(cache_key: str) -> Callable[[], Coroutine[Any, Any, None]]:
+        async def tick() -> None:
+            from rentwise.adapters.craigslist.adapter import CraigslistAdapter
+            from rentwise.aggregator.service import AggregatorService
+            from rentwise.notifications.email import SmtpConfig, SmtpEmailNotifier
+            from rentwise.notifications.runner import AlertRunner, RunnerConfig
+            from rentwise.storage.db import get_sessionmaker
+            from rentwise.storage.repositories import AlertLogRepo, SearchRepo
+
+            sessmaker = get_sessionmaker()
+            async with sessmaker() as session:
+                saved_list = await SearchRepo(session).list_saved()
+                target = next((s for s in saved_list if s.cache_key == cache_key), None)
+                if target is None:
+                    return
+                aggregator = AggregatorService(
+                    adapters=[
+                        CraigslistAdapter(
+                            region=settings.craigslist_region,
+                            user_agent=settings.user_agent,
+                        ),
+                    ],
+                    session=session,
+                    cache_ttl_seconds=settings.search_cache_ttl_seconds,
+                )
+                notifier = SmtpEmailNotifier(
+                    SmtpConfig(
+                        host=settings.rentwise_smtp_host or "localhost",
+                        port=settings.rentwise_smtp_port,
+                        starttls=settings.rentwise_smtp_starttls,
+                        username=settings.rentwise_smtp_username,
+                        password=settings.rentwise_smtp_password,
+                        from_addr=settings.rentwise_alerts_from,
+                    )
+                )
+                runner = AlertRunner(
+                    aggregator=aggregator,
+                    notifier=notifier,
+                    alert_log=AlertLogRepo(session),
+                    config=RunnerConfig(
+                        app_base_url=settings.rentwise_alerts_app_base_url,
+                    ),
+                )
+                await runner.check_one(target)
+                await session.commit()
+
+        return tick
+
+    @app.on_event("startup")
+    async def _start_scheduler() -> None:
+        from rentwise.storage.db import get_sessionmaker
+        from rentwise.storage.repositories import SearchRepo
+
+        scheduler = AlertScheduler(job_factory=job_factory)
+        scheduler.start()
+        sessmaker = get_sessionmaker()
+        async with sessmaker() as session:
+            for saved in await SearchRepo(session).list_saved():
+                if saved.alert_enabled and saved.alert_email:
+                    scheduler.register(
+                        cache_key=saved.cache_key,
+                        cadence_minutes=saved.alert_cadence_minutes,
+                    )
+        scheduler_holder["s"] = scheduler
+
+    @app.on_event("shutdown")
+    async def _stop_scheduler() -> None:
+        s = scheduler_holder.get("s")
+        if s is not None:
+            s.shutdown(wait=False)
 
 
 app = create_app()
