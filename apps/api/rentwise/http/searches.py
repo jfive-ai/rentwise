@@ -4,6 +4,10 @@ Saves piggyback on the existing search-cache row, so the user must
 have run a search at least once for that query before they can save
 it. The endpoint derives the ``cache_key`` from the supplied query so
 clients never have to track it.
+
+PR-B adds POST /searches/{cache_key}/run-now: triggers the alert
+runner synchronously so the user (or a test) can verify alert
+dispatch without waiting for the scheduler tick.
 """
 
 from __future__ import annotations
@@ -14,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from rentwise.aggregator.freshness import cache_key as compute_cache_key
 from rentwise.models import NormalizedQuery
+from rentwise.notifications.runner import AlertRunner, RunResult
 from rentwise.storage.db import session_dep
 from rentwise.storage.repositories import SavedSearch, SearchRepo
 
@@ -41,6 +46,14 @@ class SavedSearchListResponse(BaseModel):
     items: list[SavedSearchResponse]
 
 
+class RunNowResponse(BaseModel):
+    cache_key: str
+    new_listings: int
+    sent: int
+    skipped: bool
+    error: str | None = None
+
+
 def _to_response(saved: SavedSearch) -> SavedSearchResponse:
     return SavedSearchResponse(
         cache_key=saved.cache_key,
@@ -51,6 +64,59 @@ def _to_response(saved: SavedSearch) -> SavedSearchResponse:
         cadence_minutes=saved.alert_cadence_minutes,
         last_run_at=saved.last_run_at,
         total_count=saved.total_count,
+    )
+
+
+def _run_result_to_response(r: RunResult) -> RunNowResponse:
+    return RunNowResponse(
+        cache_key=r.cache_key,
+        new_listings=r.new_listings,
+        sent=r.sent,
+        skipped=r.skipped,
+        error=r.error,
+    )
+
+
+def get_alert_runner(session: AsyncSession = Depends(session_dep)) -> AlertRunner:
+    """Build a per-request AlertRunner backed by the production stack.
+
+    Tests override this via ``app.dependency_overrides`` to inject a
+    fake aggregator + recording notifier without touching SMTP.
+    """
+    from rentwise.adapters.base import SourceAdapter
+    from rentwise.adapters.craigslist.adapter import CraigslistAdapter
+    from rentwise.aggregator.service import AggregatorService
+    from rentwise.notifications.email import SmtpConfig, SmtpEmailNotifier
+    from rentwise.notifications.runner import RunnerConfig
+    from rentwise.settings import settings
+    from rentwise.storage.repositories import AlertLogRepo
+
+    adapters: list[SourceAdapter] = [
+        CraigslistAdapter(
+            region=settings.craigslist_region,
+            user_agent=settings.user_agent,
+        ),
+    ]
+    aggregator = AggregatorService(
+        adapters=adapters,
+        session=session,
+        cache_ttl_seconds=settings.search_cache_ttl_seconds,
+    )
+    notifier = SmtpEmailNotifier(
+        SmtpConfig(
+            host=settings.rentwise_smtp_host or "localhost",
+            port=settings.rentwise_smtp_port,
+            starttls=settings.rentwise_smtp_starttls,
+            username=settings.rentwise_smtp_username,
+            password=settings.rentwise_smtp_password,
+            from_addr=settings.rentwise_alerts_from,
+        )
+    )
+    return AlertRunner(
+        aggregator=aggregator,
+        notifier=notifier,
+        alert_log=AlertLogRepo(session),
+        config=RunnerConfig(app_base_url=settings.rentwise_alerts_app_base_url),
     )
 
 
@@ -101,5 +167,26 @@ def build_router() -> APIRouter:
             raise HTTPException(status_code=404, detail="not_found")
         await session.commit()
         return None
+
+    @router.post("/{cache_key}/run-now", response_model=RunNowResponse)
+    async def run_now(
+        cache_key: str,
+        session: AsyncSession = Depends(session_dep),
+        runner: AlertRunner = Depends(get_alert_runner),
+    ) -> RunNowResponse:
+        """Trigger the alert runner for a saved search synchronously.
+
+        Lets the user verify alert dispatch end-to-end without waiting
+        for the next scheduler tick. Equivalent to one tick of the
+        background job for this saved search.
+        """
+        repo = SearchRepo(session)
+        target = next((s for s in await repo.list_saved() if s.cache_key == cache_key), None)
+        if target is None:
+            raise HTTPException(status_code=404, detail="not_found")
+
+        result = await runner.check_one(target)
+        await session.commit()
+        return _run_result_to_response(result)
 
     return router
