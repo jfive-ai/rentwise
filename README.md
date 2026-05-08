@@ -121,8 +121,7 @@ Phase 8 packages RentWise as a real `.app` bundle so you can launch it from your
 ### Dev mode
 
 ```bash
-make web      # terminal 1 — Expo dev server on :8081
-make macos    # terminal 2 — Tauri window pointing at the dev server
+make macos    # starts API + Expo web + Tauri together; Ctrl+C cleans up everything
 ```
 
 ### Production build
