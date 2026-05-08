@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import { router, useLocalSearchParams } from "expo-router";
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useLocalSearchParams } from "expo-router";
 import { searchClient } from "@/src/api/client";
 import type {
   NormalizedListing,
@@ -158,18 +158,23 @@ export function SearchScreen({ apiBaseUrl }: Props) {
     [client, query, sort]
   );
 
-  // Phase 7 PR-C-2: when the user kicks off a search, sync the current
-  // query into the URL so the page is shareable / bookmarkable. Use
-  // router.replace (vs setParams) so removed filters drop out of the URL
-  // instead of merging with the prior set.
+  // Sync the current query into the URL so the page is shareable /
+  // bookmarkable, then fire the search. We bypass `router.replace` and use
+  // raw `history.replaceState` because expo-router's `replace` was
+  // unmounting+remounting SearchScreen mid-search — the in-flight setState
+  // calls then committed to a torn-down instance and the user saw a frozen
+  // "Set filters and press Search" empty state even though POST /search had
+  // returned 200. `history.replaceState` updates the URL without touching
+  // the routing tree, so the state setters stay live. Existing
+  // useLocalSearchParams() readers still see the new query string on next
+  // mount (e.g. shared link).
   const onSearch = useCallback(() => {
-    const encoded = encodeQueryToParams(query);
-    router.replace({
-      pathname: "/",
-      // expo-router params is Record<string, string>. Object.fromEntries on a
-      // URLSearchParams gives exactly that.
-      params: Object.fromEntries(encoded),
-    });
+    const qs = encodeQueryToParams(query).toString();
+    if (typeof window !== "undefined") {
+      const path = window.location.pathname;
+      const next = qs ? `${path}?${qs}` : path;
+      window.history.replaceState(null, "", next);
+    }
     void runSearch(0, false);
   }, [query, runSearch]);
   const onLoadMore = useCallback(() => { void runSearch(offset + PAGE_SIZE, true); }, [runSearch, offset]);
@@ -234,14 +239,30 @@ export function SearchScreen({ apiBaseUrl }: Props) {
                 <ParsedQueryChips />
                 <Pressable
                   accessibilityRole="button"
+                  accessibilityState={{ busy: status === "loading", disabled: status === "loading" }}
+                  accessibilityLabel={status === "loading" ? "Searching…" : "Search"}
                   onPress={onSearch}
-                  style={[styles.searchBtn, { backgroundColor: t.accent }]}
+                  disabled={status === "loading"}
+                  style={({ pressed }) => [
+                    styles.searchBtn,
+                    {
+                      backgroundColor: status === "loading" ? t.textMuted : t.accent,
+                      opacity: pressed && status !== "loading" ? 0.85 : 1,
+                    },
+                  ]}
                 >
-                  <Text style={{ color: "#fff", fontWeight: "600" }}>Search</Text>
+                  {status === "loading" ? (
+                    <View style={styles.searchBtnInner}>
+                      <ActivityIndicator size="small" color="#fff" />
+                      <Text style={{ color: "#fff", fontWeight: "600" }}>Searching…</Text>
+                    </View>
+                  ) : (
+                    <Text style={{ color: "#fff", fontWeight: "600" }}>Search</Text>
+                  )}
                 </Pressable>
               </View>
             ) : (
-              <FilterPanel onSearch={onSearch} />
+              <FilterPanel onSearch={onSearch} searching={status === "loading"} />
             )}
           </>
         ) : null}
@@ -425,6 +446,7 @@ const styles = StyleSheet.create({
   modeRow: { padding: 12, borderBottomWidth: 1, borderColor: "transparent" },
   nlPane: { padding: 12, gap: 12 },
   searchBtn: { alignSelf: "flex-end", paddingHorizontal: 18, paddingVertical: 10, borderRadius: 8 },
+  searchBtnInner: { flexDirection: "row", alignItems: "center", gap: 8 },
   results: { flex: 1, minWidth: 320 },
   resultsContent: { padding: 16, gap: 16 },
   grid: { flexDirection: "row", flexWrap: "wrap", gap: 16 },

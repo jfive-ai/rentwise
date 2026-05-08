@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import {
+  ActivityIndicator,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -30,9 +31,14 @@ export const NEIGHBORHOODS = [
 
 interface Props {
   onSearch: () => void;
+  /** True while a search is in flight — disables the button and shows a
+   * spinner + "Searching…" so the user has visible confirmation that the
+   * click registered. Without this, fast localhost responses or hung
+   * adapter calls both look like "nothing happened". */
+  searching?: boolean;
 }
 
-export function FilterPanel({ onSearch }: Props) {
+export function FilterPanel({ onSearch, searching = false }: Props) {
   const { query, set, reset, toggleNeighborhood, toggleKeyword } = useQuery();
   const t = useTheme();
   const [kw, setKw] = useState("");
@@ -41,6 +47,12 @@ export function FilterPanel({ onSearch }: Props) {
   const [neighborhoodsOpen, setNeighborhoodsOpen] = useState(false);
 
   return (
+    // Outer wrapper: column flex with the action row pinned at the bottom
+    // (no internal scroll). The ScrollView holds only the *filter sections*
+    // so scrolling the long list never hides the Search button — the
+    // previous layout buried Search at the bottom of the scrollable column
+    // on narrow viewports.
+    <View style={styles.outer}>
     <ScrollView
       style={styles.scroll}
       contentContainerStyle={[styles.wrap, { backgroundColor: t.bg }]}
@@ -228,24 +240,47 @@ export function FilterPanel({ onSearch }: Props) {
       <DisabledControl label="Available after" phase="Phase 3">
         <Text style={{ color: t.textMuted }}>YYYY-MM-DD</Text>
       </DisabledControl>
-
-      <View style={styles.actions}>
-        <Pressable
-          accessibilityRole="button"
-          onPress={onSearch}
-          style={[styles.primary, { backgroundColor: t.accent }]}
-        >
-          <Text style={styles.primaryText}>Search</Text>
-        </Pressable>
-        <Pressable
-          accessibilityRole="button"
-          onPress={reset}
-          style={[styles.secondary, { borderColor: t.border }]}
-        >
-          <Text style={{ color: t.text }}>Reset</Text>
-        </Pressable>
-      </View>
     </ScrollView>
+
+    <View
+      style={[
+        styles.actions,
+        { borderTopColor: t.border, backgroundColor: t.surface },
+      ]}
+    >
+      <Pressable
+        accessibilityRole="button"
+        accessibilityState={{ busy: searching, disabled: searching }}
+        accessibilityLabel={searching ? "Searching…" : "Search"}
+        onPress={onSearch}
+        disabled={searching}
+        style={({ pressed }) => [
+          styles.primary,
+          {
+            backgroundColor: searching ? t.textMuted : t.accent,
+            opacity: pressed && !searching ? 0.85 : 1,
+          },
+        ]}
+      >
+        {searching ? (
+          <View style={styles.btnInner}>
+            <ActivityIndicator size="small" color="#fff" />
+            <Text style={styles.primaryText}>Searching…</Text>
+          </View>
+        ) : (
+          <Text style={styles.primaryText}>Search</Text>
+        )}
+      </Pressable>
+      <Pressable
+        accessibilityRole="button"
+        onPress={reset}
+        disabled={searching}
+        style={[styles.secondary, { borderColor: t.border, opacity: searching ? 0.6 : 1 }]}
+      >
+        <Text style={{ color: t.text }}>Reset</Text>
+      </Pressable>
+    </View>
+    </View>
   );
 }
 
@@ -280,9 +315,11 @@ function toClampedMinutes(v: string): number | null {
 }
 
 const styles = StyleSheet.create({
-  // flex: 1 → the ScrollView fills its bounded parent height (set by
-  // SearchScreen's `filters` style). Without this, the ScrollView
-  // sizes to its content and there's nothing to scroll within.
+  // Outer wrapper hosts the ScrollView (flex: 1) and the pinned action
+  // row. The ScrollView's flex: 1 fills the remaining height after the
+  // action row reserves its share, so the action row never scrolls off
+  // screen.
+  outer: { flex: 1, flexDirection: "column" },
   scroll: { flex: 1 },
   wrap: { padding: 16, gap: 16 },
   section: { gap: 8 },
@@ -299,8 +336,15 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     marginTop: 4,
   },
-  actions: { flexDirection: "row", gap: 8, marginTop: 8 },
+  actions: {
+    flexDirection: "row",
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderTopWidth: 1,
+  },
   primary: { paddingHorizontal: 18, paddingVertical: 12, borderRadius: 8 },
   primaryText: { color: "#fff", fontWeight: "600" },
   secondary: { paddingHorizontal: 18, paddingVertical: 12, borderRadius: 8, borderWidth: 1 },
+  btnInner: { flexDirection: "row", alignItems: "center", gap: 8 },
 });

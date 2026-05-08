@@ -28,13 +28,25 @@ test.describe("Search states", () => {
     await page.getByRole("button", { name: "2", exact: true }).click();
     await page.getByRole("button", { name: "Search", exact: true }).click();
 
-    // Skeleton + label appears while the request is hung.
-    await expect(page.getByText(/Searching/)).toBeVisible();
+    // Two distinct "Searching…" affordances now appear together:
+    // 1. Result-area skeleton (alert role, "Searching for listings").
+    // 2. The button itself (its accessibility label flips from
+    //    "Search" → "Searching…" with a spinner).
+    // Pin both — they signal progress in different parts of the UI and
+    // both regressed in the past when state failed to propagate.
+    await expect(
+      page.getByRole("alert", { name: "Searching for listings" }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Searching…" }),
+    ).toBeVisible();
 
     // Releasing the response transitions us out of loading.
     release!();
     await expect(page.getByText(/^5 listings$/)).toBeVisible();
-    await expect(page.getByText(/Searching/)).toBeHidden();
+    await expect(
+      page.getByRole("button", { name: "Searching…" }),
+    ).toHaveCount(0);
   });
 
   test("adapter-failure banner names the source + first-line error", async ({
@@ -79,6 +91,50 @@ test.describe("Search states", () => {
     ).toBeVisible();
     await expect(
       page.getByText("No listings matched your filters."),
+    ).toBeHidden();
+  });
+
+  test("Search with no filters set — state actually updates (regression: router.replace remount)", async ({
+    page,
+  }) => {
+    // Critical regression: `router.replace` was unmounting+remounting
+    // SearchScreen on every Search click, causing the in-flight search's
+    // setState calls to commit to a torn-down instance. The user saw a
+    // frozen "Set filters and press Search" empty state even though
+    // POST /search returned 200. The fix swaps router.replace for raw
+    // history.replaceState so the URL still updates without nuking the
+    // component tree.
+    await page.route("**/search", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          total: 0,
+          listings: [],
+          cache_status: "miss",
+          unsupported_filters: [],
+          source_health: {
+            craigslist: {
+              name: "craigslist",
+              status: "degraded",
+              last_successful_fetch: null,
+              last_error: "403 Forbidden",
+            },
+          },
+        }),
+      });
+    });
+
+    await page.goto("/");
+    // No filter touched. Click Search directly — this used to leave the
+    // screen stuck in idle.
+    await page.getByRole("button", { name: "Search", exact: true }).click();
+
+    await expect(
+      page.getByText("Source unavailable: craigslist"),
+    ).toBeVisible();
+    await expect(
+      page.getByText("Set filters and press Search to find listings."),
     ).toBeHidden();
   });
 

@@ -43,26 +43,22 @@ test.describe("Responsive layout", () => {
     ).toBeVisible();
   });
 
-  test("phone viewport: filter pane scrolls so the Search button is reachable", async ({
+  test("phone viewport: Search button is visible WITHOUT scrolling (sticky action row)", async ({
     page,
   }) => {
-    // Bug today: filtersStacked.maxHeight was "none", so the inner
-    // ScrollView grew to its content height, the page itself didn't scroll,
-    // and the Search button at the bottom of FilterPanel was below the
-    // viewport with no way to reach it. Reproduces at the same 414×800 the
-    // user was using.
+    // Original bug (PR #82): filtersStacked.maxHeight was "none", so the
+    // inner ScrollView grew past the viewport and Search was unreachable.
+    // PR #82 made it scrollable; today we go further — the Search/Reset
+    // action row is now pinned at the bottom of the FilterPanel rather
+    // than appended to the scroll body, so the user never has to discover
+    // scroll to reach it.
     await page.setViewportSize({ width: 414, height: 800 });
     await page.goto("/");
     await page.getByRole("button", { name: "Show filters" }).click();
 
     const search = page.getByRole("button", { name: "Search", exact: true });
-    // The Search button is in the DOM but, before scrolling, sits below
-    // the viewport. `scrollIntoViewIfNeeded` walks up to the *scrollable*
-    // ancestor and scrolls it — which only succeeds when one exists with a
-    // bounded height. (With maxHeight:"none" the chain has no scrollable
-    // ancestor and this would time out.)
-    await search.scrollIntoViewIfNeeded();
     await expect(search).toBeVisible();
+    // Visible at the initial scroll position — no manual scroll needed.
     const box = await search.boundingBox();
     expect(box).not.toBeNull();
     expect(box!.y + box!.height).toBeLessThanOrEqual(800);
