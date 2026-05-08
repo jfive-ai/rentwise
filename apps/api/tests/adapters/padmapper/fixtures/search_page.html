@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Apartments for Rent in Vancouver, BC | Test Fixture</title>
+</head>
+<body>
+  <header>
+    <h1>Apartments in Vancouver, BC</h1>
+  </header>
+  <main>
+    <!--
+      Synthetic fixture used by tests. Real PadMapper search results render
+      client-side and are not represented here. The current scaffold's
+      _extract() returns []; tests assert that contract. When real
+      selectors land, this fixture will be replaced with a snippet of the
+      rendered DOM (no verbatim long descriptions, no re-hosted photos).
+    -->
+    <section data-testid="results">
+      <article data-testid="listing-card">
+        <a href="/rentals/test-listing-1">
+          <h2>Test Listing 1</h2>
+          <span data-testid="price">$2,500</span>
+          <span data-testid="beds">2 bd</span>
+          <span data-testid="address">1234 Test St, Vancouver, BC</span>
+        </a>
+      </article>
+      <article data-testid="listing-card">
+        <a href="/buildings/test-building-1">
+          <h2>Test Building 1</h2>
+          <span data-testid="price">$3,000</span>
+          <span data-testid="beds">3 bd</span>
+          <span data-testid="address">5678 Sample Ave, Vancouver, BC</span>
+        </a>
+      </article>
+    </section>
+  </main>
+</body>
+</html>
