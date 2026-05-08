@@ -127,14 +127,17 @@ describe("mode + nlText", () => {
     expect(result.current.mode).toBe("nl");
   });
 
-  it("filters→nl clears nlText (no fake sentence)", () => {
+  it("preserves nlText across mode toggles", () => {
+    // Issue #88: previously this provider cleared nlText on every transition
+    // into NL mode, which destroyed the user's typed query when they bounced
+    // out to Filters and back. The text is now preserved end-to-end so the
+    // user's draft survives a quick mode switch.
     const { result } = renderHook(() => useQuery(), { wrapper: QueryProvider });
     act(() => result.current.setMode("nl"));
     act(() => result.current.setNlText("키츠 2베드"));
     act(() => result.current.setMode("filters"));
     act(() => result.current.setMode("nl"));
-    // re-entered NL mode after filter mode → nlText cleared per spec
-    expect(result.current.nlText).toBe("");
+    expect(result.current.nlText).toBe("키츠 2베드");
   });
 
   it("nl→filters preserves structured query", () => {

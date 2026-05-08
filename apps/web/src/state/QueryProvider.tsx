@@ -66,9 +66,6 @@ export function QueryProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const setMode = useCallback((next: Mode) => {
-    // Spec: every NL-mode entry starts with a clean text box (don't fake a
-    // sentence from existing filters). The structured query is preserved.
-    if (next === "nl") setNlText("");
     setModeRaw(next);
   }, []);
 
