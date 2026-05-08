@@ -135,11 +135,6 @@ export interface LLMConnectionTestResult {
   model_used: string;
 }
 
-export interface CapturePairResponse {
-  token: string;
-  server_url: string;
-}
-
 // --- Phase 5 PR-A: saved searches ---
 
 export interface SaveSearchRequest {

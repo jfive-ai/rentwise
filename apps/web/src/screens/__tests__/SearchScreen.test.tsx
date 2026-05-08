@@ -365,7 +365,7 @@ describe("SearchScreen", () => {
     const { getByText } = renderScreen();
     // Auto-search runs; results render without us pressing Search.
     await waitFor(() => expect(getByText("5 listings")).toBeTruthy());
-    // Find the /search call (skip /capture/pair etc) and check its query body.
+    // Find the /search call and check its query body.
     const searchCall = (global.fetch as jest.Mock).mock.calls.find(
       (c) => (c[0] as string).endsWith("/search"),
     )!;

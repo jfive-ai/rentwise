@@ -22,12 +22,10 @@ test("filter search renders results, switches view, saves a card", async ({ page
   await page.getByLabel("School catchment").fill("Lord Byng");
   await page.getByLabel("Transit walk minutes").fill("10");
 
-  // Search — use exact: true so PR-C's "Search across sources (6 sites)"
-  // launcher button doesn't also match this selector.
+  // Search — exact: true so the split-view default doesn't double-match
+  // against MapView's "N listings have no location…" footer.
   await page.getByRole("button", { name: "Search", exact: true }).click();
 
-  // exact: true so PR-C-1's split-view default doesn't double-match against
-  // MapView's "N listings have no location…" footer.
   await expect(page.getByText("5 listings", { exact: true })).toBeVisible();
 
   // 5 cards visible
