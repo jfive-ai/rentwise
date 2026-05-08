@@ -1,6 +1,6 @@
 #!/usr/bin/env sh
 set -e
 mkdir -p /app/data
-echo "Running alembic upgrade head..."
-alembic upgrade head
+# Migrations are applied by the app on startup (see rentwise.main._auto_migrate).
+# Set RENTWISE_AUTO_MIGRATE=false to disable.
 exec uvicorn rentwise.main:app --host 0.0.0.0 --port 8000
