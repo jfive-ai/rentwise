@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Pressable,
@@ -9,6 +9,12 @@ import {
 } from "react-native";
 import { ApiError, searchClient } from "@/src/api/client";
 import { useQuery } from "@/src/state/QueryProvider";
+import {
+  addEntry as addHistoryEntry,
+  clearHistory as clearHistoryEntries,
+  loadHistory,
+  removeEntry as removeHistoryEntry,
+} from "@/src/storage/nlSearchHistory";
 import { useTheme } from "@/src/theme";
 
 interface Props {
@@ -37,6 +43,31 @@ export function NLSearchBar({ apiBaseUrl }: Props) {
   const client = useMemo(() => searchClient(apiBaseUrl), [apiBaseUrl]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [history, setHistory] = useState<string[]>([]);
+  const [historyOpen, setHistoryOpen] = useState(false);
+
+  // Restore the most recent NL query on mount, but only if the user hasn't
+  // already started typing in this session. The provider lives above the
+  // mode-toggle, so nlText may already be non-empty when we mount inside
+  // the NL pane after a parse round-trip. We read nlText through a ref so
+  // a fast typist who started before loadHistory resolves doesn't get their
+  // input clobbered by the captured initial value.
+  const restoredRef = useRef(false);
+  const nlTextRef = useRef(nlText);
+  useEffect(() => {
+    nlTextRef.current = nlText;
+  }, [nlText]);
+  useEffect(() => {
+    void loadHistory().then((list) => {
+      setHistory(list);
+      if (restoredRef.current) return;
+      restoredRef.current = true;
+      if (list[0] && !nlTextRef.current) setNlText(list[0]);
+    });
+    // Mount-only: restore is a one-shot. Subsequent updates flow through
+    // setHistory in onParse / onRemoveHistory.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const onParse = useCallback(async () => {
     const text = nlText.trim();
@@ -49,6 +80,8 @@ export function NLSearchBar({ apiBaseUrl }: Props) {
       // only what the LLM parsed, not stale filters from a previous mode.
       reset();
       set(result.query);
+      const next = await addHistoryEntry(text);
+      setHistory(next);
     } catch (e) {
       setError(`LLM unavailable: ${extractErrorDetail(e)}`);
     } finally {
@@ -60,6 +93,23 @@ export function NLSearchBar({ apiBaseUrl }: Props) {
     setError(null);
     setMode("filters");
   }, [setMode]);
+
+  const onPickHistory = useCallback(
+    (text: string) => {
+      setNlText(text);
+    },
+    [setNlText],
+  );
+
+  const onRemoveHistory = useCallback(async (text: string) => {
+    const next = await removeHistoryEntry(text);
+    setHistory(next);
+  }, []);
+
+  const onClearHistory = useCallback(async () => {
+    await clearHistoryEntries();
+    setHistory([]);
+  }, []);
 
   // Only block on in-flight requests. The empty-text guard lives in onParse
   // (so a press with empty input is a silent no-op). Coupling `disabled` to
@@ -121,6 +171,66 @@ export function NLSearchBar({ apiBaseUrl }: Props) {
           </View>
         </View>
       ) : null}
+
+      {history.length > 0 ? (
+        <View style={styles.historyWrap}>
+          <View style={styles.historyHeader}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityState={{ expanded: historyOpen }}
+              accessibilityLabel={
+                historyOpen ? "Hide recent searches" : "Show recent searches"
+              }
+              onPress={() => setHistoryOpen((open) => !open)}
+              style={styles.historyToggle}
+            >
+              <Text style={{ color: t.textMuted, fontWeight: "600" }}>
+                {historyOpen ? "Recent searches ▴" : `Recent searches (${history.length}) ▾`}
+              </Text>
+            </Pressable>
+            {historyOpen ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Clear all recent searches"
+                onPress={() => void onClearHistory()}
+                style={styles.historyClear}
+              >
+                <Text style={{ color: t.textMuted, fontSize: 12 }}>Clear all</Text>
+              </Pressable>
+            ) : null}
+          </View>
+          {historyOpen ? (
+            <View style={styles.historyList}>
+              {history.map((entry) => (
+                <View
+                  key={entry}
+                  style={[styles.historyRow, { borderColor: t.border }]}
+                >
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={`Use search: ${entry}`}
+                    onPress={() => onPickHistory(entry)}
+                    style={styles.historyText}
+                  >
+                    <Text style={{ color: t.text }} numberOfLines={2}>
+                      {entry}
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={`Remove search: ${entry}`}
+                    onPress={() => void onRemoveHistory(entry)}
+                    style={styles.historyRemove}
+                    hitSlop={8}
+                  >
+                    <Text style={{ color: t.textMuted, fontSize: 16 }}>×</Text>
+                  </Pressable>
+                </View>
+              ))}
+            </View>
+          ) : null}
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -146,5 +256,30 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 6,
     borderWidth: 1,
+  },
+  historyWrap: { marginTop: 4, gap: 6 },
+  historyHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  historyToggle: { paddingVertical: 4 },
+  historyClear: { paddingVertical: 4, paddingHorizontal: 6 },
+  historyList: { gap: 4 },
+  historyRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderWidth: 1,
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    gap: 6,
+  },
+  historyText: { flex: 1, paddingVertical: 2 },
+  historyRemove: {
+    width: 24,
+    height: 24,
+    alignItems: "center",
+    justifyContent: "center",
   },
 });
