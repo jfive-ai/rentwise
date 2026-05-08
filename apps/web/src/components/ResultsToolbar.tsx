@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import type { SortOrder } from "@/src/api/types";
 import { useTheme } from "@/src/theme";
 
-export type ViewMode = "cards" | "list" | "map";
+export type ViewMode = "cards" | "list" | "map" | "split";
 
 const SORT_LABEL: Record<SortOrder, string> = {
   newest: "Newest",
@@ -82,7 +82,7 @@ export function ResultsToolbar({
           <ViewBtn label="Cards" active={view === "cards"} onPress={() => onViewChange("cards")} />
           <ViewBtn label="List" active={view === "list"} onPress={() => onViewChange("list")} />
           <ViewBtn label="Map" active={view === "map"} onPress={() => onViewChange("map")} />
-          <ViewBtnDisabled label="Split" phase="Phase 7 PR-B" />
+          <ViewBtn label="Split" active={view === "split"} onPress={() => onViewChange("split")} />
         </View>
       </View>
     </View>
@@ -100,21 +100,6 @@ function ViewBtn({ label, active, onPress }: { label: string; active: boolean; o
     >
       <Text style={{ color: active ? "#fff" : t.text }}>{label}</Text>
     </Pressable>
-  );
-}
-
-function ViewBtnDisabled({ label, phase }: { label: string; phase: string }) {
-  const t = useTheme();
-  return (
-    <View
-      accessible
-      accessibilityRole="button"
-      accessibilityLabel={`${label} view (${phase})`}
-      accessibilityState={{ disabled: true }}
-      style={[styles.btn, { borderColor: t.border, opacity: 0.4 }]}
-    >
-      <Text style={{ color: t.disabled }}>{label}</Text>
-    </View>
   );
 }
 

@@ -46,4 +46,42 @@ describe("ListingTable", () => {
     expect(getByText("$2,000")).toBeTruthy();
     expect(getByText("$3,000")).toBeTruthy();
   });
+
+  it("calls onSelectListing when a row is pressed", () => {
+    const onSelect = jest.fn();
+    const { getByLabelText } = render(
+      <ListingTable
+        listings={rows}
+        sort="newest"
+        onSortChange={jest.fn()}
+        actions={{}}
+        onAction={jest.fn()}
+        onSelectListing={onSelect}
+      />,
+    );
+    fireEvent.press(getByLabelText("Select A row"));
+    expect(onSelect).toHaveBeenCalledWith("a");
+  });
+
+  it("highlights the selected row via accessibilityState", () => {
+    const { getByLabelText } = render(
+      <ListingTable
+        listings={rows}
+        sort="newest"
+        onSortChange={jest.fn()}
+        actions={{}}
+        onAction={jest.fn()}
+        selectedListingId="b"
+      />,
+    );
+    // The row with id "b" should have a non-transparent backgroundColor in
+    // its computed style — selection paints surfaceAlt; unselected rows are
+    // transparent. We only assert the visual difference via the style array.
+    const selected = getByLabelText("Select B row");
+    const unselected = getByLabelText("Select A row");
+    const flatten = (s: unknown): Record<string, unknown> =>
+      Array.isArray(s) ? Object.assign({}, ...s.map(flatten)) : (s as Record<string, unknown>) ?? {};
+    expect(flatten(selected.props.style).backgroundColor).not.toBe("transparent");
+    expect(flatten(unselected.props.style).backgroundColor).toBe("transparent");
+  });
 });

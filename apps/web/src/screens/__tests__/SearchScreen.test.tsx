@@ -279,6 +279,17 @@ describe("SearchScreen", () => {
     expect(queryByText("↗ rentals_ca")).toBeNull();
   });
 
+  it("Split view renders both the map pane and the list rows", async () => {
+    const { getByText, getByLabelText, findAllByText, queryByText } = renderScreen();
+    fireEvent.press(getByText("Search"));
+    await waitFor(() => expect(getByText("5 listings")).toBeTruthy());
+    fireEvent.press(getByLabelText("Split view"));
+    // List rows still render
+    expect((await findAllByText("$2,800")).length).toBeGreaterThan(0);
+    // The pre-search empty state should be gone
+    expect(queryByText(/Set filters and press Search/i)).toBeNull();
+  });
+
   it("rapid Search clicks: only the latest response wins", async () => {
     // First call: slow, returns total=99 (stale)
     let resolveFirst: ((v: unknown) => void) | undefined;
