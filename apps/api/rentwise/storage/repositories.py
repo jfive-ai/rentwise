@@ -12,7 +12,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from rentwise.models import AdapterHealth, NormalizedListing, SchoolCatchments
-from rentwise.storage.models import Listing, Search, SourceHealthRow
+from rentwise.storage.models import GeocodeCacheRow, Listing, Search, SourceHealthRow
 
 
 def _now_iso() -> str:
@@ -344,3 +344,76 @@ class SourceHealthRepo:
                 row.last_error_message = error
                 row.consecutive_failures += 1
         await self.session.flush()
+
+
+# ---------------------------------------------------------------------------
+# GeocodeCacheRepo (Phase 4 PR-A)
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class GeocodeCacheEntry:
+    address_key: str
+    lat: float | None
+    lon: float | None
+    provider: str
+    fetched_at: str  # ISO8601
+    stale_after: str  # ISO8601
+
+
+class GeocodeCacheRepo:
+    """Persistent cache for geocoder lookups.
+
+    A row exists for every address we've asked the geocoder about, including
+    *negative* results (lat / lon both null). That keeps us from hammering
+    Nominatim repeatedly for addresses it can't resolve. ``stale_after`` lets
+    callers decide whether to trust a cached row or refresh.
+    """
+
+    def __init__(self, session: AsyncSession) -> None:
+        self.session = session
+
+    async def get(self, address_key: str) -> GeocodeCacheEntry | None:
+        row = await self.session.get(GeocodeCacheRow, address_key)
+        if row is None:
+            return None
+        return GeocodeCacheEntry(
+            address_key=row.address_key,
+            lat=row.lat,
+            lon=row.lon,
+            provider=row.provider,
+            fetched_at=row.fetched_at,
+            stale_after=row.stale_after,
+        )
+
+    async def upsert(self, entry: GeocodeCacheEntry) -> None:
+        existing = await self.session.get(GeocodeCacheRow, entry.address_key)
+        if existing is None:
+            self.session.add(
+                GeocodeCacheRow(
+                    address_key=entry.address_key,
+                    lat=entry.lat,
+                    lon=entry.lon,
+                    provider=entry.provider,
+                    fetched_at=entry.fetched_at,
+                    stale_after=entry.stale_after,
+                )
+            )
+        else:
+            existing.lat = entry.lat
+            existing.lon = entry.lon
+            existing.provider = entry.provider
+            existing.fetched_at = entry.fetched_at
+            existing.stale_after = entry.stale_after
+        await self.session.flush()
+
+    @staticmethod
+    def is_stale(entry: GeocodeCacheEntry, *, now: datetime | None = None) -> bool:
+        """True if ``entry.stale_after`` is in the past relative to ``now``."""
+        moment = now or datetime.now(UTC)
+        try:
+            cutoff = datetime.fromisoformat(entry.stale_after)
+        except ValueError:
+            # Unparseable cutoff → treat as stale so we re-fetch.
+            return True
+        return moment >= cutoff

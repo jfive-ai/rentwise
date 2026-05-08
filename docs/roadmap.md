@@ -81,11 +81,14 @@
 ## Phase 4: Deduplication & Enrichment (Week 7)
 **Goal:** Useful, clean results.
 
-- [ ] Address normalization (using `libpostal` or similar)
-- [ ] Photo perceptual hashing (`imagehash`)
-- [ ] Dedup matching algorithm + confidence scoring
-- [ ] School catchment lookup (VSB shapefiles)
-- [ ] Transit lookup (TransLink GTFS or Google Maps API)
+- [x] Address normalization (`pyap`; upgrade to `libpostal` when we go multi-city) — PR-A
+- [x] Geocoding (Nominatim) + persistent geocode cache — PR-A
+- [ ] Photo perceptual hashing (`imagehash`) — PR-C
+- [ ] Dedup matching algorithm + confidence scoring — PR-C
+- [ ] School catchment lookup (VSB shapefiles) — PR-B
+- [ ] Transit lookup (TransLink GTFS) — PR-B
+- [ ] Filters: `school_catchment` + `transit_max_walk_minutes` wired through `/search` — PR-B
+- [ ] UI polish: school chip, transit slider, "duplicate of …" affordance — PR-D
 - [ ] **Milestone:** "2br in Lord Byng catchment" works correctly
 
 ## Phase 5: Saved Searches & Alerts (Week 8)
