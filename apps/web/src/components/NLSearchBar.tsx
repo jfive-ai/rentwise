@@ -7,12 +7,28 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { searchClient } from "@/src/api/client";
+import { ApiError, searchClient } from "@/src/api/client";
 import { useQuery } from "@/src/state/QueryProvider";
 import { useTheme } from "@/src/theme";
 
 interface Props {
   apiBaseUrl: string;
+}
+
+function extractErrorDetail(e: unknown): string {
+  if (e instanceof ApiError) {
+    // FastAPI shape: { detail: { error, message } } — show the message so
+    // the user can see *why* (e.g. "OpenRouter 401: No cookie auth credentials").
+    const payload = e.payload as
+      | { detail?: { message?: string } | string }
+      | undefined;
+    if (payload && typeof payload.detail === "object" && payload.detail?.message) {
+      return payload.detail.message;
+    }
+    if (typeof payload?.detail === "string") return payload.detail;
+    return e.status === 0 ? e.message : `HTTP ${e.status}`;
+  }
+  return e instanceof Error ? e.message : String(e);
 }
 
 export function NLSearchBar({ apiBaseUrl }: Props) {
@@ -33,15 +49,17 @@ export function NLSearchBar({ apiBaseUrl }: Props) {
       // only what the LLM parsed, not stale filters from a previous mode.
       reset();
       set(result.query);
-    } catch {
-      setError(
-        "LLM unavailable — switched to filter mode. Try again or use the filter UI."
-      );
-      setMode("filters");
+    } catch (e) {
+      setError(`LLM unavailable: ${extractErrorDetail(e)}`);
     } finally {
       setBusy(false);
     }
-  }, [client, nlText, reset, set, setMode]);
+  }, [client, nlText, reset, set]);
+
+  const onSwitchToFilters = useCallback(() => {
+    setError(null);
+    setMode("filters");
+  }, [setMode]);
 
   // Only block on in-flight requests. The empty-text guard lives in onParse
   // (so a press with empty input is a silent no-op). Coupling `disabled` to
@@ -87,7 +105,22 @@ export function NLSearchBar({ apiBaseUrl }: Props) {
           )}
         </Pressable>
       </View>
-      {error ? <Text style={[styles.error, { color: "#c00" }]}>{error}</Text> : null}
+      {error ? (
+        <View style={styles.errorWrap}>
+          <Text style={[styles.error, { color: "#c00" }]} accessibilityRole="alert">
+            {error}
+          </Text>
+          <View style={styles.errorActions}>
+            <Pressable
+              accessibilityRole="button"
+              onPress={onSwitchToFilters}
+              style={[styles.linkBtn, { borderColor: t.border }]}
+            >
+              <Text style={{ color: t.text }}>Use filter mode</Text>
+            </Pressable>
+          </View>
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -105,5 +138,13 @@ const styles = StyleSheet.create({
   btnInner: { flexDirection: "row", alignItems: "center", gap: 6 },
   parseBtn: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 6 },
   parseBtnText: { color: "#fff", fontWeight: "600" },
-  error: { marginTop: 4, fontSize: 13 },
+  errorWrap: { marginTop: 4, gap: 6 },
+  error: { fontSize: 13 },
+  errorActions: { flexDirection: "row", gap: 8 },
+  linkBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 6,
+    borderWidth: 1,
+  },
 });
