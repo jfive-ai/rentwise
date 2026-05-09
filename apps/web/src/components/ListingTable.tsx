@@ -7,6 +7,52 @@ import { useTheme } from "@/src/theme";
 
 const ROW_HEIGHT = 56;
 
+// Each sortable column has a default direction (the one chosen on the
+// first click) and a paired opposite direction (used when the user
+// clicks the already-active column to toggle).
+const COLUMN_SORTS: Record<
+  "title" | "price" | "bedrooms" | "source",
+  { default: SortOrder; opposite: SortOrder; matches: SortOrder[] }
+> = {
+  title: {
+    default: "title_asc",
+    opposite: "title_desc",
+    matches: ["title_asc", "title_desc"],
+  },
+  price: {
+    default: "price_asc",
+    opposite: "price_desc",
+    matches: ["price_asc", "price_desc"],
+  },
+  bedrooms: {
+    default: "bedrooms_desc",
+    opposite: "bedrooms_asc",
+    // The legacy "bedrooms" alias maps to bedrooms_desc.
+    matches: ["bedrooms_asc", "bedrooms_desc", "bedrooms"],
+  },
+  source: {
+    default: "source_asc",
+    opposite: "source_desc",
+    matches: ["source_asc", "source_desc"],
+  },
+};
+
+function nextForColumn(col: keyof typeof COLUMN_SORTS, current: SortOrder): SortOrder {
+  const cfg = COLUMN_SORTS[col];
+  if (!cfg.matches.includes(current)) return cfg.default;
+  // Active column: flip direction. Treat the legacy "bedrooms" alias as
+  // bedrooms_desc when computing the flip.
+  const normalized = current === "bedrooms" ? "bedrooms_desc" : current;
+  return normalized === cfg.default ? cfg.opposite : cfg.default;
+}
+
+function arrowFor(col: keyof typeof COLUMN_SORTS, current: SortOrder): string {
+  const cfg = COLUMN_SORTS[col];
+  if (!cfg.matches.includes(current)) return "";
+  const normalized = current === "bedrooms" ? "bedrooms_desc" : current;
+  return normalized.endsWith("_asc") ? " ↑" : " ↓";
+}
+
 interface Props {
   listings: NormalizedListing[];
   sort: SortOrder;
@@ -34,10 +80,30 @@ export function ListingTable({
   return (
     <View style={[styles.wrap, { borderColor: t.border, backgroundColor: t.surface }]}>
       <View style={[styles.headerRow, { borderColor: t.border }]}>
-        <Header label="Title" />
-        <Header label="Price" sortKey="price_asc" sort={sort} onPress={() => onSortChange("price_asc")} />
-        <Header label="Beds" sortKey="bedrooms" sort={sort} onPress={() => onSortChange("bedrooms")} />
-        <Header label="Source" />
+        <Header
+          label="Title"
+          column="title"
+          sort={sort}
+          onPress={() => onSortChange(nextForColumn("title", sort))}
+        />
+        <Header
+          label="Price"
+          column="price"
+          sort={sort}
+          onPress={() => onSortChange(nextForColumn("price", sort))}
+        />
+        <Header
+          label="Beds"
+          column="bedrooms"
+          sort={sort}
+          onPress={() => onSortChange(nextForColumn("bedrooms", sort))}
+        />
+        <Header
+          label="Source"
+          column="source"
+          sort={sort}
+          onPress={() => onSortChange(nextForColumn("source", sort))}
+        />
         <Header label="" />
       </View>
       <FlatList
@@ -60,14 +126,32 @@ export function ListingTable({
 }
 
 function Header({
-  label, sortKey, sort, onPress,
-}: { label: string; sortKey?: SortOrder; sort?: SortOrder; onPress?: () => void }) {
+  label,
+  column,
+  sort,
+  onPress,
+}: {
+  label: string;
+  column?: keyof typeof COLUMN_SORTS;
+  sort?: SortOrder;
+  onPress?: () => void;
+}) {
   const t = useTheme();
-  const active = sortKey && sort === sortKey;
+  const active = !!(column && sort && COLUMN_SORTS[column].matches.includes(sort));
+  const arrow = column && sort ? arrowFor(column, sort) : "";
   if (onPress) {
     return (
-      <Pressable accessibilityRole="button" onPress={onPress} style={styles.cell}>
-        <Text style={{ color: active ? t.accent : t.textMuted, fontWeight: "600" }}>{label}</Text>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`Sort by ${label}`}
+        accessibilityState={{ selected: active }}
+        onPress={onPress}
+        style={styles.cell}
+      >
+        <Text style={{ color: active ? t.accent : t.textMuted, fontWeight: "600" }}>
+          {label}
+          {arrow}
+        </Text>
       </Pressable>
     );
   }

@@ -67,4 +67,16 @@ def test_search_response_contract():
 
 
 def test_sort_order_values():
-    assert {s.value for s in SortOrder} == {"newest", "price_asc", "price_desc", "bedrooms"}
+    assert {s.value for s in SortOrder} == {
+        "newest",
+        "price_asc",
+        "price_desc",
+        "bedrooms_asc",
+        "bedrooms_desc",
+        # Legacy alias kept for already-shared URLs.
+        "bedrooms",
+        "title_asc",
+        "title_desc",
+        "source_asc",
+        "source_desc",
+    }

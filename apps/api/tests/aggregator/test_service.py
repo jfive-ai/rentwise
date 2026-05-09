@@ -163,6 +163,113 @@ async def test_sort_price_asc(session):
 
 
 @pytest.mark.asyncio
+async def test_sort_title_and_source_and_bedrooms_directions(session):
+    adapter = FakeAdapter(
+        listings=[
+            RawListing(
+                source="zumper",
+                source_url=HttpUrl("https://x/c"),
+                source_listing_id="c",
+                title="Cozy condo",
+                bedrooms=1,
+                price_cad=2000,
+                posted_at=datetime.now(UTC),
+            ),
+            RawListing(
+                source="craigslist",
+                source_url=HttpUrl("https://x/a"),
+                source_listing_id="a",
+                title="Apple loft",
+                bedrooms=3,
+                price_cad=2500,
+                posted_at=datetime.now(UTC),
+            ),
+            RawListing(
+                source="padmapper",
+                source_url=HttpUrl("https://x/b"),
+                source_listing_id="b",
+                title="Bright suite",
+                bedrooms=2,
+                price_cad=2200,
+                posted_at=datetime.now(UTC),
+            ),
+        ]
+    )
+    svc = AggregatorService(adapters=[adapter], session=session, cache_ttl_seconds=900)
+
+    resp = await svc.search(
+        SearchRequest(query=NormalizedQuery(), sort=SortOrder.TITLE_ASC)
+    )
+    assert [x.title for x in resp.listings] == ["Apple loft", "Bright suite", "Cozy condo"]
+
+    resp = await svc.search(
+        SearchRequest(
+            query=NormalizedQuery(), sort=SortOrder.TITLE_DESC, force_refresh=True
+        )
+    )
+    assert [x.title for x in resp.listings] == ["Cozy condo", "Bright suite", "Apple loft"]
+
+    resp = await svc.search(
+        SearchRequest(
+            query=NormalizedQuery(), sort=SortOrder.SOURCE_ASC, force_refresh=True
+        )
+    )
+    assert [x.source for x in resp.listings] == ["craigslist", "padmapper", "zumper"]
+
+    resp = await svc.search(
+        SearchRequest(
+            query=NormalizedQuery(), sort=SortOrder.SOURCE_DESC, force_refresh=True
+        )
+    )
+    assert [x.source for x in resp.listings] == ["zumper", "padmapper", "craigslist"]
+
+    resp = await svc.search(
+        SearchRequest(
+            query=NormalizedQuery(), sort=SortOrder.BEDROOMS_ASC, force_refresh=True
+        )
+    )
+    assert [x.bedrooms for x in resp.listings] == [1, 2, 3]
+
+    resp = await svc.search(
+        SearchRequest(
+            query=NormalizedQuery(), sort=SortOrder.BEDROOMS_DESC, force_refresh=True
+        )
+    )
+    assert [x.bedrooms for x in resp.listings] == [3, 2, 1]
+
+
+@pytest.mark.asyncio
+async def test_legacy_bedrooms_alias_sorts_descending(session):
+    """The legacy ?sort=bedrooms value (pre asc/desc split) must keep
+    sorting descending so older shared URLs don't break."""
+    adapter = FakeAdapter(
+        listings=[
+            RawListing(
+                source="craigslist",
+                source_url=HttpUrl("https://x/1"),
+                source_listing_id="1",
+                title="one",
+                bedrooms=1,
+                posted_at=datetime.now(UTC),
+            ),
+            RawListing(
+                source="craigslist",
+                source_url=HttpUrl("https://x/3"),
+                source_listing_id="3",
+                title="three",
+                bedrooms=3,
+                posted_at=datetime.now(UTC),
+            ),
+        ]
+    )
+    svc = AggregatorService(adapters=[adapter], session=session, cache_ttl_seconds=900)
+    resp = await svc.search(
+        SearchRequest(query=NormalizedQuery(), sort=SortOrder.BEDROOMS)
+    )
+    assert [x.bedrooms for x in resp.listings] == [3, 1]
+
+
+@pytest.mark.asyncio
 async def test_all_adapters_failing_does_not_poison_cache(session):
     """Regression: previously an all-fail run would write listing_ids=[] as fresh,
     masking the outage for the full TTL on the next call."""

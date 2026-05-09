@@ -28,15 +28,42 @@ describe("ListingTable", () => {
     expect(getByText("B row")).toBeTruthy();
   });
 
-  it("fires onSortChange when a sortable header is pressed", () => {
+  it("first click on each header picks that column's default direction", () => {
     const onSortChange = jest.fn();
-    const { getByText } = render(
+    const { getByLabelText } = render(
       <ListingTable listings={rows} sort="newest" onSortChange={onSortChange} actions={{}} onAction={jest.fn()} />
     );
-    fireEvent.press(getByText("Price"));
-    expect(onSortChange).toHaveBeenCalledWith("price_asc");
-    fireEvent.press(getByText("Beds"));
-    expect(onSortChange).toHaveBeenCalledWith("bedrooms");
+    fireEvent.press(getByLabelText("Sort by Title"));
+    expect(onSortChange).toHaveBeenLastCalledWith("title_asc");
+    fireEvent.press(getByLabelText("Sort by Price"));
+    expect(onSortChange).toHaveBeenLastCalledWith("price_asc");
+    fireEvent.press(getByLabelText("Sort by Beds"));
+    expect(onSortChange).toHaveBeenLastCalledWith("bedrooms_desc");
+    fireEvent.press(getByLabelText("Sort by Source"));
+    expect(onSortChange).toHaveBeenLastCalledWith("source_asc");
+  });
+
+  it("clicking the active column toggles its direction", () => {
+    const onSortChange = jest.fn();
+    const { getByLabelText, rerender } = render(
+      <ListingTable listings={rows} sort="price_asc" onSortChange={onSortChange} actions={{}} onAction={jest.fn()} />
+    );
+    fireEvent.press(getByLabelText("Sort by Price"));
+    expect(onSortChange).toHaveBeenLastCalledWith("price_desc");
+    rerender(
+      <ListingTable listings={rows} sort="price_desc" onSortChange={onSortChange} actions={{}} onAction={jest.fn()} />
+    );
+    fireEvent.press(getByLabelText("Sort by Price"));
+    expect(onSortChange).toHaveBeenLastCalledWith("price_asc");
+  });
+
+  it("treats the legacy 'bedrooms' alias as bedrooms_desc when toggling", () => {
+    const onSortChange = jest.fn();
+    const { getByLabelText } = render(
+      <ListingTable listings={rows} sort="bedrooms" onSortChange={onSortChange} actions={{}} onAction={jest.fn()} />
+    );
+    fireEvent.press(getByLabelText("Sort by Beds"));
+    expect(onSortChange).toHaveBeenLastCalledWith("bedrooms_asc");
   });
 
   it("renders price formatted with thousands separator", () => {

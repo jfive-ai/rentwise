@@ -41,6 +41,25 @@ from rentwise.storage.repositories import (
 log = structlog.get_logger(__name__)
 
 
+class _ReverseStr:
+    """Sort key that reverses string ordering. Used to sort title/source
+    descending without negating values (which doesn't work on strings)."""
+
+    __slots__ = ("s",)
+
+    def __init__(self, s: str) -> None:
+        self.s = s
+
+    def __lt__(self, other: _ReverseStr) -> bool:
+        return self.s > other.s
+
+    def __eq__(self, other: object) -> bool:
+        return isinstance(other, _ReverseStr) and self.s == other.s
+
+    def __hash__(self) -> int:
+        return hash(self.s)
+
+
 def _catchment_matches(listing: NormalizedListing, needle: str) -> bool:
     """True iff the listing should be kept for catchment query ``needle``.
 
@@ -383,14 +402,35 @@ class AggregatorService:
     def _sorted_paginated(
         self, listings: list[NormalizedListing], req: SearchRequest
     ) -> list[NormalizedListing]:
+        # NULL-handling philosophy: missing values sink to the bottom in both
+        # asc and desc directions, so toggling direction never resurfaces
+        # "—" rows above real data. Achieved via (is_null, value) tuples
+        # for asc, and (is_null, -value) for desc on numeric fields.
         def key(x: NormalizedListing) -> Any:
-            if req.sort == SortOrder.PRICE_ASC:
-                return (x.price_cad if x.price_cad is not None else 1 << 30,)
-            if req.sort == SortOrder.PRICE_DESC:
-                return (-(x.price_cad if x.price_cad is not None else 0),)
-            if req.sort == SortOrder.BEDROOMS:
-                return (-(x.bedrooms or 0),)
-            return (-(x.posted_at.timestamp()),)
+            s = req.sort
+            if s == SortOrder.PRICE_ASC:
+                p = x.price_cad
+                return (p is None, p if p is not None else 0)
+            if s == SortOrder.PRICE_DESC:
+                p = x.price_cad
+                return (p is None, -(p if p is not None else 0))
+            if s == SortOrder.BEDROOMS_ASC:
+                b = x.bedrooms
+                return (b is None, b if b is not None else 0)
+            if s in (SortOrder.BEDROOMS_DESC, SortOrder.BEDROOMS):
+                b = x.bedrooms
+                return (b is None, -(b if b is not None else 0))
+            if s == SortOrder.TITLE_ASC:
+                return (False, (x.title or "").casefold())
+            if s == SortOrder.TITLE_DESC:
+                # Negate via reverse mapping: tuple of inverted codepoints
+                # is awkward, so flip via secondary sort.
+                return (False, _ReverseStr((x.title or "").casefold()))
+            if s == SortOrder.SOURCE_ASC:
+                return (False, (x.source or "").casefold())
+            if s == SortOrder.SOURCE_DESC:
+                return (False, _ReverseStr((x.source or "").casefold()))
+            return (False, -(x.posted_at.timestamp()))
 
         ordered = sorted(listings, key=key)
         return ordered[req.offset : req.offset + req.limit]
