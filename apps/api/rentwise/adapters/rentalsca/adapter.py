@@ -227,6 +227,10 @@ class RentalsCaAdapter:
     base_url: str = _BASE_URL
     method: Literal["api", "rss", "browser"] = "browser"
     rate_limit_per_second: float = 0.5
+    # Scaffold flag (#94). Selectors only match the synthetic test
+    # fixture — live rentals.ca returns 403 to our UA via Cloudflare,
+    # so the parser hasn't been confirmed against rendered HTML.
+    is_extractor_calibrated: bool = False
 
     _capabilities: ClassVar[AdapterCapabilities] = {
         "supported_filters": {
