@@ -219,12 +219,9 @@ export function SearchScreen({ apiBaseUrl }: Props) {
         style={[
           styles.filters,
           stacked && styles.filtersStacked,
-          // FilterPanel's outer/actions split (commit 252e73d) needs a
-          // *definite* parent height so its flex:1 ScrollView can compress
-          // and leave the actions row visible. maxHeight alone doesn't
-          // count — without an explicit height the ScrollView grows to
-          // content and pushes Search below the viewport. Only apply when
-          // expanded; collapsed mode should hug the toggle.
+          // In stacked mode the wrapper hugs its toggle when collapsed
+          // and takes the full column when open so the pinned Search
+          // button is visible.
           stacked && filtersOpen && styles.filtersStackedOpen,
           { borderColor: t.border, backgroundColor: t.surface },
         ]}
@@ -282,7 +279,19 @@ export function SearchScreen({ apiBaseUrl }: Props) {
         ) : null}
       </View>
 
-      <ScrollView style={styles.results} contentContainerStyle={styles.resultsContent}>
+      <ScrollView
+        style={[
+          styles.results,
+          // When filters are open on narrow viewports they take the full
+          // column; hide results so the column doesn't try to share space
+          // (which would either squish the filter pane or hide the Search
+          // button below the viewport). Closing the filter restores
+          // results without unmounting — display:none preserves scroll
+          // position and any in-flight state.
+          stacked && filtersOpen && styles.resultsHiddenStacked,
+        ]}
+        contentContainerStyle={styles.resultsContent}
+      >
         <ResultsToolbar
           total={total}
           sort={sort}
@@ -423,20 +432,25 @@ export function SearchScreen({ apiBaseUrl }: Props) {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, flexDirection: "row", flexWrap: "wrap" },
+  // No flex-wrap: with wrap, a child that's naturally taller than the row
+  // (FilterPanel's full content) makes the row line grow to that
+  // content height, breaking alignSelf:stretch and pushing both the
+  // sidebar's Search button and the results' bottom past the
+  // viewport (where body's overflow:hidden clips them). Layout is
+  // already responsive via the stacked switch below.
+  root: { flex: 1, flexDirection: "row" },
   // Narrow viewports: stack filters above results, full width.
-  rootStacked: { flexDirection: "column", flexWrap: "nowrap" },
-  // alignSelf:"stretch" → the column inherits the row's cross-axis
-  // height so the inner ScrollView in FilterPanel has a bounded
-  // height to scroll within. maxHeight ties it to the viewport on
-  // web specifically (RN ignores the string units gracefully).
+  rootStacked: { flexDirection: "column" },
   filters: {
     width: 320,
     minWidth: 260,
     borderRightWidth: 1,
     alignSelf: "stretch",
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    maxHeight: ("100vh" as any),
+    // overflow:hidden lets the wrapper actually take the row's bounded
+    // height even when the inner FilterPanel's natural content is
+    // taller — without it, min-content keeps the wrapper at content
+    // height and overflow leaks out of the screen container.
+    overflow: "hidden",
   },
   filtersStacked: {
     width: "100%",
@@ -444,17 +458,14 @@ const styles = StyleSheet.create({
     borderRightWidth: 0,
     borderBottomWidth: 1,
     alignSelf: "auto",
-    // maxHeight is the belt: caps the wrapper at viewport-height-minus-
-    // header even if explicit height is somehow ignored.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    maxHeight: ("calc(100vh - 56px)" as any),
   },
-  // Suspenders: FilterPanel's flex:1 ScrollView needs a *definite* parent
-  // height to actually compress, otherwise the pinned action row sits
-  // beyond the viewport. Applied only in stacked+open mode.
+  // Stacked + open: take the full column so the FilterPanel's
+  // flex:1 ScrollView gets a definite parent height (and the pinned
+  // Search row stays on screen). Results is hidden in this state via
+  // resultsHiddenStacked so it doesn't fight for column space.
   filtersStackedOpen: {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    height: ("calc(100vh - 56px)" as any),
+    flex: 1,
+    minHeight: 0,
   },
   filtersToggle: {
     paddingHorizontal: 12,
@@ -466,7 +477,12 @@ const styles = StyleSheet.create({
   nlPane: { padding: 12, gap: 12 },
   searchBtn: { alignSelf: "flex-end", paddingHorizontal: 18, paddingVertical: 10, borderRadius: 8 },
   searchBtnInner: { flexDirection: "row", alignItems: "center", gap: 8 },
-  results: { flex: 1, minWidth: 320 },
+  // minHeight:0 lets the ScrollView shrink below its content so its own
+  // overflow:auto kicks in — without it, react-native-web's default
+  // min-height:auto keeps the ScrollView at content height and the
+  // results column overflows the screen container instead of scrolling.
+  results: { flex: 1, minWidth: 320, minHeight: 0 },
+  resultsHiddenStacked: { display: "none" },
   resultsContent: { padding: 16, gap: 16 },
   grid: { flexDirection: "row", flexWrap: "wrap", gap: 16 },
   loadMore: { alignSelf: "center", paddingHorizontal: 18, paddingVertical: 10, borderWidth: 1, borderRadius: 8 },

@@ -339,11 +339,12 @@ function toClampedMinutes(v: string): number | null {
 
 const styles = StyleSheet.create({
   // Outer wrapper hosts the ScrollView (flex: 1) and the pinned action
-  // row. The ScrollView's flex: 1 fills the remaining height after the
-  // action row reserves its share, so the action row never scrolls off
-  // screen.
-  outer: { flex: 1, flexDirection: "column" },
-  scroll: { flex: 1 },
+  // row. minHeight:0 is essential: without it, react-native-web's
+  // default min-height:auto resolves to min-content (the ScrollView's
+  // full content height), so the ScrollView refuses to shrink below
+  // its content and the actions row gets pushed past the viewport.
+  outer: { flex: 1, flexDirection: "column", minHeight: 0 },
+  scroll: { flex: 1, minHeight: 0 },
   wrap: { padding: 16, gap: 16 },
   section: { gap: 8 },
   sectionLabel: { fontSize: 12, fontWeight: "600", textTransform: "uppercase", letterSpacing: 0.6 },
