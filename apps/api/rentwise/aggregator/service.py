@@ -238,10 +238,25 @@ class AggregatorService:
         official_names = self.neighborhoods.resolve(neighborhoods_q) if neighborhoods_q else []
         official_set = {n.casefold() for n in official_names}
 
+        # If the user typed neighborhood names that all failed to resolve
+        # (typos, deprecated aliases, an unknown name in a saved query),
+        # the resolver returns []. Rather than silently dropping every
+        # listing — which would turn an unresolvable filter into a hard
+        # zero-result query — log a warning and skip the neighborhood
+        # filter entirely, matching the resolver's "unknown names dropped
+        # silently" semantics (Codex review #97).
+        skip_neighborhood_filter = bool(neighborhoods_q) and not official_set
+        if skip_neighborhood_filter:
+            log.warning(
+                "aggregator.neighborhood_filter_unresolvable",
+                requested=list(neighborhoods_q),
+                hint="all names failed to resolve; skipping the neighborhood filter",
+            )
+
         out: list[NormalizedListing] = []
         catchment_needle = catchment.casefold().strip() if isinstance(catchment, str) else None
         for listing in listings:
-            if neighborhoods_q:
+            if neighborhoods_q and not skip_neighborhood_filter:
                 if not self._listing_in_neighborhoods(listing, official_set):
                     continue
             if catchment_needle:

@@ -140,14 +140,21 @@ class NeighborhoodLookup:
     def lookup(self, lat: float | None, lon: float | None) -> str | None:
         """Return the official local-area name containing ``(lat, lon)``.
 
-        Returns ``None`` if either coord is missing or no polygon contains
+        Returns ``None`` if either coord is missing or no polygon covers
         the point (e.g. the listing is in Burnaby / Richmond / Coquitlam).
+
+        Uses ``covers`` rather than ``contains`` so points exactly on a
+        polygon boundary are still attributed to that polygon (Codex
+        review #97). Two adjacent polygons sharing a boundary will both
+        cover an on-boundary point — the iteration order picks the first
+        match, which is stable across runs because GeoJSON feature order
+        is preserved.
         """
         if lat is None or lon is None:
             return None
         point = Point(lon, lat)
         for a in self._areas:
-            if a.geom.contains(point):
+            if a.geom.covers(point):
                 return a.name
         return None
 
@@ -200,12 +207,13 @@ class NeighborhoodLookup:
 
         Returns ``False`` for missing coords (the caller decides whether
         to keep or drop those — same posture as transit-walk filtering).
+        ``covers`` is boundary-inclusive (Codex review #97).
         """
         if lat is None or lon is None:
             return False
         point = Point(lon, lat)
         for poly in self.polygons_for(names):
-            if poly.contains(point):
+            if poly.covers(point):
                 return True
         return False
 

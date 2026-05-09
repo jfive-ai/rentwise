@@ -96,3 +96,51 @@ def test_is_inside_any_missing_coords_false() -> None:
 def test_is_inside_any_no_names_false() -> None:
     nl = NeighborhoodLookup()
     assert nl.is_inside_any(49.255, -123.185, []) is False
+
+
+def test_lookup_includes_boundary_points() -> None:
+    """Point exactly on a polygon boundary must still resolve to that
+    polygon (Codex review #97). The original `contains` excluded
+    boundary points, so any address geocoded onto a centerline-aligned
+    border was attributed to neither neighborhood.
+
+    Construct a synthetic polygon and lookup against its corner +
+    edge midpoint — both should hit.
+    """
+    import json
+    import tempfile
+    from pathlib import Path
+
+    feature = {
+        "type": "FeatureCollection",
+        "features": [
+            {
+                "type": "Feature",
+                "properties": {"name": "TestArea"},
+                "geometry": {
+                    "type": "Polygon",
+                    "coordinates": [
+                        [
+                            [-123.20, 49.25],
+                            [-123.10, 49.25],
+                            [-123.10, 49.30],
+                            [-123.20, 49.30],
+                            [-123.20, 49.25],
+                        ]
+                    ],
+                },
+            }
+        ],
+    }
+    with tempfile.TemporaryDirectory() as tmp:
+        path = Path(tmp) / "test.geojson"
+        path.write_text(json.dumps(feature), encoding="utf-8")
+        nl = NeighborhoodLookup(geojson_path=path)
+        # Corner — boundary point.
+        assert nl.lookup(49.25, -123.20) == "TestArea"
+        # Edge midpoint — boundary point.
+        assert nl.lookup(49.275, -123.20) == "TestArea"
+        # Interior — control.
+        assert nl.lookup(49.275, -123.15) == "TestArea"
+        # Outside — control.
+        assert nl.lookup(49.20, -123.15) is None

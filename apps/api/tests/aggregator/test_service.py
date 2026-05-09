@@ -221,6 +221,28 @@ async def test_neighborhood_alias_point_grey_resolves(session):
 
 
 @pytest.mark.asyncio
+async def test_unresolvable_neighborhood_skips_filter_not_drops_all(session):
+    """When every requested name fails to resolve (typo, deprecated
+    alias, unknown name in a saved query), the filter is skipped rather
+    than dropping every listing — Codex review #97. The resolver
+    silently drops unknown names; the post-filter must follow suit
+    instead of turning an unresolvable filter into a hard zero-result
+    query.
+    """
+    in_dunbar = _raw_at(1, lat=49.255, lon=-123.185)
+    in_kits = _raw_at(2, lat=49.268, lon=-123.165)
+    adapter = FakeAdapter(listings=[in_dunbar, in_kits])
+    svc = AggregatorService(adapters=[adapter], session=session, cache_ttl_seconds=900)
+    resp = await svc.search(
+        SearchRequest(query=NormalizedQuery(neighborhoods=["Atlantis", "DunbarTypo"]))
+    )
+    await session.commit()
+    # Both listings survive — the filter was skipped because nothing
+    # resolved.
+    assert {x.source_listing_id for x in resp.listings} == {"1", "2"}
+
+
+@pytest.mark.asyncio
 async def test_all_adapters_failing_falls_back_to_stale_cache(session):
     """If a previous successful search left a stale cache, an all-fail run returns the stale
     listings tagged cache_status="stale" with degraded source_health — better than serving nothing."""
