@@ -2,7 +2,7 @@
 import React from "react";
 import { Platform } from "react-native";
 import { render } from "@testing-library/react-native";
-import { MapView } from "@/src/components/MapView";
+import { MapView, bboxOfFeatures } from "@/src/components/MapView";
 import type { NormalizedListing } from "@/src/api/types";
 
 function listing(id: string, overrides: Partial<NormalizedListing> = {}): NormalizedListing {
@@ -91,5 +91,86 @@ describe("MapView", () => {
       />,
     );
     expect(queryByText(/have no location/)).toBeNull();
+  });
+
+  // The auto-fit-to-neighborhoods integration (#101) calls
+  // `map.fitBounds(...)` after the polygon overlay loads. We can't
+  // exercise that path under jsdom because react-test-renderer doesn't
+  // attach the inner `<div>` ref to a real DOM node, so MapView's
+  // mount effect early-returns before constructing the (mocked) map.
+  // Coverage instead splits cleanly: the bbox math is unit-tested via
+  // the exported `bboxOfFeatures` helper below; the camera-fit
+  // integration is covered manually + by the Playwright smoke test.
+  describe("bboxOfFeatures (#101 helper)", () => {
+    it("computes the [W, S, E, N] bbox for a single polygon", () => {
+      const fc: GeoJSON.Feature[] = [
+        {
+          type: "Feature",
+          properties: {},
+          geometry: {
+            type: "Polygon",
+            coordinates: [
+              [
+                [-123.20, 49.235],
+                [-123.17, 49.235],
+                [-123.17, 49.265],
+                [-123.20, 49.265],
+                [-123.20, 49.235],
+              ],
+            ],
+          },
+        },
+      ];
+      expect(bboxOfFeatures(fc)).toEqual([-123.20, 49.235, -123.17, 49.265]);
+    });
+
+    it("unions multiple features (e.g. East Van's three polygons)", () => {
+      const fc: GeoJSON.Feature[] = [
+        {
+          type: "Feature",
+          properties: {},
+          geometry: {
+            type: "Polygon",
+            coordinates: [[[-123.10, 49.25], [-123.08, 49.25], [-123.08, 49.27], [-123.10, 49.27], [-123.10, 49.25]]],
+          },
+        },
+        {
+          type: "Feature",
+          properties: {},
+          geometry: {
+            type: "Polygon",
+            coordinates: [[[-123.06, 49.26], [-123.04, 49.26], [-123.04, 49.28], [-123.06, 49.28], [-123.06, 49.26]]],
+          },
+        },
+      ];
+      expect(bboxOfFeatures(fc)).toEqual([-123.10, 49.25, -123.04, 49.28]);
+    });
+
+    it("walks MultiPolygon coordinates", () => {
+      const fc: GeoJSON.Feature[] = [
+        {
+          type: "Feature",
+          properties: {},
+          geometry: {
+            type: "MultiPolygon",
+            coordinates: [
+              [[[-123.20, 49.23], [-123.18, 49.23], [-123.18, 49.25], [-123.20, 49.25], [-123.20, 49.23]]],
+              [[[-123.10, 49.27], [-123.08, 49.27], [-123.08, 49.29], [-123.10, 49.29], [-123.10, 49.27]]],
+            ],
+          },
+        },
+      ];
+      expect(bboxOfFeatures(fc)).toEqual([-123.20, 49.23, -123.08, 49.29]);
+    });
+
+    it("returns null for empty input or features without polygon geometry", () => {
+      expect(bboxOfFeatures([])).toBeNull();
+      const pointFeature: GeoJSON.Feature = {
+        type: "Feature",
+        properties: {},
+        geometry: { type: "Point", coordinates: [-123.1, 49.27] },
+      };
+      expect(bboxOfFeatures([pointFeature])).toBeNull();
+    });
   });
 });

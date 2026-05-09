@@ -15,6 +15,14 @@ jest.mock("react-native/Libraries/Animated/NativeAnimatedModule");
 jest.mock("maplibre-gl", () => {
   class FakeMap {
     private source: { setData: jest.Mock; getClusterExpansionZoom: jest.Mock } | null = null;
+    // No-op stubs so production code that calls these (highlight, fit
+    // bounds, etc.) doesn't throw under jsdom. The mount-effect that
+    // would actually invoke them never runs in react-test-renderer
+    // because the inner <div> ref doesn't bind, so these are guards
+    // only — tests cover the helpers directly.
+    fitBounds = jest.fn();
+    setLayoutProperty = jest.fn();
+    setPaintProperty = jest.fn();
     on(event: string, layerOrHandler: unknown, handler?: unknown) {
       // Fire the 'load' handler synchronously the moment the production
       // code registers it. That lets the inner addSource / addLayer /

@@ -148,4 +148,18 @@ describe("mode + nlText", () => {
     expect(result.current.query.bedrooms_min).toBe(2);
     expect(result.current.query.neighborhoods).toEqual(["Kitsilano"]);
   });
+
+  it("lastParsedNlText defaults empty and survives reset (#101)", () => {
+    // The bottom Search button compares `nlText` against `lastParsedNlText`
+    // to decide whether to re-translate. It's *NL state*, not filter
+    // state, so reset() (which clears the structured query) must not
+    // wipe it — that would force a redundant LLM call after every
+    // reset-and-edit cycle.
+    const { result } = renderHook(() => useQuery(), { wrapper: QueryProvider });
+    expect(result.current.lastParsedNlText).toBe("");
+    act(() => result.current.setLastParsedNlText("2 bedroom in Dunbar"));
+    expect(result.current.lastParsedNlText).toBe("2 bedroom in Dunbar");
+    act(() => result.current.reset());
+    expect(result.current.lastParsedNlText).toBe("2 bedroom in Dunbar");
+  });
 });
