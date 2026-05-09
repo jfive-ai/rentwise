@@ -1,10 +1,10 @@
 import React from "react";
 import { render, fireEvent } from "@testing-library/react-native";
-import * as Linking from "expo-linking";
 import { ListingCard } from "@/src/components/ListingCard";
 import type { NormalizedListing } from "@/src/api/types";
 
-jest.mock("expo-linking", () => ({ openURL: jest.fn().mockResolvedValue(undefined) }));
+jest.mock("@/src/lib/openUrl", () => ({ openExternalUrl: jest.fn() }));
+import { openExternalUrl } from "@/src/lib/openUrl";
 
 const listing: NormalizedListing = {
   id: "id-1",
@@ -69,12 +69,12 @@ describe("ListingCard", () => {
     expect(onAction).toHaveBeenCalledWith("saved", false);
   });
 
-  it("opens the source URL via Linking", () => {
+  it("opens the source URL via the platform-aware helper", () => {
     const { getByLabelText } = render(
       <ListingCard listing={listing} actions={{}} onAction={jest.fn()} />
     );
     fireEvent.press(getByLabelText("Open original"));
-    expect((Linking.openURL as jest.Mock)).toHaveBeenCalledWith("https://example.com/p/123");
+    expect((openExternalUrl as jest.Mock)).toHaveBeenCalledWith("https://example.com/p/123");
   });
 
   it("shows price as '—' when null", () => {
@@ -112,7 +112,7 @@ describe("ListingCard", () => {
     expect(getByText("↗ padmapper")).toBeTruthy();
 
     fireEvent.press(getByLabelText("Open rentals_ca"));
-    expect((Linking.openURL as jest.Mock)).toHaveBeenCalledWith("https://rentals.ca/p/2");
+    expect((openExternalUrl as jest.Mock)).toHaveBeenCalledWith("https://rentals.ca/p/2");
   });
 
   it("does not render the duplicate block when alternates is empty", () => {

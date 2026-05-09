@@ -11,6 +11,7 @@ from rentwise.adapters.base import SourceAdapter
 from rentwise.aggregator.service import AggregatorService
 from rentwise.dedup.service import DedupConfig, DedupService
 from rentwise.enrichment.geocode import Geocoder, NominatimGeocoder
+from rentwise.enrichment.neighborhoods import NeighborhoodLookup
 from rentwise.enrichment.photo_hash import HttpxPhotoHasher, PhotoHasher
 from rentwise.enrichment.service import EnrichmentConfig, EnrichmentService
 from rentwise.models import SearchRequest, SearchResponse
@@ -88,6 +89,12 @@ def _build_photo_hasher() -> PhotoHasher:
     )
 
 
+@lru_cache(maxsize=1)
+def _build_neighborhood_lookup() -> NeighborhoodLookup:
+    """Process-wide so the GeoJSON polygon set is parsed only once."""
+    return NeighborhoodLookup()
+
+
 def get_adapters() -> list[SourceAdapter]:
     """Override in tests via app.dependency_overrides[get_adapters]."""
     return list(_build_adapters())
@@ -103,6 +110,11 @@ def get_photo_hasher() -> PhotoHasher:
     return _build_photo_hasher()
 
 
+def get_neighborhood_lookup() -> NeighborhoodLookup:
+    """Override in tests via app.dependency_overrides[get_neighborhood_lookup]."""
+    return _build_neighborhood_lookup()
+
+
 def build_router() -> APIRouter:
     router = APIRouter()
 
@@ -113,6 +125,7 @@ def build_router() -> APIRouter:
         adapters: list[SourceAdapter] = Depends(get_adapters),
         geocoder: Geocoder = Depends(get_geocoder),
         photo_hasher: PhotoHasher = Depends(get_photo_hasher),
+        neighborhoods: NeighborhoodLookup = Depends(get_neighborhood_lookup),
     ) -> SearchResponse:
         try:
             enrichment = EnrichmentService(
@@ -124,6 +137,7 @@ def build_router() -> APIRouter:
                     photo_hash_enabled=settings.rentwise_photo_hash_enabled,
                     photo_hash_cache_ttl_days=settings.rentwise_photo_hash_cache_ttl_days,
                 ),
+                neighborhoods=neighborhoods,
                 photo_hasher=photo_hasher,
                 photo_hash_cache=PhotoHashCacheRepo(session),
             )
@@ -140,6 +154,7 @@ def build_router() -> APIRouter:
                 cache_ttl_seconds=settings.search_cache_ttl_seconds,
                 enrichment=enrichment,
                 dedup=dedup,
+                neighborhood_lookup=neighborhoods,
             )
             resp = await svc.search(request)
             await session.commit()

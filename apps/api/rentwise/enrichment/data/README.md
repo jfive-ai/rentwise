@@ -2,7 +2,7 @@
 
 These files are loaded at runtime by `enrichment/school_catchments.py`,
 `enrichment/transit.py`, and `enrichment/neighborhoods.py`. They split
-into two groups:
+into three groups:
 
 - **Real, committed**: `vancouver_local_areas.geojson` and
   `vancouver_schools.geojson` are official City of Vancouver Open Data
@@ -27,11 +27,25 @@ not an automated job — per the project's TOS posture
 Source: City of Vancouver Open Data — `local-area-boundary` dataset
 (<https://opendata.vancouver.ca/explore/dataset/local-area-boundary/>),
 licensed under the [Open Government Licence – Vancouver](https://opendata.vancouver.ca/page/licence/).
+Boundaries follow street centrelines and the City notes they are
+stable over time, so this file rarely needs refreshing.
 
 ```bash
 curl -s 'https://opendata.vancouver.ca/api/explore/v2.1/catalog/datasets/local-area-boundary/exports/geojson' \
   -o apps/api/rentwise/enrichment/data/vancouver_local_areas.geojson
 ```
+
+The schema invariant the loader assumes:
+
+- top-level is a `FeatureCollection`
+- each feature has a polygon geometry in WGS84 (EPSG:4326)
+- each feature has `properties.name` matching one of the official 22
+  local areas (`Dunbar-Southlands`, `West Point Grey`, `Kitsilano`, etc.)
+
+If the City re-publishes with a different `name` field, update the
+alias map in `enrichment/neighborhoods.py` rather than munging this
+file — the alias resolver is the right place for "what the user typed
+→ official name".
 
 ## Refreshing `vancouver_schools.geojson`
 
@@ -65,30 +79,6 @@ writes the result. Each feature carries `_source: "voronoi-from-school-points"`
 and a `_note` explaining the approximation — the file is **not** an
 authoritative VSB catchment map; it is a deterministic, public-data
 approximation that's significantly better than keyword matching.
-
-## Refreshing `vsb_catchments.geojson`
-
-Source: Vancouver School Board (VSB) catchment shapefiles.
-
-1. Download the elementary and secondary catchment shapefiles from
-   the [VSB GIS open data portal](https://www.vsb.bc.ca/) (or the
-   Vancouver Open Data portal — search for "school catchment").
-2. Convert each shapefile to GeoJSON and merge into one
-   `FeatureCollection` whose features have the properties
-   `level` (`"elementary"` | `"middle"` | `"secondary"`) and
-   `name` (e.g. `"Lord Byng"`).
-
-   ```bash
-   ogr2ogr -f GeoJSON -t_srs EPSG:4326 elementary.geojson VSB_Elementary.shp
-   ogr2ogr -f GeoJSON -t_srs EPSG:4326 secondary.geojson  VSB_Secondary.shp
-   ```
-
-   Then merge with `jq` or a quick Python script that adds the
-   `level` / `name` properties expected by the loader.
-3. Verify the resulting file is in WGS84 (EPSG:4326). The loader
-   assumes lat/lon coordinates.
-4. Replace this file and run `pytest tests/enrichment` to make sure
-   the catchment unit tests still pass with the new shape.
 
 ## Refreshing `translink_stops.json`
 

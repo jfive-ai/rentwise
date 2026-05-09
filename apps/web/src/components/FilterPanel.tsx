@@ -20,13 +20,36 @@ const BEDROOM_CHIPS = [
   { label: "4+", value: 4 },
 ];
 
+// Each label resolves to a City of Vancouver `local-area-boundary`
+// polygon on the backend (#92) — aliases like "Dunbar" → "Dunbar-Southlands"
+// and "Yaletown" → "Downtown" are handled by the resolver. Keep this
+// list in sync with `_NEIGHBORHOODS` in apps/api/rentwise/llm/prompts.py.
 export const NEIGHBORHOODS = [
-  "Coal Harbour", "Commercial Drive", "Downtown", "Dunbar",
-  "East Vancouver", "Fairview", "False Creek", "Gastown",
-  "Grandview-Woodland", "Kerrisdale", "Kitsilano", "Marpole",
-  "Mount Pleasant", "Oakridge", "Point Grey", "Riley Park",
-  "Shaughnessy", "South Cambie", "South Granville", "Strathcona",
-  "Sunset", "West End", "West Point Grey", "Yaletown",
+  "Arbutus Ridge",
+  "Coal Harbour",
+  "Commercial Drive",
+  "Downtown",
+  "Dunbar",
+  "East Vancouver",
+  "Fairview",
+  "False Creek",
+  "Gastown",
+  "Grandview-Woodland",
+  "Kerrisdale",
+  "Kitsilano",
+  "Marpole",
+  "Mount Pleasant",
+  "Oakridge",
+  "Point Grey",
+  "Riley Park",
+  "Shaughnessy",
+  "South Cambie",
+  "South Granville",
+  "Strathcona",
+  "Sunset",
+  "West End",
+  "West Point Grey",
+  "Yaletown",
 ];
 
 interface Props {

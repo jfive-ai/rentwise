@@ -95,3 +95,33 @@ def test_skytrain_stops_503_when_file_missing(monkeypatch, client):
     r = client.get("/map/overlays/skytrain-stops")
     assert r.status_code == 503
     assert r.json()["detail"] == "stops_unavailable"
+
+
+def test_neighborhoods_returns_feature_collection(client):
+    """The 22 City of Vancouver local-area polygons (#92)."""
+    r = client.get("/map/overlays/neighborhoods")
+    assert r.status_code == 200
+    assert r.headers["content-type"].startswith("application/geo+json")
+    assert "max-age=86400" in r.headers.get("cache-control", "")
+    body = r.json()
+    assert body["type"] == "FeatureCollection"
+    names = {f["properties"]["name"] for f in body["features"]}
+    assert "Dunbar-Southlands" in names
+    assert "West Point Grey" in names
+    assert "Kitsilano" in names
+    assert len(body["features"]) == 22
+
+
+def test_neighborhoods_503_when_file_missing(monkeypatch, client):
+    from pathlib import Path as _Path
+
+    from rentwise.http import map_overlays
+
+    monkeypatch.setattr(
+        map_overlays,
+        "DEFAULT_NEIGHBORHOODS_GEOJSON",
+        _Path("/tmp/rentwise-missing-neighborhoods.geojson"),
+    )
+    r = client.get("/map/overlays/neighborhoods")
+    assert r.status_code == 503
+    assert r.json()["detail"] == "neighborhoods_unavailable"
