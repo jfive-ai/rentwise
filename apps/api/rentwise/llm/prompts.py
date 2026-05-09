@@ -76,7 +76,14 @@ QUERY_TOOL_SCHEMA: dict[str, Any] = _build_query_tool_schema()
 # Must match `NEIGHBORHOODS` in apps/web/src/components/FilterPanel.tsx so that
 # NL parses produce queries equivalent to filter-form queries. If you edit one,
 # edit the other (or refactor both to read from a shared source of truth).
+#
+# Aligned with the City of Vancouver Open Data `local-area-boundary` names so
+# every label resolves to a polygon on the backend (#92). The backend's
+# `enrichment.neighborhoods` resolver also accepts common short forms
+# (e.g. "Dunbar" → "Dunbar-Southlands", "Point Grey" → "West Point Grey")
+# so the LLM can keep using user-friendly labels.
 _NEIGHBORHOODS = [
+    "Arbutus Ridge",
     "Coal Harbour",
     "Commercial Drive",
     "Downtown",

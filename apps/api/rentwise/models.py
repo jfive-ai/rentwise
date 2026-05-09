@@ -137,6 +137,14 @@ class NormalizedListing(BaseModel):
     description_snippet: str | None
 
     # Enrichment
+    neighborhood: str | None = Field(
+        default=None,
+        description=(
+            "Vancouver local-area name (per City of Vancouver Open Data) "
+            "containing this listing's geocoded coordinates. None if the "
+            "listing is unlocated or sits outside the City of Vancouver."
+        ),
+    )
     school_catchments: SchoolCatchments = Field(default_factory=SchoolCatchments)
     nearest_transit: TransitInfo | None = None
     walkscore: int | None = None

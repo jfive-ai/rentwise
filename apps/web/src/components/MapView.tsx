@@ -27,6 +27,7 @@ import {
   featureCollection,
   listingsToFeatures,
 } from "@/src/lib/mapClusters";
+import { expandNeighborhoodNames } from "@/src/lib/neighborhoods";
 import { useTheme } from "@/src/theme";
 
 const VANCOUVER_CENTER: [number, number] = [-123.12, 49.28];
@@ -41,6 +42,10 @@ const CATCHMENTS_FILL_LAYER = "rentwise-catchments-fill";
 const CATCHMENTS_LINE_LAYER = "rentwise-catchments-line";
 const SKYTRAIN_SOURCE = "rentwise-skytrain";
 const SKYTRAIN_LAYER = "rentwise-skytrain-radii";
+
+const NEIGHBORHOODS_SOURCE = "rentwise-neighborhoods";
+const NEIGHBORHOODS_FILL_LAYER = "rentwise-neighborhoods-fill";
+const NEIGHBORHOODS_LINE_LAYER = "rentwise-neighborhoods-line";
 
 export interface MapOverlaysToggle {
   catchments: boolean;
@@ -63,6 +68,12 @@ interface Props {
   /** Required when any overlay is enabled — same shape as the
    * `apiBaseUrl` SearchScreen receives. */
   apiBaseUrl?: string;
+  /** Names the user filtered on (e.g. ["Dunbar"]). When present, the
+   * matching City of Vancouver local-area polygons are highlighted on
+   * the map so the user can see exactly where the post-filter is
+   * confining results (#92). Free-form aliases are accepted; resolution
+   * to official names happens client-side. */
+  selectedNeighborhoods?: string[];
 }
 
 export function MapView(props: Props) {
@@ -91,6 +102,7 @@ function MapViewWeb({
   overlays = { catchments: false, skytrain: false },
   onToggleOverlay,
   apiBaseUrl,
+  selectedNeighborhoods,
 }: Props) {
   const t = useTheme();
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -105,6 +117,7 @@ function MapViewWeb({
   const overlayCacheRef = useRef<{
     catchments?: GeoJSON.FeatureCollection | null;
     skytrain?: SkytrainStop[] | null;
+    neighborhoods?: GeoJSON.FeatureCollection | null;
   }>({});
 
   const { features, dropped } = useMemo(
@@ -158,6 +171,10 @@ function MapViewWeb({
         type: "geojson",
         data: { type: "FeatureCollection", features: [] },
       });
+      map.addSource(NEIGHBORHOODS_SOURCE, {
+        type: "geojson",
+        data: { type: "FeatureCollection", features: [] },
+      });
 
       map.addSource(SOURCE_ID, {
         type: "geojson",
@@ -165,6 +182,29 @@ function MapViewWeb({
         cluster: true,
         clusterRadius: 60,
         clusterMaxZoom: 14,
+      });
+
+      // Selected neighborhood — drawn under everything else so the
+      // listing markers and catchment overlays still read clearly.
+      // Visibility starts hidden; the toggle effect below shows it as
+      // soon as the caller passes a non-empty `selectedNeighborhoods`.
+      map.addLayer({
+        id: NEIGHBORHOODS_FILL_LAYER,
+        type: "fill",
+        source: NEIGHBORHOODS_SOURCE,
+        layout: { visibility: "none" },
+        paint: { "fill-color": "#f97316", "fill-opacity": 0.18 },
+      });
+      map.addLayer({
+        id: NEIGHBORHOODS_LINE_LAYER,
+        type: "line",
+        source: NEIGHBORHOODS_SOURCE,
+        layout: { visibility: "none" },
+        paint: {
+          "line-color": "#ea580c",
+          "line-opacity": 0.8,
+          "line-width": 2,
+        },
       });
 
       // Catchment polygons — drawn under listing markers so a marker
@@ -367,6 +407,51 @@ function MapViewWeb({
         overlayCacheRef.current.catchments = null;
       });
   }, [overlays.catchments, apiBaseUrl]);
+
+  // Selected-neighborhood overlay (#92). When the user filters by
+  // neighborhood, fetch the full city polygon set once and filter
+  // client-side to the requested names so the map highlights the same
+  // polygons the backend post-filter is using.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapLoadedRef.current) return;
+    const names = selectedNeighborhoods ?? [];
+    const visibility = names.length > 0 ? "visible" : "none";
+    map.setLayoutProperty(NEIGHBORHOODS_FILL_LAYER, "visibility", visibility);
+    map.setLayoutProperty(NEIGHBORHOODS_LINE_LAYER, "visibility", visibility);
+    if (names.length === 0) return;
+    if (!apiBaseUrl) return;
+    const apply = (full: GeoJSON.FeatureCollection | null) => {
+      if (!full) return;
+      const wanted = new Set(
+        expandNeighborhoodNames(names).map((n) => n.toLowerCase()),
+      );
+      const filtered: GeoJSON.FeatureCollection = {
+        type: "FeatureCollection",
+        features: full.features.filter((f) => {
+          const raw = (f.properties as { name?: string } | null)?.name;
+          return typeof raw === "string" && wanted.has(raw.toLowerCase());
+        }),
+      };
+      const src = map.getSource(NEIGHBORHOODS_SOURCE) as
+        | maplibregl.GeoJSONSource
+        | undefined;
+      if (src) src.setData(filtered);
+    };
+    if (overlayCacheRef.current.neighborhoods !== undefined) {
+      apply(overlayCacheRef.current.neighborhoods);
+      return;
+    }
+    void fetch(`${apiBaseUrl.replace(/\/$/, "")}/map/overlays/neighborhoods`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data: GeoJSON.FeatureCollection | null) => {
+        overlayCacheRef.current.neighborhoods = data;
+        apply(data);
+      })
+      .catch(() => {
+        overlayCacheRef.current.neighborhoods = null;
+      });
+  }, [selectedNeighborhoods, apiBaseUrl]);
 
   // Skytrain overlay — fetch once, render as point features for the
   // radii circle layer.

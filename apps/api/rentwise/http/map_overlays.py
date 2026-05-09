@@ -13,6 +13,9 @@ import json
 
 from fastapi import APIRouter, HTTPException, Response
 
+from rentwise.enrichment.neighborhoods import (
+    DEFAULT_GEOJSON as DEFAULT_NEIGHBORHOODS_GEOJSON,
+)
 from rentwise.enrichment.school_catchments import DEFAULT_GEOJSON
 from rentwise.enrichment.transit import DEFAULT_STOPS_JSON
 
@@ -32,6 +35,22 @@ def build_router() -> APIRouter:
             raise HTTPException(status_code=503, detail="catchments_unavailable")
         return Response(
             content=DEFAULT_GEOJSON.read_bytes(),
+            media_type="application/geo+json",
+            headers=CACHE_HEADERS,
+        )
+
+    @router.get("/neighborhoods")
+    async def get_neighborhoods() -> Response:
+        """Returns the City of Vancouver local-area FeatureCollection.
+
+        Used by the web map to draw the queried neighborhood as an
+        overlay so the user can see exactly where the post-filter is
+        confining results.
+        """
+        if not DEFAULT_NEIGHBORHOODS_GEOJSON.exists():
+            raise HTTPException(status_code=503, detail="neighborhoods_unavailable")
+        return Response(
+            content=DEFAULT_NEIGHBORHOODS_GEOJSON.read_bytes(),
             media_type="application/geo+json",
             headers=CACHE_HEADERS,
         )
