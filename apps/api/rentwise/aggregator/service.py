@@ -336,9 +336,12 @@ class AggregatorService:
         out: list[NormalizedListing] = []
         catchment_needle = catchment.casefold().strip() if isinstance(catchment, str) else None
         for listing in listings:
-            if neighborhoods_q and not skip_neighborhood_filter:
-                if not self._listing_in_neighborhoods(listing, official_set):
-                    continue
+            if (
+                neighborhoods_q
+                and not skip_neighborhood_filter
+                and not self._listing_in_neighborhoods(listing, official_set)
+            ):
+                continue
             if catchment_needle and not _catchment_matches(listing, catchment_needle):
                 continue
             if max_walk is not None:

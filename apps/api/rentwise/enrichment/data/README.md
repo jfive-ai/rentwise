@@ -80,6 +80,30 @@ and a `_note` explaining the approximation — the file is **not** an
 authoritative VSB catchment map; it is a deterministic, public-data
 approximation that's significantly better than keyword matching.
 
+## Refreshing `vsb_catchments.geojson`
+
+Source: Vancouver School Board (VSB) catchment shapefiles.
+
+1. Download the elementary and secondary catchment shapefiles from
+   the [VSB GIS open data portal](https://www.vsb.bc.ca/) (or the
+   Vancouver Open Data portal — search for "school catchment").
+2. Convert each shapefile to GeoJSON and merge into one
+   `FeatureCollection` whose features have the properties
+   `level` (`"elementary"` | `"middle"` | `"secondary"`) and
+   `name` (e.g. `"Lord Byng"`).
+
+   ```bash
+   ogr2ogr -f GeoJSON -t_srs EPSG:4326 elementary.geojson VSB_Elementary.shp
+   ogr2ogr -f GeoJSON -t_srs EPSG:4326 secondary.geojson  VSB_Secondary.shp
+   ```
+
+   Then merge with `jq` or a quick Python script that adds the
+   `level` / `name` properties expected by the loader.
+3. Verify the resulting file is in WGS84 (EPSG:4326). The loader
+   assumes lat/lon coordinates.
+4. Replace this file and run `pytest tests/enrichment` to make sure
+   the catchment unit tests still pass with the new shape.
+
 ## Refreshing `translink_stops.json`
 
 Source: [TransLink GTFS feed](https://www.translink.ca/about-us/doing-business-with-translink/app-developer-resources/gtfs).
