@@ -1,8 +1,8 @@
 import React, { useState } from "react";
 import { Image, Pressable, StyleSheet, Text, View } from "react-native";
-import * as Linking from "expo-linking";
 import type { NormalizedListing } from "@/src/api/types";
 import type { ActionFlag, ListingActions } from "@/src/storage/listingActions";
+import { openExternalUrl } from "@/src/lib/openUrl";
 import { useTheme } from "@/src/theme";
 
 interface Props {
@@ -73,9 +73,7 @@ export function ListingCard({ listing, actions, onAction, alternates }: Props) {
                     key={alt.id}
                     accessibilityRole="button"
                     accessibilityLabel={`Open ${alt.source}`}
-                    onPress={() => {
-                      void Linking.openURL(alt.source_url);
-                    }}
+                    onPress={() => openExternalUrl(alt.source_url)}
                   >
                     <Text style={{ color: t.text, fontSize: 12 }}>↗ {alt.source}</Text>
                   </Pressable>
@@ -92,7 +90,7 @@ export function ListingCard({ listing, actions, onAction, alternates }: Props) {
           <ActionBtn
             label="Open original"
             active={false}
-            onPress={() => { void Linking.openURL(listing.source_url); }}
+            onPress={() => openExternalUrl(listing.source_url)}
           />
         </View>
       </View>

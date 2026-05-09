@@ -1,8 +1,8 @@
 import React from "react";
 import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
-import * as Linking from "expo-linking";
 import type { NormalizedListing, SortOrder } from "@/src/api/types";
 import type { ActionFlag, ListingActionMap, ListingActions } from "@/src/storage/listingActions";
+import { openExternalUrl } from "@/src/lib/openUrl";
 import { useTheme } from "@/src/theme";
 
 const ROW_HEIGHT = 56;
@@ -138,7 +138,7 @@ function Row({
         <Pressable accessibilityRole="button" accessibilityLabel="Save" onPress={() => onAction("saved", !acts.saved)}>
           <Text style={{ color: acts.saved ? t.accent : t.textMuted }}>♥</Text>
         </Pressable>
-        <Pressable accessibilityRole="button" accessibilityLabel="Open original" onPress={() => { void Linking.openURL(listing.source_url); }}>
+        <Pressable accessibilityRole="button" accessibilityLabel="Open original" onPress={() => openExternalUrl(listing.source_url)}>
           <Text style={{ color: t.textMuted }}>↗</Text>
         </Pressable>
       </View>
