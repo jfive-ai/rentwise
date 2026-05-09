@@ -16,6 +16,13 @@ interface QueryContextValue {
   setMode: (m: Mode) => void;
   nlText: string;
   setNlText: (s: string) => void;
+  /** The exact `nlText` that was last sent to /translate-query and
+   * accepted (whether by NLSearchBar's Parse button or by SearchScreen's
+   * auto-parse on Search). SearchScreen compares the current `nlText`
+   * against this to decide whether to re-parse before searching — issue
+   * #101: the bottom Search button used to skip parsing entirely. */
+  lastParsedNlText: string;
+  setLastParsedNlText: (s: string) => void;
 }
 
 const QueryContext = createContext<QueryContextValue | null>(null);
@@ -24,6 +31,7 @@ export function QueryProvider({ children }: { children: React.ReactNode }) {
   const [query, setQuery] = useState<NormalizedQuery>(() => emptyQuery());
   const [mode, setModeRaw] = useState<Mode>("filters");
   const [nlText, setNlText] = useState<string>("");
+  const [lastParsedNlText, setLastParsedNlText] = useState<string>("");
 
   const set = useCallback((patch: Partial<NormalizedQuery>) => {
     if (Object.keys(patch).length === 0) return;
@@ -81,8 +89,21 @@ export function QueryProvider({ children }: { children: React.ReactNode }) {
       setMode,
       nlText,
       setNlText,
+      lastParsedNlText,
+      setLastParsedNlText,
     }),
-    [query, set, replace, reset, toggleNeighborhood, toggleKeyword, mode, setMode, nlText]
+    [
+      query,
+      set,
+      replace,
+      reset,
+      toggleNeighborhood,
+      toggleKeyword,
+      mode,
+      setMode,
+      nlText,
+      lastParsedNlText,
+    ]
   );
 
   return <QueryContext.Provider value={value}>{children}</QueryContext.Provider>;

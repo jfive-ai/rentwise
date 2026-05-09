@@ -40,7 +40,7 @@ function extractErrorDetail(e: unknown): string {
 
 export function NLSearchBar({ apiBaseUrl }: Props) {
   const t = useTheme();
-  const { nlText, setNlText, set, reset, setMode } = useQuery();
+  const { nlText, setNlText, set, reset, setMode, setLastParsedNlText } = useQuery();
   const client = useMemo(() => searchClient(apiBaseUrl), [apiBaseUrl]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -93,12 +93,15 @@ export function NLSearchBar({ apiBaseUrl }: Props) {
       // only what the LLM parsed, not stale filters from a previous mode.
       reset();
       set(result.query);
+      // Tell SearchScreen this exact text has already been translated, so
+      // the bottom Search button doesn't redundantly re-call the LLM (#101).
+      setLastParsedNlText(text);
     } catch (e) {
       setError(`LLM unavailable: ${extractErrorDetail(e)}`);
     } finally {
       setBusy(false);
     }
-  }, [client, nlText, reset, set]);
+  }, [client, nlText, reset, set, setLastParsedNlText]);
 
   const onSwitchToFilters = useCallback(() => {
     setError(null);

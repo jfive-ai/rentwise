@@ -247,6 +247,105 @@ describe("SearchScreen", () => {
     await waitFor(() => expect(getAllByText(/Sunny 2br/).length).toBe(3));
   });
 
+  it("NL mode: Search auto-parses when user skipped Parse (#101)", async () => {
+    // Issue #101: clicking Search in NL mode used to ship whatever
+    // structured filters happened to be in state — which, for a user
+    // who never clicked Parse, was an empty query. The bug was a
+    // user-visible "2 bedroom in Dunbar" returning 2912 listings from
+    // all of Vancouver. Search must now translate the NL text first.
+    const fetchSpy = global.fetch as jest.Mock;
+    let translateCalled = false;
+    let searchCallIdx = -1;
+    fetchSpy.mockImplementation((url: string, init?: RequestInit) => {
+      if (url.endsWith("/translate-query")) {
+        translateCalled = true;
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => ({
+            query: {
+              neighborhoods: ["Dunbar"],
+              bedrooms_min: 2,
+              free_text_keywords: [],
+              pets: "any",
+              furnished: "any",
+            },
+            unsupported_filters: [],
+            lang_detected: "en",
+            model_used: "m",
+          }),
+          clone: () => ({ text: async () => "{}" }),
+        } as never);
+      }
+      if (url.endsWith("/search")) {
+        searchCallIdx = fetchSpy.mock.calls.length;
+        // Assert ordering: translate must have happened first.
+        expect(translateCalled).toBe(true);
+        expect(JSON.parse(init!.body as string).query.neighborhoods).toEqual([
+          "Dunbar",
+        ]);
+      }
+      return Promise.resolve(okResponse() as never);
+    });
+
+    const { getByText, getByLabelText } = renderScreen();
+    fireEvent.press(getByLabelText("Natural language"));
+    fireEvent.changeText(
+      getByLabelText("Search input"),
+      "2 bedroom in Dunbar",
+    );
+    // Skip the Parse button — go straight to Search. Pre-#101 this
+    // shipped an empty NormalizedQuery and returned everything.
+    fireEvent.press(getByText("Search"));
+    await waitFor(() => expect(searchCallIdx).toBeGreaterThan(0));
+  });
+
+  it("NL mode: Search skips re-translation when text matches the last parse (#101)", async () => {
+    const fetchSpy = global.fetch as jest.Mock;
+    fetchSpy.mockImplementation((url: string) => {
+      if (url.endsWith("/translate-query")) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => ({
+            query: {
+              neighborhoods: ["Dunbar"],
+              free_text_keywords: [],
+              pets: "any",
+              furnished: "any",
+            },
+            unsupported_filters: [],
+            lang_detected: "en",
+            model_used: "m",
+          }),
+          clone: () => ({ text: async () => "{}" }),
+        } as never);
+      }
+      return Promise.resolve(okResponse() as never);
+    });
+
+    const { getByText, getByLabelText } = renderScreen();
+    fireEvent.press(getByLabelText("Natural language"));
+    fireEvent.changeText(getByLabelText("Search input"), "Dunbar");
+    fireEvent.press(getByText("Parse"));
+    await waitFor(() =>
+      expect(
+        fetchSpy.mock.calls.filter((c) =>
+          (c[0] as string).endsWith("/translate-query"),
+        ).length,
+      ).toBe(1),
+    );
+    fireEvent.press(getByText("Search"));
+    await waitFor(() => expect(getByText("5 listings")).toBeTruthy());
+    // The Parse already covered this text — Search should NOT have
+    // re-called /translate-query.
+    expect(
+      fetchSpy.mock.calls.filter((c) =>
+        (c[0] as string).endsWith("/translate-query"),
+      ).length,
+    ).toBe(1);
+  });
+
   it("NL mode → typing + Parse → chips appear → Search uses parsed query", async () => {
     const fetchSpy = global.fetch as jest.Mock;
     // First fetch is /translate-query (returns the parsed query).

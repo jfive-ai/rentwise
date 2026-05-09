@@ -50,7 +50,7 @@ interface Props {
 
 export function SearchScreen({ apiBaseUrl }: Props) {
   const t = useTheme();
-  const { query, mode, nlText, replace } = useQuery();
+  const { query, mode, nlText, replace, lastParsedNlText, setLastParsedNlText } = useQuery();
   const client = useMemo(() => searchClient(apiBaseUrl), [apiBaseUrl]);
 
   // Phase 7 PR-C-1: viewport-aware initial view. Mount-only so a user
@@ -170,20 +170,64 @@ export function SearchScreen({ apiBaseUrl }: Props) {
   // useLocalSearchParams() readers still see the new query string on next
   // mount (e.g. shared link).
   const onSearch = useCallback(() => {
-    const qs = encodeQueryToParams(query).toString();
-    if (typeof window !== "undefined") {
-      const path = window.location.pathname;
-      const next = qs ? `${path}?${qs}` : path;
-      window.history.replaceState(null, "", next);
-    }
     // Record the NL draft to history on Search too, not just on Parse —
     // many users will type and hit Search without ever pressing Parse,
     // and the original "remember last query" ask covers that flow.
     if (mode === "nl" && nlText.trim().length > 0) {
       void addNlHistoryEntry(nlText);
     }
+
+    // #101: in NL mode, if the current text hasn't been parsed yet (or
+    // has changed since the last parse), translate it before searching.
+    // The bottom Search button used to skip parsing entirely and ship
+    // an empty structured query, so a "2 bedroom in Dunbar" search
+    // returned everything Craigslist had.
+    const trimmed = nlText.trim();
+    if (mode === "nl" && trimmed.length > 0 && trimmed !== lastParsedNlText) {
+      setStatus("loading");
+      setErrMsg("");
+      void (async () => {
+        try {
+          const result = await client.translateQuery({ text: trimmed });
+          replace(result.query);
+          setLastParsedNlText(trimmed);
+          // Sync URL with the freshly-parsed structured query (the
+          // pre-#101 path used `query` from closure, which was still
+          // empty at this point — push the parsed one).
+          const qs = encodeQueryToParams(result.query).toString();
+          if (typeof window !== "undefined") {
+            const path = window.location.pathname;
+            const next = qs ? `${path}?${qs}` : path;
+            window.history.replaceState(null, "", next);
+          }
+          await runSearch(0, false, result.query);
+        } catch (e) {
+          setStatus("error");
+          setErrMsg(
+            `Couldn't parse query — ${e instanceof Error ? e.message : String(e)}`,
+          );
+        }
+      })();
+      return;
+    }
+
+    const qs = encodeQueryToParams(query).toString();
+    if (typeof window !== "undefined") {
+      const path = window.location.pathname;
+      const next = qs ? `${path}?${qs}` : path;
+      window.history.replaceState(null, "", next);
+    }
     void runSearch(0, false);
-  }, [query, runSearch, mode, nlText]);
+  }, [
+    query,
+    runSearch,
+    mode,
+    nlText,
+    lastParsedNlText,
+    client,
+    replace,
+    setLastParsedNlText,
+  ]);
   const onLoadMore = useCallback(() => { void runSearch(offset + PAGE_SIZE, true); }, [runSearch, offset]);
   // Retry replays the exact (offset, append) of the failed call so a Load-more
   // failure doesn't drop earlier pages.

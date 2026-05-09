@@ -76,6 +76,47 @@ interface Props {
   selectedNeighborhoods?: string[];
 }
 
+/** Compute a [W, S, E, N] bbox from a list of polygon/multipolygon
+ * features, walking the coordinate ring(s) by hand so we don't pull in
+ * @turf/bbox just for this one use. Returns null when the input has no
+ * usable coordinates so the caller can skip the camera move (#101).
+ * Exported for unit testing — the integration path (search → map fit)
+ * is exercised manually because the jsdom test harness can't get a
+ * real DOM container ref to instantiate maplibre-gl. */
+export function bboxOfFeatures(
+  features: GeoJSON.Feature[],
+): [number, number, number, number] | null {
+  let west = Infinity,
+    south = Infinity,
+    east = -Infinity,
+    north = -Infinity;
+  let hasAny = false;
+  const visit = (lon: number, lat: number) => {
+    if (!Number.isFinite(lon) || !Number.isFinite(lat)) return;
+    hasAny = true;
+    if (lon < west) west = lon;
+    if (lon > east) east = lon;
+    if (lat < south) south = lat;
+    if (lat > north) north = lat;
+  };
+  for (const f of features) {
+    const geom = f.geometry;
+    if (!geom) continue;
+    if (geom.type === "Polygon") {
+      for (const ring of geom.coordinates) {
+        for (const [lon, lat] of ring) visit(lon, lat);
+      }
+    } else if (geom.type === "MultiPolygon") {
+      for (const poly of geom.coordinates) {
+        for (const ring of poly) {
+          for (const [lon, lat] of ring) visit(lon, lat);
+        }
+      }
+    }
+  }
+  return hasAny ? [west, south, east, north] : null;
+}
+
 export function MapView(props: Props) {
   const t = useTheme();
 
@@ -127,6 +168,12 @@ function MapViewWeb({
     skytrain?: SkytrainStop[] | null;
     neighborhoods?: GeoJSON.FeatureCollection | null;
   }>({});
+  // Tracks the neighborhood-set we've already auto-fit the camera to,
+  // keyed by sorted-joined names. Without this guard, every render
+  // that re-creates `selectedNeighborhoods` (a fresh array literal
+  // from the parent's query state) would re-fit and yank the camera
+  // back from any pan the user had done after the initial fit (#101).
+  const fittedNamesKeyRef = useRef<string | null>(null);
 
   const { features, dropped } = useMemo(
     () => listingsToFeatures(listings),
@@ -422,6 +469,10 @@ function MapViewWeb({
   // neighborhood, fetch the full city polygon set once and filter
   // client-side to the requested names so the map highlights the same
   // polygons the backend post-filter is using.
+  //
+  // #101: also auto-fit the camera to the matched polygons. The map
+  // mounts at a wide Vancouver-region view; without this fit, a Dunbar
+  // search showed the highlight off-screen and pins were invisible.
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !mapLoaded) return;
@@ -429,24 +480,50 @@ function MapViewWeb({
     const visibility = names.length > 0 ? "visible" : "none";
     map.setLayoutProperty(NEIGHBORHOODS_FILL_LAYER, "visibility", visibility);
     map.setLayoutProperty(NEIGHBORHOODS_LINE_LAYER, "visibility", visibility);
-    if (names.length === 0) return;
+    if (names.length === 0) {
+      fittedNamesKeyRef.current = null;
+      return;
+    }
     if (!apiBaseUrl) return;
     const apply = (full: GeoJSON.FeatureCollection | null) => {
       if (!full) return;
       const wanted = new Set(
         expandNeighborhoodNames(names).map((n) => n.toLowerCase()),
       );
+      const matched = full.features.filter((f) => {
+        const raw = (f.properties as { name?: string } | null)?.name;
+        return typeof raw === "string" && wanted.has(raw.toLowerCase());
+      });
       const filtered: GeoJSON.FeatureCollection = {
         type: "FeatureCollection",
-        features: full.features.filter((f) => {
-          const raw = (f.properties as { name?: string } | null)?.name;
-          return typeof raw === "string" && wanted.has(raw.toLowerCase());
-        }),
+        features: matched,
       };
       const src = map.getSource(NEIGHBORHOODS_SOURCE) as
         | maplibregl.GeoJSONSource
         | undefined;
       if (src) src.setData(filtered);
+
+      const key = [...names].sort().join("|");
+      if (fittedNamesKeyRef.current === key) return;
+      const bbox = bboxOfFeatures(matched);
+      if (!bbox) return;
+      // padding gives the highlighted polygon room to breathe at the
+      // edges; maxZoom prevents zooming so deep on a small neighborhood
+      // (e.g. Strathcona) that the user loses surrounding context.
+      map.fitBounds(bbox, { padding: 40, maxZoom: 14, duration: 600 });
+      fittedNamesKeyRef.current = key;
+      // The auto-fit moves the viewport, which would otherwise trip the
+      // moveend listener and reveal the "Search this area" button. The
+      // user didn't pan — they searched — so reset the baseline bbox so
+      // the listener doesn't treat this as a manual move.
+      const b = map.getBounds();
+      initialBboxRef.current = [
+        b.getWest(),
+        b.getSouth(),
+        b.getEast(),
+        b.getNorth(),
+      ];
+      setMoved(false);
     };
     if (overlayCacheRef.current.neighborhoods !== undefined) {
       apply(overlayCacheRef.current.neighborhoods);
