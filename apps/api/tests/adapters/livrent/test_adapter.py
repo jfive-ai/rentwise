@@ -1,7 +1,9 @@
-"""Tests for the liv.rent scaffold adapter.
+"""Tests for the liv.rent adapter (calibrated against live HTML, #105).
 
-Same gates as the Zumper / REW tests. Per-adapter file mirrors the
-existing Craigslist test layout.
+The fixture is a trimmed snippet of the live ``rental-listings/city/vancouver``
+page rendered via Playwright (two real listing anchors with ``srcset`` stripped
+to keep the file small). When the live DOM drifts, recapture and re-trim
+rather than synthesizing a stand-in.
 """
 
 from __future__ import annotations
@@ -46,12 +48,38 @@ def test_satisfies_source_adapter_protocol() -> None:
     assert adapter.base_url == "https://liv.rent"
 
 
+def test_extractor_marked_calibrated() -> None:
+    """Aggregator only suppresses the "scaffold not calibrated" health
+    warning when this flag is True (#94, #105). Failure here means the
+    adapter is wired but the aggregator will still report degraded."""
+    assert LivRentAdapter.is_extractor_calibrated is True
+
+
 @pytest.mark.asyncio
-async def test_search_returns_empty_for_stub_extract(fixture_html: str) -> None:
+async def test_search_extracts_real_listings_from_fixture(fixture_html: str) -> None:
     fetcher = _make_fetcher(fixture_html, robots_allowed=True)
     adapter = LivRentAdapter(user_agent="RentWise-test/0.1", fetcher=fetcher)
     results = [r async for r in adapter.search(NormalizedQuery())]
-    assert results == []
+    assert len(results) == 2
+
+    by_id = {r.source_listing_id: r for r in results}
+    assert set(by_id) == {"142215", "141116"}
+
+    a = by_id["142215"]
+    assert a.source == "livrent"
+    assert str(a.source_url) == "https://liv.rent/rental-listings/detail/house/vancouver/142215"
+    assert a.price_cad == 3000
+    assert a.bedrooms == 2.0
+    assert a.bathrooms == 1.0
+    assert a.address == "Puget Dr, Vancouver, BC"
+    assert len(a.photos) == 1
+    assert "cdn.liv.rent" in str(a.photos[0])
+
+    b = by_id["141116"]
+    assert b.price_cad == 3995
+    assert b.bedrooms == 3.0
+    assert b.bathrooms == 2.0
+    assert b.address == "8080 Nunavut Lane, Vancouver, BC"
 
 
 @pytest.mark.asyncio
@@ -73,17 +101,20 @@ async def test_health_check_blocked_when_robots_disallows() -> None:
 
 
 @pytest.mark.asyncio
-async def test_health_check_degraded_when_extractor_stubbed() -> None:
-    fetcher = _make_fetcher("<html></html>", robots_allowed=True)
+async def test_search_returns_empty_when_dom_drifts() -> None:
+    """Defensive: an unrecognized HTML page shouldn't crash the adapter,
+    it should just yield nothing. This is the fallback the aggregator's
+    `degraded` health path relies on."""
+    fetcher = _make_fetcher("<html><body>no listings here</body></html>", robots_allowed=True)
     adapter = LivRentAdapter(user_agent="RentWise-test/0.1", fetcher=fetcher)
-    h = await adapter.health_check()
-    assert h.status == "degraded"
+    results = [r async for r in adapter.search(NormalizedQuery())]
+    assert results == []
 
 
 def test_disabled_by_default_not_registered(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Mutate the live settings instance + clear the lru_cache, rather
-    than reloading modules — module reload pollutes shared state across
-    the rest of the test session."""
+    """Mutate the live settings instance + clear the lru_cache, rather than
+    reloading modules — module reload pollutes shared state across the
+    rest of the test session."""
     from rentwise.http import search as search_module
     from rentwise.settings import settings
 

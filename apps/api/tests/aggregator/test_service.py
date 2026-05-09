@@ -475,16 +475,23 @@ def test_non_scaffold_adapter_not_flagged():
 
 
 def test_real_scaffold_classes_flagged():
-    """The actual project scaffolds — livrent / zumper / rew — must
-    be flagged. They each ship their own stub `_extract` so the old
-    method-identity check missed all three."""
+    """The remaining project scaffolds — zumper / rew — must still be
+    flagged. liv.rent was calibrated against live HTML in #105 and
+    should NOT be flagged any more; we keep it in the test as a
+    negative case so a future regression on `is_extractor_calibrated`
+    fails loudly."""
     from rentwise.adapters.livrent.adapter import LivRentAdapter
     from rentwise.adapters.rew.adapter import RewAdapter
     from rentwise.adapters.zumper.adapter import ZumperAdapter
 
-    for cls in (LivRentAdapter, ZumperAdapter, RewAdapter):
+    for cls in (ZumperAdapter, RewAdapter):
         adapter = cls(user_agent="rentwise-test/0.1")
         assert _is_uncalibrated_scaffold(adapter) is True, f"{cls.__name__} should be flagged"
+
+    livrent = LivRentAdapter(user_agent="rentwise-test/0.1")
+    assert _is_uncalibrated_scaffold(livrent) is False, (
+        "liv.rent extractor is calibrated as of #105 — flag should be False"
+    )
 
 
 def test_non_scaffold_base_classes_flagged():
