@@ -346,6 +346,88 @@ describe("SearchScreen", () => {
     ).toBe(1);
   });
 
+  it("NL mode: late-arriving translate response is dropped when a newer search races it (#102 review)", async () => {
+    // Race the Codex review flagged: a Search-button click in NL mode
+    // sets status=loading and disables the Search button — but Sort
+    // and other affordances stay enabled. After at least one prior
+    // search (so the sort effect's hasSearchedRef gate is open), a
+    // Sort click while an NL parse is in flight calls runSearch
+    // directly, which must invalidate the pending parse so the stale
+    // translate response can't replace() / runSearch over the newer
+    // intent.
+    const fetchSpy = global.fetch as jest.Mock;
+    let resolveStaleTranslate: (() => void) | undefined;
+    let staleParseCommitted = false;
+    fetchSpy.mockImplementation((url: string, init?: RequestInit) => {
+      if (url.endsWith("/translate-query")) {
+        return new Promise((r) => {
+          resolveStaleTranslate = () =>
+            r({
+              ok: true,
+              status: 200,
+              json: async () => ({
+                query: {
+                  neighborhoods: ["Dunbar"],
+                  free_text_keywords: [],
+                  pets: "any",
+                  furnished: "any",
+                },
+                unsupported_filters: [],
+                lang_detected: "en",
+                model_used: "m",
+              }),
+              clone: () => ({ text: async () => "{}" }),
+            });
+        }) as never;
+      }
+      if (url.endsWith("/search")) {
+        const body = JSON.parse(init!.body as string) as {
+          query: { neighborhoods: string[] };
+        };
+        if (body.query.neighborhoods.includes("Dunbar")) {
+          staleParseCommitted = true;
+        }
+      }
+      return Promise.resolve(okResponse() as never);
+    });
+
+    const { getByText, getByLabelText } = renderScreen();
+
+    // Prior search in filters mode so hasSearchedRef is set — needed
+    // for the Sort effect to be willing to re-fire later.
+    fireEvent.press(getByText("Search"));
+    await waitFor(() => expect(getByText("5 listings")).toBeTruthy());
+
+    // Switch to NL mode and kick off a parse that will hang.
+    fireEvent.press(getByLabelText("Natural language"));
+    fireEvent.changeText(getByLabelText("Search input"), "Dunbar");
+    fireEvent.press(getByText("Search"));
+    // Sort button is not disabled during loading — toggling it fires
+    // the sort-effect's runSearch, which invalidates the parse.
+    fireEvent.press(getByLabelText("Sort by"));
+
+    // Wait for the sort-driven runSearch to land.
+    await waitFor(() => {
+      const searches = fetchSpy.mock.calls.filter((c) =>
+        (c[0] as string).endsWith("/search"),
+      );
+      expect(searches.length).toBe(2);
+    });
+
+    // Release the stale NL translate. The race guard must drop it.
+    resolveStaleTranslate!();
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(staleParseCommitted).toBe(false);
+    // Still exactly two searches — the initial filters-mode one plus
+    // the sort-driven one. No third search from the dropped parse.
+    expect(
+      fetchSpy.mock.calls.filter((c) =>
+        (c[0] as string).endsWith("/search"),
+      ),
+    ).toHaveLength(2);
+  });
+
   it("NL mode → typing + Parse → chips appear → Search uses parsed query", async () => {
     const fetchSpy = global.fetch as jest.Mock;
     // First fetch is /translate-query (returns the parsed query).
