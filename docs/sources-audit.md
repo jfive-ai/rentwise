@@ -40,18 +40,22 @@ CAPTCHA / login-wall games. This doc only adds per-source colour.
 ## What "scaffold" means in code
 
 `apps/api/rentwise/adapters/scaffold_base.py` is the shared base for
-the Playwright-backed scaffolds (zumper, rew, livrent). Its
-`_extract(html, query)` returns `[]` + a `structlog.warning` until a
-subclass overrides it. Subclasses that haven't overridden it are
-flagged at the aggregator layer (`_is_uncalibrated_scaffold`) so a
-successful HTTP fetch + zero results reports as
+the Playwright-backed scaffolds (zumper, rew, livrent). Each scaffold
+adapter ships its own `_extract` — most just log + return `[]`, a few
+attempt a synthetic-fixture parse — so method-identity introspection
+isn't reliable. Every adapter that hasn't been calibrated against
+live rendered HTML carries a class-level boolean
+`is_extractor_calibrated = False`: that's the default on
+`ScaffoldAdapterBase`, and the standalone `PadMapperAdapter` /
+`RentalsCaAdapter` classes declare it explicitly. The aggregator's
+`_is_uncalibrated_scaffold` reads that flag, so a successful HTTP
+fetch + zero results from any scaffold reports as
 `source_health = degraded` instead of silently looking like "no
 matches" to the user (#94).
 
-PadMapper and Rentals.ca have their own non-base extractors that
-parse a synthetic test fixture; they're scaffolds in the sense that
-the live-site selectors haven't been confirmed against rendered HTML
-yet, but a calibration pass is the only blocker for PadMapper.
+A scaffold flips its flag to `True` only after its selectors have
+been confirmed against live rendered HTML and the adapter has a
+non-fixture regression test. None do today.
 
 ## Path to "shipped" for PadMapper
 

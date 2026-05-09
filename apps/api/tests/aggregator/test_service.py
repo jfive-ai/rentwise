@@ -183,32 +183,83 @@ class _StubScaffold(ScaffoldAdapterBase):
     base_url: str = "https://example.test"
 
 
-class _CalibratedScaffold(ScaffoldAdapterBase):
-    """Scaffold subclass with a real `_extract` (returns listings)."""
+class _StubScaffoldWithStubExtract(ScaffoldAdapterBase):
+    """Mirrors the real-world livrent / zumper / rew shape: subclass
+    overrides `_extract` with its own log-and-return-`[]` stub. The
+    detector must still flag this as uncalibrated (Codex review
+    catch — method-identity introspection missed this case)."""
 
-    name: str = "calibrated_scaffold"
+    name: str = "stub_scaffold_with_extract"
     base_url: str = "https://example.test"
 
     def _extract(self, html: str, query: NormalizedQuery) -> list[RawListing]:
         return []
 
 
-def test_uncalibrated_scaffold_detected():
-    """`_is_uncalibrated_scaffold` returns True only for stub subclasses (#94)."""
+class _CalibratedScaffold(ScaffoldAdapterBase):
+    """Scaffold subclass that has flipped the `is_extractor_calibrated`
+    flag — the path a future PadMapper / Rentals.ca calibration takes."""
+
+    name: str = "calibrated_scaffold"
+    base_url: str = "https://example.test"
+    is_extractor_calibrated: bool = True
+
+    def _extract(self, html: str, query: NormalizedQuery) -> list[RawListing]:
+        return []
+
+
+def test_uncalibrated_scaffold_base_default_detected():
+    """Subclass that doesn't override `_extract` is uncalibrated (#94)."""
     stub = _StubScaffold(user_agent="rentwise-test/0.1")
     assert _is_uncalibrated_scaffold(stub) is True
 
 
-def test_calibrated_scaffold_not_flagged():
-    """Subclass that overrides `_extract` is treated as production-ready (#94)."""
+def test_uncalibrated_scaffold_with_stub_extract_detected():
+    """Subclass that overrides `_extract` with a stub is *still* uncalibrated.
+    Regression for the Codex review on #99 — the previous method-identity
+    check missed every real scaffold (livrent / zumper / rew)."""
+    stub = _StubScaffoldWithStubExtract(user_agent="rentwise-test/0.1")
+    assert _is_uncalibrated_scaffold(stub) is True
+
+
+def test_calibrated_scaffold_flag_lifts_warning():
+    """Setting `is_extractor_calibrated=True` opts out of the warning."""
     cal = _CalibratedScaffold(user_agent="rentwise-test/0.1")
     assert _is_uncalibrated_scaffold(cal) is False
 
 
 def test_non_scaffold_adapter_not_flagged():
-    """A production adapter (FakeAdapter / Craigslist / etc.) isn't a scaffold."""
+    """A production adapter (FakeAdapter / Craigslist / etc.) isn't a scaffold.
+    Default for adapters with no `is_extractor_calibrated` attribute is True
+    — they were never stubs, so we never warn."""
     adapter = FakeAdapter(listings=[])
     assert _is_uncalibrated_scaffold(adapter) is False
+
+
+def test_real_scaffold_classes_flagged():
+    """The actual project scaffolds — livrent / zumper / rew — must
+    be flagged. They each ship their own stub `_extract` so the old
+    method-identity check missed all three."""
+    from rentwise.adapters.livrent.adapter import LivRentAdapter
+    from rentwise.adapters.rew.adapter import RewAdapter
+    from rentwise.adapters.zumper.adapter import ZumperAdapter
+
+    for cls in (LivRentAdapter, ZumperAdapter, RewAdapter):
+        adapter = cls(user_agent="rentwise-test/0.1")
+        assert _is_uncalibrated_scaffold(adapter) is True, f"{cls.__name__} should be flagged"
+
+
+def test_non_scaffold_base_classes_flagged():
+    """PadMapper / Rentals.ca aren't ScaffoldAdapterBase subclasses
+    but still ship uncalibrated extractors — they declare the flag
+    directly so the detector treats them like any other scaffold."""
+    from rentwise.adapters.padmapper.adapter import PadMapperAdapter
+    from rentwise.adapters.rentalsca.adapter import RentalsCaAdapter
+
+    pad = PadMapperAdapter(user_agent="rentwise-test/0.1")
+    assert _is_uncalibrated_scaffold(pad) is True
+    rca = RentalsCaAdapter(user_agent="rentwise-test/0.1")
+    assert _is_uncalibrated_scaffold(rca) is True
 
 
 @pytest.mark.asyncio

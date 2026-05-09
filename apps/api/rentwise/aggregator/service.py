@@ -41,24 +41,22 @@ log = structlog.get_logger(__name__)
 
 
 def _is_uncalibrated_scaffold(adapter: SourceAdapter) -> bool:
-    """True iff `adapter` is a `ScaffoldAdapterBase` subclass that hasn't
-    overridden `_extract`.
+    """True iff `adapter` declares itself an uncalibrated scaffold.
 
-    The scaffold's stub `_extract` returns ``[]`` plus a structlog
-    warning. When such an adapter is enabled, a successful HTTP fetch
-    paired with an empty result is the expected "I'm a stub" signal,
-    not "I found nothing matching" — surface it so the user sees why.
-
-    Imported lazily so the aggregator stays usable in environments where
-    the Playwright-based scaffold module wouldn't import.
+    Each scaffold adapter (`livrent`, `zumper`, `rew`, `padmapper`,
+    `rentalsca`) overrides `_extract` with a different stub variant —
+    some return ``[]`` directly, some attempt a synthetic-fixture parse
+    that misses live HTML. Method-identity introspection on
+    ``ScaffoldAdapterBase._extract`` therefore misses every real
+    scaffold (Codex review, #99 → #94). Instead we look for a
+    class-level marker ``is_extractor_calibrated`` that scaffolds set
+    to ``False`` and production-ready adapters set to ``True`` (or
+    omit, for non-scaffold adapters that never had a stub). When the
+    marker is missing we treat the adapter as calibrated — that's the
+    safe default for production adapters that never had a stub
+    (Craigslist, FakeAdapter in tests, etc.).
     """
-    try:
-        from rentwise.adapters.scaffold_base import ScaffoldAdapterBase
-    except Exception:  # pragma: no cover — import-time miss is non-fatal
-        return False
-    if not isinstance(adapter, ScaffoldAdapterBase):
-        return False
-    return type(adapter)._extract is ScaffoldAdapterBase._extract
+    return getattr(adapter, "is_extractor_calibrated", True) is False
 
 
 class AggregatorService:
