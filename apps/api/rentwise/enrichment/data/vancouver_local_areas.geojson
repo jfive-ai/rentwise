@@ -5236,6 +5236,6 @@
       }
     }
   ],
-  "_source": "City of Vancouver Open Data \u2014 local-area-boundary dataset. Licensed under the Open Government Licence - Vancouver. Downloaded 2026-05-09 via opendata.vancouver.ca/api/explore/v2.1/catalog/datasets/local-area-boundary/exports/geojson. These are the official 22 local planning areas; boundaries follow street centrelines and are stable over time.",
-  "_attribution": "Contains information licensed under the Open Government Licence - Vancouver."
+  "_source": "City of Vancouver Open Data \u2014 local-area-boundary dataset. Licensed under the Open Government Licence \u2013 Vancouver. Downloaded 2026-05-09 via opendata.vancouver.ca/api/explore/v2.1/catalog/datasets/local-area-boundary/exports/geojson. These are the official 22 local planning areas; boundaries follow street centrelines and are stable over time.",
+  "_attribution": "Contains information licensed under the Open Government Licence \u2013 Vancouver."
 }
