@@ -13,13 +13,16 @@ from rentwise.adapters.base import AdapterCapabilities
 from rentwise.adapters.scaffold_base import ScaffoldAdapterBase
 from rentwise.aggregator.service import (
     AggregatorService,
+    _catchment_matches,
     _is_uncalibrated_scaffold,
 )
 from rentwise.models import (
     AdapterHealth,
+    NormalizedListing,
     NormalizedQuery,
     PetPolicy,
     RawListing,
+    SchoolCatchments,
     SearchRequest,
     SortOrder,
 )
@@ -244,6 +247,78 @@ async def test_unresolvable_neighborhood_skips_filter_not_drops_all(session):
     # Both listings survive — the filter was skipped because nothing
     # resolved.
     assert {x.source_listing_id for x in resp.listings} == {"1", "2"}
+
+
+def _listing(
+    *,
+    title: str = "Sunny 1br",
+    address: str | None = None,
+    description: str | None = None,
+    catchments: SchoolCatchments | None = None,
+) -> NormalizedListing:
+    from datetime import datetime as _dt
+    from uuid import uuid4 as _uuid4
+
+    new_id = _uuid4()
+    return NormalizedListing(
+        id=new_id,
+        canonical_id=new_id,
+        source="craigslist",
+        source_url=HttpUrl("https://example.com/1"),
+        source_listing_id="1",
+        title=title,
+        address=address,
+        address_normalized=None,
+        lat=None,
+        lon=None,
+        bedrooms=1.0,
+        bathrooms=None,
+        price_cad=2000,
+        pets_allowed=None,
+        furnished=None,
+        available_date=None,
+        posted_at=_dt.now(UTC),
+        last_seen_at=_dt.now(UTC),
+        photos=[],
+        description_snippet=description,
+        school_catchments=catchments or SchoolCatchments(),
+    )
+
+
+def test_catchment_match_uses_address_when_enriched():
+    """Geocoded listing inside Byng polygon → enrichment populated
+    secondary='Lord Byng'; needle 'lord byng' matches (#93)."""
+    listing = _listing(
+        title="Quiet 2br near 16th and Crown",
+        catchments=SchoolCatchments(secondary="Lord Byng"),
+    )
+    assert _catchment_matches(listing, "lord byng") is True
+
+
+def test_catchment_drops_listing_outside_polygon_even_if_title_mentions_school():
+    """Geocoded listing whose secondary != 'Lord Byng' (e.g. Kitsilano) is
+    dropped even if title mentions Byng — text without address-confirmation
+    isn't enough when address-confirmation contradicts it (#93)."""
+    listing = _listing(
+        title="Walk to Lord Byng — but actually in Kitsilano",
+        catchments=SchoolCatchments(secondary="Kitsilano"),
+    )
+    assert _catchment_matches(listing, "lord byng") is False
+
+
+def test_catchment_falls_back_to_text_when_no_geocode():
+    """Listing has no enriched catchment (no geocode); fall back to a
+    text match against title + address + description (#93)."""
+    listing = _listing(
+        title="Bright suite — Lord Byng catchment per landlord",
+        catchments=SchoolCatchments(),  # empty
+    )
+    assert _catchment_matches(listing, "lord byng") is True
+
+
+def test_catchment_unrelated_listing_still_filtered_out():
+    listing = _listing(title="Sunny 1br", catchments=SchoolCatchments())
+    assert _catchment_matches(listing, "lord byng") is False
 
 
 class _StubScaffold(ScaffoldAdapterBase):

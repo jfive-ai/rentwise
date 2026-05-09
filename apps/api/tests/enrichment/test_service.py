@@ -238,7 +238,7 @@ async def test_enrich_caches_negative_result(make_service, session):
 @pytest.mark.asyncio
 async def test_enrich_populates_school_catchments_when_inside_polygon(make_service):
     """Geocoder returns coords inside the synthetic Lord Byng polygon."""
-    geocoder = FakeGeocoder(result=GeocodeResult(lat=49.275, lon=-123.180))
+    geocoder = FakeGeocoder(result=GeocodeResult(lat=49.255, lon=-123.185))
     svc = make_service(geocoder)
     listing = _listing()
 
@@ -262,7 +262,7 @@ async def test_enrich_populates_nearest_transit_when_within_radius(make_service)
 
 @pytest.mark.asyncio
 async def test_enrich_skips_school_catchments_when_disabled(make_service):
-    geocoder = FakeGeocoder(result=GeocodeResult(lat=49.275, lon=-123.180))
+    geocoder = FakeGeocoder(result=GeocodeResult(lat=49.255, lon=-123.185))
     svc = make_service(geocoder, school_catchments_enabled=False)
     listing = _listing()
 
@@ -291,7 +291,7 @@ async def test_enrich_populates_phash_when_photo_url_present(make_service, sessi
         async def hash_url(self, url: str) -> str | None:
             return "deadbeefcafebabe"
 
-    geocoder = FakeGeocoder(result=GeocodeResult(lat=49.275, lon=-123.180))
+    geocoder = FakeGeocoder(result=GeocodeResult(lat=49.255, lon=-123.185))
     svc = EnrichmentService(
         cache_repo=GeocodeCacheRepo(session),
         geocoder=geocoder,
@@ -346,7 +346,7 @@ async def test_enrich_uses_phash_cache(make_service, session):
         )
     )
 
-    geocoder = FakeGeocoder(result=GeocodeResult(lat=49.275, lon=-123.180))
+    geocoder = FakeGeocoder(result=GeocodeResult(lat=49.255, lon=-123.185))
     svc = EnrichmentService(
         cache_repo=GeocodeCacheRepo(session),
         geocoder=geocoder,
@@ -371,7 +371,7 @@ async def test_enrich_skips_phash_when_disabled(make_service, session):
         async def hash_url(self, url: str) -> str | None:
             raise AssertionError("must not be called")
 
-    geocoder = FakeGeocoder(result=GeocodeResult(lat=49.275, lon=-123.180))
+    geocoder = FakeGeocoder(result=GeocodeResult(lat=49.255, lon=-123.185))
     svc = EnrichmentService(
         cache_repo=GeocodeCacheRepo(session),
         geocoder=geocoder,

@@ -41,6 +41,36 @@ from rentwise.storage.repositories import (
 log = structlog.get_logger(__name__)
 
 
+def _catchment_matches(listing: NormalizedListing, needle: str) -> bool:
+    """True iff the listing should be kept for catchment query ``needle``.
+
+    The needle is already casefold-stripped by the caller.
+
+    Address-first (#93):
+    - If enrichment populated *any* catchment field (the listing's
+      geocode landed inside a Voronoi cell), trust those values:
+      match iff the needle is a substring of the joined catchment
+      fields. A wrong-school listing is dropped even if its title
+      mentions the queried school.
+    - If no catchment field was populated (no geocode, or geocode
+      outside the Voronoi mesh), fall back to a substring match
+      against the listing's title + address + description snippet so
+      the user still finds explicit references the address can't
+      confirm.
+    """
+    sc = listing.school_catchments
+    catchment_text = " ".join(filter(None, [sc.elementary, sc.middle, sc.secondary])).casefold()
+    if catchment_text:
+        return needle in catchment_text
+    fallback_text = " ".join(
+        filter(
+            None,
+            [listing.title, listing.address, listing.description_snippet],
+        )
+    ).casefold()
+    return needle in fallback_text
+
+
 def _is_uncalibrated_scaffold(adapter: SourceAdapter) -> bool:
     """True iff `adapter` declares itself an uncalibrated scaffold.
 
@@ -260,8 +290,19 @@ class AggregatorService:
           but the geocoder hadn't run yet) — otherwise they are dropped.
           The previous coarse FSA-radius search was leaking
           Burnaby/Richmond results into "Dunbar" queries (#92).
-        - ``school_catchment``: case-insensitive substring match against any
-          of the three catchment fields (elementary / middle / secondary).
+        - ``school_catchment``: address-first (#93). When the listing has
+          an enriched catchment (point-in-polygon match against the
+          Voronoi catchment polygons) we trust that — substring match
+          against the per-level fields. When the listing has *no*
+          enriched catchment (e.g. it's outside the Voronoi mesh, or it
+          had no geocode), we fall back to a substring match against the
+          listing's title + address + description so the user still
+          finds explicit references like "near Lord Byng catchment".
+          Crucially, a listing geocoded *inside* the city but in a
+          different catchment is dropped even if its title incidentally
+          mentions the queried school — text-mention without
+          address-confirmation isn't enough when address-confirmation
+          contradicts it.
         - ``transit_max_walk_minutes``: keep only listings with a
           ``nearest_transit`` whose ``walk_minutes`` ≤ the configured max.
           Listings without a transit lookup result are dropped — the user
@@ -295,14 +336,14 @@ class AggregatorService:
         out: list[NormalizedListing] = []
         catchment_needle = catchment.casefold().strip() if isinstance(catchment, str) else None
         for listing in listings:
-            if neighborhoods_q and not skip_neighborhood_filter:
-                if not self._listing_in_neighborhoods(listing, official_set):
-                    continue
-            if catchment_needle:
-                sc = listing.school_catchments
-                hay = " ".join(filter(None, [sc.elementary, sc.middle, sc.secondary])).casefold()
-                if catchment_needle not in hay:
-                    continue
+            if (
+                neighborhoods_q
+                and not skip_neighborhood_filter
+                and not self._listing_in_neighborhoods(listing, official_set)
+            ):
+                continue
+            if catchment_needle and not _catchment_matches(listing, catchment_needle):
+                continue
             if max_walk is not None:
                 t = listing.nearest_transit
                 if t is None or t.walk_minutes > max_walk:
