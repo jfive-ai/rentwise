@@ -104,6 +104,10 @@ class PadMapperAdapter:
     name = "padmapper"
     method: Literal["api", "rss", "browser"] = "browser"
     rate_limit_per_second: float = 0.5
+    # Scaffold flag (#94). Selectors only match the synthetic test
+    # fixture; calibration against live rendered HTML is the only
+    # blocker — see docs/sources-audit.md.
+    is_extractor_calibrated: bool = False
     _capabilities: ClassVar[AdapterCapabilities] = {
         "supported_filters": {
             "bedrooms_min",

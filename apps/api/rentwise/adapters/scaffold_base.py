@@ -66,6 +66,12 @@ class ScaffoldAdapterBase:
     base_url: str = ""
     method: Literal["api", "rss", "browser"] = "browser"
     rate_limit_per_second: float = 0.5
+    # Class-level signal read by the aggregator (#94). Stays False until
+    # a subclass has confirmed selectors against live rendered HTML and
+    # ships a non-fixture extractor test. The aggregator surfaces a
+    # `degraded` source_health entry when an enabled scaffold returns
+    # zero listings, so the user sees why nothing came back.
+    is_extractor_calibrated: bool = False
     _capabilities: ClassVar[AdapterCapabilities] = {
         "supported_filters": set(),
     }

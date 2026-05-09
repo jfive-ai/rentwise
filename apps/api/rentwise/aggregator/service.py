@@ -70,6 +70,25 @@ def _catchment_matches(listing: NormalizedListing, needle: str) -> bool:
     return needle in fallback_text
 
 
+def _is_uncalibrated_scaffold(adapter: SourceAdapter) -> bool:
+    """True iff `adapter` declares itself an uncalibrated scaffold.
+
+    Each scaffold adapter (`livrent`, `zumper`, `rew`, `padmapper`,
+    `rentalsca`) overrides `_extract` with a different stub variant —
+    some return ``[]`` directly, some attempt a synthetic-fixture parse
+    that misses live HTML. Method-identity introspection on
+    ``ScaffoldAdapterBase._extract`` therefore misses every real
+    scaffold (Codex review, #99 → #94). Instead we look for a
+    class-level marker ``is_extractor_calibrated`` that scaffolds set
+    to ``False`` and production-ready adapters set to ``True`` (or
+    omit, for non-scaffold adapters that never had a stub). When the
+    marker is missing we treat the adapter as calibrated — that's the
+    safe default for production adapters that never had a stub
+    (Craigslist, FakeAdapter in tests, etc.).
+    """
+    return getattr(adapter, "is_extractor_calibrated", True) is False
+
+
 class AggregatorService:
     def __init__(
         self,
@@ -118,9 +137,11 @@ class AggregatorService:
         for adapter in self.adapters:
             projected, dropped = project_query_to_capabilities(req.query, adapter.capabilities)
             unsupported.update(dropped)
+            adapter_yielded = 0
             try:
                 seen: set[str] = set()
                 async for raw in adapter.search(projected):
+                    adapter_yielded += 1
                     if raw.source_listing_id in seen:
                         continue
                     seen.add(raw.source_listing_id)
@@ -149,8 +170,26 @@ class AggregatorService:
                             )
                     saved = await self.listing_repo.upsert(listing)
                     all_listings.append(saved)
-                await self.health_repo.set(adapter.name, "ok", error=None)
-                health[adapter.name] = AdapterHealth(name=adapter.name, status="ok")
+                # A successful search that produced zero rows from a known
+                # stub adapter is reported as degraded so the user sees
+                # *why* their enabled adapter isn't returning anything (#94).
+                # Only triggers for ScaffoldAdapterBase subclasses that
+                # haven't overridden `_extract` — production adapters that
+                # legitimately found no matches still report `ok`.
+                if adapter_yielded == 0 and _is_uncalibrated_scaffold(adapter):
+                    await self.health_repo.set(
+                        adapter.name,
+                        "degraded",
+                        error="scaffold: extractor not yet calibrated against live HTML",
+                    )
+                    health[adapter.name] = AdapterHealth(
+                        name=adapter.name,
+                        status="degraded",
+                        last_error="scaffold: extractor not yet calibrated against live HTML",
+                    )
+                else:
+                    await self.health_repo.set(adapter.name, "ok", error=None)
+                    health[adapter.name] = AdapterHealth(name=adapter.name, status="ok")
                 any_succeeded = True
             except Exception as exc:
                 log.warning("adapter.failed", adapter=adapter.name, error=str(exc))
