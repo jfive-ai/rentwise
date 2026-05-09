@@ -21,6 +21,7 @@ from rentwise.aggregator.freshness import (
     is_fresh,
 )
 from rentwise.dedup.service import DedupService
+from rentwise.enrichment.neighborhoods import NeighborhoodLookup
 from rentwise.enrichment.service import EnrichmentService
 from rentwise.models import (
     AdapterHealth,
@@ -68,6 +69,7 @@ class AggregatorService:
         cache_ttl_seconds: int,
         enrichment: EnrichmentService | None = None,
         dedup: DedupService | None = None,
+        neighborhood_lookup: NeighborhoodLookup | None = None,
     ) -> None:
         self.adapters = adapters
         self.session = session
@@ -80,6 +82,9 @@ class AggregatorService:
         self.enrichment = enrichment
         # Optional dedup. None = every listing stays self-canonical.
         self.dedup = dedup
+        # Neighborhood polygons are loaded once per process so the
+        # post-filter step doesn't re-parse the GeoJSON per request.
+        self.neighborhoods = neighborhood_lookup or NeighborhoodLookup()
 
     async def search(self, req: SearchRequest) -> SearchResponse:
         key = _cache_key(req.query)
@@ -178,6 +183,11 @@ class AggregatorService:
         # the response so clients see them as supported.
         unsupported.discard("school_catchment")
         unsupported.discard("transit_max_walk_minutes")
+        # Neighborhood polygon filtering happens here too (#92), so no
+        # adapter has to advertise the capability — Craigslist's
+        # postal-radius search is wider than the polygon and the
+        # post-filter reins it in.
+        unsupported.discard("neighborhoods")
 
         if any_succeeded:
             await self.search_repo.upsert(
@@ -236,13 +246,20 @@ class AggregatorService:
             source_health=health or {},
         )
 
-    @staticmethod
     def _apply_post_filters(
-        listings: list[NormalizedListing], query: Any
+        self, listings: list[NormalizedListing], query: Any
     ) -> list[NormalizedListing]:
         """Apply enrichment-dependent filters that no adapter can express
         in its URL params.
 
+        - ``neighborhoods``: keep only listings whose geocoded coordinates
+          fall inside the union of the requested neighborhood polygons.
+          Listings without a geocode are kept *only* if their
+          enriched ``neighborhood`` field already matches one of the
+          resolved official names (e.g. the address text was matchable
+          but the geocoder hadn't run yet) — otherwise they are dropped.
+          The previous coarse FSA-radius search was leaking
+          Burnaby/Richmond results into "Dunbar" queries (#92).
         - ``school_catchment``: case-insensitive substring match against any
           of the three catchment fields (elementary / middle / secondary).
         - ``transit_max_walk_minutes``: keep only listings with a
@@ -252,12 +269,35 @@ class AggregatorService:
         """
         catchment = getattr(query, "school_catchment", None)
         max_walk = getattr(query, "transit_max_walk_minutes", None)
-        if not catchment and max_walk is None:
+        neighborhoods_q = getattr(query, "neighborhoods", None) or []
+
+        if not catchment and max_walk is None and not neighborhoods_q:
             return listings
+
+        official_names = self.neighborhoods.resolve(neighborhoods_q) if neighborhoods_q else []
+        official_set = {n.casefold() for n in official_names}
+
+        # If the user typed neighborhood names that all failed to resolve
+        # (typos, deprecated aliases, an unknown name in a saved query),
+        # the resolver returns []. Rather than silently dropping every
+        # listing — which would turn an unresolvable filter into a hard
+        # zero-result query — log a warning and skip the neighborhood
+        # filter entirely, matching the resolver's "unknown names dropped
+        # silently" semantics (Codex review #97).
+        skip_neighborhood_filter = bool(neighborhoods_q) and not official_set
+        if skip_neighborhood_filter:
+            log.warning(
+                "aggregator.neighborhood_filter_unresolvable",
+                requested=list(neighborhoods_q),
+                hint="all names failed to resolve; skipping the neighborhood filter",
+            )
 
         out: list[NormalizedListing] = []
         catchment_needle = catchment.casefold().strip() if isinstance(catchment, str) else None
         for listing in listings:
+            if neighborhoods_q and not skip_neighborhood_filter:
+                if not self._listing_in_neighborhoods(listing, official_set):
+                    continue
             if catchment_needle:
                 sc = listing.school_catchments
                 hay = " ".join(filter(None, [sc.elementary, sc.middle, sc.secondary])).casefold()
@@ -269,6 +309,35 @@ class AggregatorService:
                     continue
             out.append(listing)
         return out
+
+    def _listing_in_neighborhoods(
+        self,
+        listing: NormalizedListing,
+        official_lower: set[str],
+    ) -> bool:
+        """True iff `listing` belongs to one of the requested official names.
+
+        Strategy (in order):
+        1. If enrichment populated `listing.neighborhood`, trust it.
+           Enrichment uses the same point-in-polygon logic as the
+           lookup, so duplicating the polygon test here would be wasted
+           work.
+        2. Otherwise, run point-in-polygon directly against
+           `(lat, lon)` — covers listings that came in with native
+           coordinates but skipped enrichment.
+        3. Without coords AND without an enriched neighborhood, the
+           listing is considered unverified — drop it (consistent with
+           how `transit_max_walk_minutes` handles unknowns).
+        """
+        if not official_lower:
+            return False
+        if listing.neighborhood and listing.neighborhood.casefold() in official_lower:
+            return True
+        if listing.lat is not None and listing.lon is not None:
+            name = self.neighborhoods.lookup(listing.lat, listing.lon)
+            if name is not None and name.casefold() in official_lower:
+                return True
+        return False
 
     def _sorted_paginated(
         self, listings: list[NormalizedListing], req: SearchRequest
@@ -309,6 +378,7 @@ class AggregatorService:
             last_seen_at=datetime.now(UTC),
             photos=raw.photos,
             description_snippet=raw.description_snippet,
+            neighborhood=None,
             school_catchments=SchoolCatchments(),
             raw_metadata=raw.raw_metadata,
         )

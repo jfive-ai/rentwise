@@ -176,6 +176,76 @@ async def test_all_adapters_failing_does_not_poison_cache(session):
     assert resp.source_health["craigslist"].status == "degraded"
 
 
+def _raw_at(i: int, *, lat: float | None, lon: float | None) -> RawListing:
+    return RawListing(
+        source="craigslist",
+        source_url=HttpUrl(f"https://example.com/{i}"),
+        source_listing_id=str(i),
+        title=f"$2000 / 1br - listing {i}",
+        bedrooms=1.0,
+        price_cad=2000,
+        posted_at=datetime.now(UTC),
+        lat=lat,
+        lon=lon,
+    )
+
+
+@pytest.mark.asyncio
+async def test_neighborhood_filter_drops_listings_outside_polygon(session):
+    """`neighborhoods=["Dunbar"]` must reject listings that the wide
+    Craigslist FSA-radius search dragged in from Burnaby / Richmond /
+    Kitsilano. (#92)
+    """
+    inside_dunbar = _raw_at(1, lat=49.255, lon=-123.185)  # 4750 W 16th area
+    inside_kits = _raw_at(2, lat=49.268, lon=-123.165)
+    outside_city = _raw_at(3, lat=49.226, lon=-122.998)  # Metrotown
+    no_coords = _raw_at(4, lat=None, lon=None)
+
+    adapter = FakeAdapter(listings=[inside_dunbar, inside_kits, outside_city, no_coords])
+    svc = AggregatorService(adapters=[adapter], session=session, cache_ttl_seconds=900)
+    req = SearchRequest(query=NormalizedQuery(neighborhoods=["Dunbar"]))
+    resp = await svc.search(req)
+    await session.commit()
+
+    ids = {x.source_listing_id for x in resp.listings}
+    assert ids == {"1"}, f"only the in-polygon listing should survive; got {ids}"
+    assert "neighborhoods" not in resp.unsupported_filters
+
+
+@pytest.mark.asyncio
+async def test_neighborhood_alias_point_grey_resolves(session):
+    """`Point Grey` → `West Point Grey` polygon."""
+    inside_pt_grey = _raw_at(1, lat=49.265, lon=-123.205)
+    inside_kits = _raw_at(2, lat=49.268, lon=-123.165)
+    adapter = FakeAdapter(listings=[inside_pt_grey, inside_kits])
+    svc = AggregatorService(adapters=[adapter], session=session, cache_ttl_seconds=900)
+    resp = await svc.search(SearchRequest(query=NormalizedQuery(neighborhoods=["Point Grey"])))
+    await session.commit()
+    assert {x.source_listing_id for x in resp.listings} == {"1"}
+
+
+@pytest.mark.asyncio
+async def test_unresolvable_neighborhood_skips_filter_not_drops_all(session):
+    """When every requested name fails to resolve (typo, deprecated
+    alias, unknown name in a saved query), the filter is skipped rather
+    than dropping every listing — Codex review #97. The resolver
+    silently drops unknown names; the post-filter must follow suit
+    instead of turning an unresolvable filter into a hard zero-result
+    query.
+    """
+    in_dunbar = _raw_at(1, lat=49.255, lon=-123.185)
+    in_kits = _raw_at(2, lat=49.268, lon=-123.165)
+    adapter = FakeAdapter(listings=[in_dunbar, in_kits])
+    svc = AggregatorService(adapters=[adapter], session=session, cache_ttl_seconds=900)
+    resp = await svc.search(
+        SearchRequest(query=NormalizedQuery(neighborhoods=["Atlantis", "DunbarTypo"]))
+    )
+    await session.commit()
+    # Both listings survive — the filter was skipped because nothing
+    # resolved.
+    assert {x.source_listing_id for x in resp.listings} == {"1", "2"}
+
+
 class _StubScaffold(ScaffoldAdapterBase):
     """Concrete scaffold subclass that doesn't override `_extract`."""
 

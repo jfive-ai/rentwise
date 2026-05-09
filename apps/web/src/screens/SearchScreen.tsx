@@ -355,6 +355,7 @@ export function SearchScreen({ apiBaseUrl }: Props) {
                 setOverlays((o) => ({ ...o, [k]: !o[k] }))
               }
               apiBaseUrl={apiBaseUrl}
+              selectedNeighborhoods={query.neighborhoods}
               onSearchBbox={() => {
                 // PR-C will encode bbox in URL params + add a backend filter.
                 onSearch();
@@ -374,6 +375,7 @@ export function SearchScreen({ apiBaseUrl }: Props) {
                   setOverlays((o) => ({ ...o, [k]: !o[k] }))
                 }
                 apiBaseUrl={apiBaseUrl}
+                selectedNeighborhoods={query.neighborhoods}
                 onSearchBbox={() => {
                   onSearch();
                 }}

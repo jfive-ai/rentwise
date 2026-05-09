@@ -21,6 +21,7 @@ import structlog
 
 from rentwise.enrichment.address import normalize_address
 from rentwise.enrichment.geocode import GeocodeError, Geocoder
+from rentwise.enrichment.neighborhoods import NeighborhoodLookup
 from rentwise.enrichment.photo_hash import PhotoHasher
 from rentwise.enrichment.school_catchments import SchoolCatchmentLookup
 from rentwise.enrichment.transit import TransitLookup
@@ -42,6 +43,7 @@ class EnrichmentConfig:
     provider: str = "nominatim"
     school_catchments_enabled: bool = True
     transit_enabled: bool = True
+    neighborhoods_enabled: bool = True
     photo_hash_enabled: bool = True
     photo_hash_cache_ttl_days: int = 90
 
@@ -55,6 +57,7 @@ class EnrichmentService:
         config: EnrichmentConfig | None = None,
         school_catchments: SchoolCatchmentLookup | None = None,
         transit: TransitLookup | None = None,
+        neighborhoods: NeighborhoodLookup | None = None,
         photo_hasher: PhotoHasher | None = None,
         photo_hash_cache: PhotoHashCacheRepo | None = None,
     ) -> None:
@@ -69,6 +72,7 @@ class EnrichmentService:
             school_catchments if school_catchments is not None else SchoolCatchmentLookup()
         )
         self._transit = transit if transit is not None else TransitLookup()
+        self._neighborhoods = neighborhoods if neighborhoods is not None else NeighborhoodLookup()
         self._photo_hasher = photo_hasher
         self._photo_cache = photo_hash_cache
 
@@ -107,6 +111,7 @@ class EnrichmentService:
                 "address_normalized": canonical,
                 "lat": lat,
                 "lon": lon,
+                "neighborhood": self._lookup_neighborhood(lat, lon),
                 "school_catchments": self._lookup_catchments(lat, lon),
                 "nearest_transit": self._lookup_transit(lat, lon),
                 "phash": phash if phash is not None else listing.phash,
@@ -139,6 +144,11 @@ class EnrichmentService:
         if not self.config.school_catchments_enabled:
             return SchoolCatchments()
         return self._schools.lookup(lat, lon)
+
+    def _lookup_neighborhood(self, lat: float | None, lon: float | None) -> str | None:
+        if not self.config.neighborhoods_enabled:
+            return None
+        return self._neighborhoods.lookup(lat, lon)
 
     def _lookup_transit(self, lat: float | None, lon: float | None) -> TransitInfo | None:
         if not self.config.transit_enabled:
