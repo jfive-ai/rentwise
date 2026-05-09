@@ -2,7 +2,18 @@
 
 export type PetPolicy = "required" | "ok" | "no" | "any";
 export type FurnishedPolicy = "yes" | "no" | "any";
-export type SortOrder = "newest" | "price_asc" | "price_desc" | "bedrooms";
+export type SortOrder =
+  | "newest"
+  | "price_asc"
+  | "price_desc"
+  | "bedrooms_asc"
+  | "bedrooms_desc"
+  // Legacy alias kept so already-shared URLs still resolve to a sensible order.
+  | "bedrooms"
+  | "title_asc"
+  | "title_desc"
+  | "source_asc"
+  | "source_desc";
 export type CacheStatus = "fresh" | "stale" | "miss";
 
 export interface NormalizedQuery {

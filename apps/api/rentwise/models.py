@@ -168,7 +168,15 @@ class SortOrder(StrEnum):
     NEWEST = "newest"
     PRICE_ASC = "price_asc"
     PRICE_DESC = "price_desc"
+    BEDROOMS_ASC = "bedrooms_asc"
+    BEDROOMS_DESC = "bedrooms_desc"
+    # Legacy alias kept so already-shared URLs that encoded ?sort=bedrooms
+    # before the asc/desc split still resolve to a sensible order.
     BEDROOMS = "bedrooms"
+    TITLE_ASC = "title_asc"
+    TITLE_DESC = "title_desc"
+    SOURCE_ASC = "source_asc"
+    SOURCE_DESC = "source_desc"
 
 
 class SearchRequest(BaseModel):

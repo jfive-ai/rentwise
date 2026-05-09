@@ -21,10 +21,34 @@ describe("ResultsToolbar", () => {
     expect(getByText("142 listings")).toBeTruthy();
   });
 
-  it("cycles sort options on press", () => {
+  it("opens the sort menu and exposes every column option", () => {
+    const { getByLabelText, queryByLabelText } = render(<ResultsToolbar {...props} />);
+    // Menu starts collapsed.
+    expect(queryByLabelText("Sort by Title A→Z")).toBeNull();
+    fireEvent.press(getByLabelText("Sort by"));
+    // Each column gets at least one option in the menu.
+    expect(getByLabelText("Sort by Title A→Z")).toBeTruthy();
+    expect(getByLabelText("Sort by Title Z→A")).toBeTruthy();
+    expect(getByLabelText("Sort by Price ↑")).toBeTruthy();
+    expect(getByLabelText("Sort by Price ↓")).toBeTruthy();
+    expect(getByLabelText("Sort by Beds ↑")).toBeTruthy();
+    expect(getByLabelText("Sort by Beds ↓")).toBeTruthy();
+    expect(getByLabelText("Sort by Source A→Z")).toBeTruthy();
+    expect(getByLabelText("Sort by Source Z→A")).toBeTruthy();
+  });
+
+  it("emits onSortChange when a menu option is picked", () => {
     const { getByLabelText } = render(<ResultsToolbar {...props} />);
     fireEvent.press(getByLabelText("Sort by"));
-    expect(props.onSortChange).toHaveBeenCalledWith("price_asc");
+    fireEvent.press(getByLabelText("Sort by Source A→Z"));
+    expect(props.onSortChange).toHaveBeenCalledWith("source_asc");
+  });
+
+  it("renders the active sort label on the trigger", () => {
+    const { getByLabelText } = render(
+      <ResultsToolbar {...props} sort="title_desc" />,
+    );
+    expect(getByLabelText("Sort by").props.children).toBeDefined();
   });
 
   it("switches to list view on press", () => {

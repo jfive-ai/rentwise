@@ -176,7 +176,9 @@ describe("SearchScreen", () => {
     await waitFor(() => expect(getByText("5 listings")).toBeTruthy());
     const callsBefore = (global.fetch as jest.Mock).mock.calls.length;
 
-    fireEvent.press(getByLabelText("Sort by")); // newest -> price_asc
+    // Open the sort menu, then pick an option.
+    fireEvent.press(getByLabelText("Sort by"));
+    fireEvent.press(getByLabelText("Sort by Price ↑"));
 
     await waitFor(() => {
       const calls = (global.fetch as jest.Mock).mock.calls;
@@ -188,7 +190,9 @@ describe("SearchScreen", () => {
 
   it("does not fetch on sort change before any search has been run", () => {
     const { getByLabelText } = renderScreen();
-    fireEvent.press(getByLabelText("Sort by")); // would normally refetch
+    // Open menu and pick an option — would normally refetch after a search.
+    fireEvent.press(getByLabelText("Sort by"));
+    fireEvent.press(getByLabelText("Sort by Price ↑"));
     expect((global.fetch as jest.Mock).mock.calls).toHaveLength(0);
   });
 
