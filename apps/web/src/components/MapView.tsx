@@ -112,7 +112,15 @@ function MapViewWeb({
   const idIndexRef = useRef<Map<string, NormalizedListing>>(new Map());
   const [moved, setMoved] = useState(false);
   const initialBboxRef = useRef<Bbox | null>(null);
+  // `mapLoadedRef` keeps a non-reactive copy for handlers that fire
+  // outside React's render cycle (the `moveend` listener etc.).
+  // `mapLoaded` (state) drives the dependent effects below — without
+  // it, an effect that runs before `map.on("load")` fires would early-
+  // exit and never re-run, leaving the layer it depends on stuck
+  // empty (Codex review #100). Pair them: set both together when load
+  // fires; reset both on cleanup.
   const mapLoadedRef = useRef(false);
+  const [mapLoaded, setMapLoaded] = useState(false);
   // Cache of fetched overlay data so we never refetch in a session.
   const overlayCacheRef = useRef<{
     catchments?: GeoJSON.FeatureCollection | null;
@@ -161,6 +169,7 @@ function MapViewWeb({
 
     map.on("load", () => {
       mapLoadedRef.current = true;
+      setMapLoaded(true);
       // Catchments + skytrain sources are added empty; the toggle
       // effect below populates + renders layers when first enabled.
       map.addSource(CATCHMENTS_SOURCE, {
@@ -351,6 +360,7 @@ function MapViewWeb({
       map.remove();
       mapRef.current = null;
       mapLoadedRef.current = false;
+      setMapLoaded(false);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -368,7 +378,7 @@ function MapViewWeb({
   // re-set the paint when the selection changes.
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !mapLoadedRef.current) return;
+    if (!map || !mapLoaded) return;
     const id = selectedListingId ?? "";
     map.setPaintProperty(POINT_LAYER, "circle-color", [
       "case",
@@ -382,12 +392,12 @@ function MapViewWeb({
       12,
       8,
     ]);
-  }, [selectedListingId]);
+  }, [selectedListingId, mapLoaded]);
 
   // Catchments overlay — fetch once, toggle layer visibility per props.
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !mapLoadedRef.current) return;
+    if (!map || !mapLoaded) return;
     const visibility = overlays.catchments ? "visible" : "none";
     map.setLayoutProperty(CATCHMENTS_FILL_LAYER, "visibility", visibility);
     map.setLayoutProperty(CATCHMENTS_LINE_LAYER, "visibility", visibility);
@@ -406,7 +416,7 @@ function MapViewWeb({
       .catch(() => {
         overlayCacheRef.current.catchments = null;
       });
-  }, [overlays.catchments, apiBaseUrl]);
+  }, [overlays.catchments, apiBaseUrl, mapLoaded]);
 
   // Selected-neighborhood overlay (#92). When the user filters by
   // neighborhood, fetch the full city polygon set once and filter
@@ -414,7 +424,7 @@ function MapViewWeb({
   // polygons the backend post-filter is using.
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !mapLoadedRef.current) return;
+    if (!map || !mapLoaded) return;
     const names = selectedNeighborhoods ?? [];
     const visibility = names.length > 0 ? "visible" : "none";
     map.setLayoutProperty(NEIGHBORHOODS_FILL_LAYER, "visibility", visibility);
@@ -451,13 +461,13 @@ function MapViewWeb({
       .catch(() => {
         overlayCacheRef.current.neighborhoods = null;
       });
-  }, [selectedNeighborhoods, apiBaseUrl]);
+  }, [selectedNeighborhoods, apiBaseUrl, mapLoaded]);
 
   // Skytrain overlay — fetch once, render as point features for the
   // radii circle layer.
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !mapLoadedRef.current) return;
+    if (!map || !mapLoaded) return;
     const visibility = overlays.skytrain ? "visible" : "none";
     map.setLayoutProperty(SKYTRAIN_LAYER, "visibility", visibility);
     if (!overlays.skytrain) return;
@@ -488,7 +498,7 @@ function MapViewWeb({
       .catch(() => {
         overlayCacheRef.current.skytrain = null;
       });
-  }, [overlays.skytrain, apiBaseUrl]);
+  }, [overlays.skytrain, apiBaseUrl, mapLoaded]);
 
   const onSearchHere = () => {
     const map = mapRef.current;
