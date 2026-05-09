@@ -197,43 +197,31 @@ async def test_sort_title_and_source_and_bedrooms_directions(session):
     )
     svc = AggregatorService(adapters=[adapter], session=session, cache_ttl_seconds=900)
 
-    resp = await svc.search(
-        SearchRequest(query=NormalizedQuery(), sort=SortOrder.TITLE_ASC)
-    )
+    resp = await svc.search(SearchRequest(query=NormalizedQuery(), sort=SortOrder.TITLE_ASC))
     assert [x.title for x in resp.listings] == ["Apple loft", "Bright suite", "Cozy condo"]
 
     resp = await svc.search(
-        SearchRequest(
-            query=NormalizedQuery(), sort=SortOrder.TITLE_DESC, force_refresh=True
-        )
+        SearchRequest(query=NormalizedQuery(), sort=SortOrder.TITLE_DESC, force_refresh=True)
     )
     assert [x.title for x in resp.listings] == ["Cozy condo", "Bright suite", "Apple loft"]
 
     resp = await svc.search(
-        SearchRequest(
-            query=NormalizedQuery(), sort=SortOrder.SOURCE_ASC, force_refresh=True
-        )
+        SearchRequest(query=NormalizedQuery(), sort=SortOrder.SOURCE_ASC, force_refresh=True)
     )
     assert [x.source for x in resp.listings] == ["craigslist", "padmapper", "zumper"]
 
     resp = await svc.search(
-        SearchRequest(
-            query=NormalizedQuery(), sort=SortOrder.SOURCE_DESC, force_refresh=True
-        )
+        SearchRequest(query=NormalizedQuery(), sort=SortOrder.SOURCE_DESC, force_refresh=True)
     )
     assert [x.source for x in resp.listings] == ["zumper", "padmapper", "craigslist"]
 
     resp = await svc.search(
-        SearchRequest(
-            query=NormalizedQuery(), sort=SortOrder.BEDROOMS_ASC, force_refresh=True
-        )
+        SearchRequest(query=NormalizedQuery(), sort=SortOrder.BEDROOMS_ASC, force_refresh=True)
     )
     assert [x.bedrooms for x in resp.listings] == [1, 2, 3]
 
     resp = await svc.search(
-        SearchRequest(
-            query=NormalizedQuery(), sort=SortOrder.BEDROOMS_DESC, force_refresh=True
-        )
+        SearchRequest(query=NormalizedQuery(), sort=SortOrder.BEDROOMS_DESC, force_refresh=True)
     )
     assert [x.bedrooms for x in resp.listings] == [3, 2, 1]
 
@@ -263,9 +251,7 @@ async def test_legacy_bedrooms_alias_sorts_descending(session):
         ]
     )
     svc = AggregatorService(adapters=[adapter], session=session, cache_ttl_seconds=900)
-    resp = await svc.search(
-        SearchRequest(query=NormalizedQuery(), sort=SortOrder.BEDROOMS)
-    )
+    resp = await svc.search(SearchRequest(query=NormalizedQuery(), sort=SortOrder.BEDROOMS))
     assert [x.bedrooms for x in resp.listings] == [3, 1]
 
 
