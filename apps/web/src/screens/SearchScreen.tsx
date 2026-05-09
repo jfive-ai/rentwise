@@ -98,6 +98,12 @@ export function SearchScreen({ apiBaseUrl }: Props) {
   // it's still the latest. Prevents stale responses from overwriting newer ones
   // when calls overlap (e.g. rapid Search clicks, Search during Load more).
   const reqIdRef = useRef(0);
+  // Same idea for the auto-parse path (#101 → #102 review): if the user
+  // edits NL text and re-clicks Search before the in-flight translate
+  // resolves, the slower response must NOT replace() the now-stale
+  // query, write lastParsedNlText, or kick off a runSearch — that
+  // would overwrite the newer search's URL/state with the older intent.
+  const parseReqIdRef = useRef(0);
   // True after the user has triggered at least one search. Gates the sort-effect
   // so changing sort doesn't fetch on initial mount.
   const hasSearchedRef = useRef(false);
@@ -128,6 +134,14 @@ export function SearchScreen({ apiBaseUrl }: Props) {
       queryOverride?: NormalizedQuery,
     ): Promise<void> => {
       const myId = ++reqIdRef.current;
+      // Invalidate any in-flight NL parse: a runSearch call (from the
+      // sort effect, URL hydration, filter-mode Search, etc.) means a
+      // newer intent is committing fresh state, and a stale parse
+      // resolving later must NOT replace() / runSearch over it
+      // (#102 review). The parse-path's own runSearch call also bumps
+      // here, but its commit happens BEFORE the runSearch — so it's
+      // self-consistent.
+      parseReqIdRef.current++;
       hasSearchedRef.current = true;
       setLastCall({ offset: nextOffset, append });
       setStatus("loading");
@@ -184,11 +198,17 @@ export function SearchScreen({ apiBaseUrl }: Props) {
     // returned everything Craigslist had.
     const trimmed = nlText.trim();
     if (mode === "nl" && trimmed.length > 0 && trimmed !== lastParsedNlText) {
+      const myParseId = ++parseReqIdRef.current;
       setStatus("loading");
       setErrMsg("");
       void (async () => {
         try {
           const result = await client.translateQuery({ text: trimmed });
+          // Race guard (#102 review): a newer Search click may have
+          // bumped parseReqIdRef while we were awaiting. Drop the
+          // stale response on the floor — don't replace the query,
+          // don't write lastParsedNlText, don't fire runSearch.
+          if (myParseId !== parseReqIdRef.current) return;
           replace(result.query);
           setLastParsedNlText(trimmed);
           // Sync URL with the freshly-parsed structured query (the
@@ -202,6 +222,7 @@ export function SearchScreen({ apiBaseUrl }: Props) {
           }
           await runSearch(0, false, result.query);
         } catch (e) {
+          if (myParseId !== parseReqIdRef.current) return;
           setStatus("error");
           setErrMsg(
             `Couldn't parse query — ${e instanceof Error ? e.message : String(e)}`,
