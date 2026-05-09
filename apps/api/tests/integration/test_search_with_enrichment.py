@@ -206,7 +206,7 @@ def app_client_post_filter(monkeypatch, tmp_sqlite_url):
         async def geocode(self, query: str):
             self.calls.append(query)
             if "8th avenue" in query.lower():
-                return GeocodeResult(lat=49.275, lon=-123.180)
+                return GeocodeResult(lat=49.255, lon=-123.185)
             return GeocodeResult(lat=49.230, lon=-123.080)
 
     geo = _DispatchingGeocoder()
@@ -237,7 +237,7 @@ def test_transit_max_walk_post_filter(app_client_post_filter) -> None:
     a max-walk filter that only the inside-Byng coords satisfy proves the
     aggregator drops the other one."""
     client, _geo = app_client_post_filter
-    # Inside-Byng (49.275, -123.180) is ~5 km from Broadway-City Hall but
+    # Inside-Byng (49.255, -123.185) is ~5 km from Broadway-City Hall but
     # closer to W 4th @ MacDonald (10020 at 49.268, -123.174). The outside
     # listing (49.230, -123.080) is closest to Joyce-Collingwood (49.238,
     # -123.032) — much further from any other stop. Cap walk at 4 minutes
@@ -305,7 +305,7 @@ def app_client_dedup(monkeypatch, tmp_sqlite_url):
 
     class _OneCoordsGeocoder:
         async def geocode(self, query: str):
-            return GeocodeResult(lat=49.275, lon=-123.180)
+            return GeocodeResult(lat=49.255, lon=-123.185)
 
     class _NoOpHasher:
         async def hash_url(self, url: str) -> str | None:

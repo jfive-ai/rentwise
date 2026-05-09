@@ -92,12 +92,22 @@ def test_lookup_handles_missing_coords() -> None:
 
 
 def test_lookup_works_against_default_fixture() -> None:
-    """The committed synthetic fixture must round-trip — sanity check."""
+    """The committed Voronoi catchments resolve well-known addresses (#93).
+
+    These coords are at the heart of each school's Voronoi cell — they
+    should still resolve to the same school after every refresh of
+    `vsb_catchments.geojson`. If a refresh changes the answer here, the
+    Voronoi seed (school point) probably moved.
+    """
     lookup = SchoolCatchmentLookup()  # default path
-    # A point in the synthetic Lord Byng polygon (-123.220 .. -123.150 west,
-    # 49.255 .. 49.295 north).
-    out = lookup.lookup(49.275, -123.180)
-    assert out.secondary == "Lord Byng"
+    # 4750 W 16th Ave area — Lord Byng territory.
+    assert lookup.lookup(49.255, -123.185).secondary == "Lord Byng"
+    # Kitsilano Secondary's neighborhood.
+    assert lookup.lookup(49.262, -123.163).secondary == "Kitsilano"
+    # Eric Hamber catchment near Oak/41st.
+    assert lookup.lookup(49.235, -123.125).secondary == "Eric Hamber"
+    # Britannia catchment around Commercial Drive.
+    assert lookup.lookup(49.275, -123.07).secondary == "Britannia"
 
 
 def test_loader_skips_malformed_features(tmp_path: Path) -> None:

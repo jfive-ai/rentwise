@@ -1,15 +1,70 @@
 # Enrichment data files
 
-These files are loaded at runtime by `enrichment/school_catchments.py`
-and `enrichment/transit.py`. The committed copies are **synthetic** —
-hand-authored covering a few representative Vancouver neighborhoods so
-the unit tests are self-contained and CI never has to fetch external
-data.
+These files are loaded at runtime by `enrichment/school_catchments.py`,
+`enrichment/transit.py`, and `enrichment/neighborhoods.py`. They split
+into two groups:
 
-For real-world production use, refresh both files from the upstream
-sources below. This is a **manual maintainer task**, not an automated
-job — per the project's TOS posture (`docs/operational-rules.md`) we don't
-auto-fetch external data.
+- **Real, committed**: `vancouver_local_areas.geojson` and
+  `vancouver_schools.geojson` are official City of Vancouver Open Data
+  (Open Government Licence – Vancouver). These rarely need refreshing.
+- **Derived, committed**: `vsb_catchments.geojson` is a Voronoi
+  approximation generated from `vancouver_schools.geojson` by
+  `apps/api/scripts/refresh_school_catchments.py`. The Vancouver School
+  Board does not publish official catchment polygons as open data, so
+  Voronoi-from-public-school-points is the most defensible
+  approximation we can ship from public sources alone.
+- **Synthetic, committed**: `translink_stops.json` is a hand-authored
+  placeholder so the unit tests stay self-contained and CI never has
+  to fetch external data.
+
+For real-world production use, refresh the derived / synthetic files
+from the upstream sources below. This is a **manual maintainer task**,
+not an automated job — per the project's TOS posture
+(`docs/operational-rules.md`) we don't auto-fetch external data.
+
+## Refreshing `vancouver_local_areas.geojson`
+
+Source: City of Vancouver Open Data — `local-area-boundary` dataset
+(<https://opendata.vancouver.ca/explore/dataset/local-area-boundary/>),
+licensed under the [Open Government Licence – Vancouver](https://opendata.vancouver.ca/page/licence/).
+
+```bash
+curl -s 'https://opendata.vancouver.ca/api/explore/v2.1/catalog/datasets/local-area-boundary/exports/geojson' \
+  -o apps/api/rentwise/enrichment/data/vancouver_local_areas.geojson
+```
+
+## Refreshing `vancouver_schools.geojson`
+
+Source: City of Vancouver Open Data — `schools` dataset
+(<https://opendata.vancouver.ca/explore/dataset/schools/>), Open
+Government Licence – Vancouver. Used to derive catchments via Voronoi.
+
+```bash
+curl -s 'https://opendata.vancouver.ca/api/explore/v2.1/catalog/datasets/schools/exports/geojson' \
+  -o apps/api/rentwise/enrichment/data/vancouver_schools.geojson
+```
+
+After refreshing, regenerate the catchment file:
+
+```bash
+cd apps/api && python scripts/refresh_school_catchments.py
+```
+
+## Refreshing `vsb_catchments.geojson` (#93)
+
+Generated, not edited by hand:
+
+```bash
+cd apps/api && python scripts/refresh_school_catchments.py
+```
+
+The script reads `vancouver_local_areas.geojson` and
+`vancouver_schools.geojson`, computes a Voronoi tessellation of
+public secondary-school points clipped to the city boundary, and
+writes the result. Each feature carries `_source: "voronoi-from-school-points"`
+and a `_note` explaining the approximation — the file is **not** an
+authoritative VSB catchment map; it is a deterministic, public-data
+approximation that's significantly better than keyword matching.
 
 ## Refreshing `vsb_catchments.geojson`
 
