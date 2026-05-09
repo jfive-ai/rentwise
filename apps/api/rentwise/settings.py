@@ -90,8 +90,11 @@ class Settings(BaseSettings):
         default=False,
         validation_alias="RENTWISE_REW_ENABLED",
     )
+    # liv.rent extractor was calibrated against live HTML in #105 —
+    # default-on so a fresh install gets results from a second source
+    # without extra opt-in. Set RENTWISE_LIVRENT_ENABLED=false to disable.
     rentwise_livrent_enabled: bool = Field(
-        default=False,
+        default=True,
         validation_alias="RENTWISE_LIVRENT_ENABLED",
     )
 

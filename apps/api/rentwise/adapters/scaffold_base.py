@@ -137,8 +137,9 @@ class ScaffoldAdapterBase:
 
         Per operational-rules § 1, robots.txt is the gate. If our path
         is Disallow'd we report `blocked` so the caller knows to skip
-        this source. Anything else returns `degraded` — these adapters
-        are stubs, so we deliberately do not claim `ok`.
+        this source. Calibrated subclasses (``is_extractor_calibrated =
+        True``) report ``ok`` once robots is allowed; uncalibrated stubs
+        report ``degraded`` so the source-health UI surfaces the reason.
         """
         url = self._search_url(NormalizedQuery())
         try:
@@ -149,11 +150,13 @@ class ScaffoldAdapterBase:
             return AdapterHealth(name=self.name, status="degraded", last_error=str(exc))
         if not allowed:
             return AdapterHealth(name=self.name, status="blocked", last_error="robots.txt")
-        return AdapterHealth(
-            name=self.name,
-            status="degraded",
-            last_error="scaffold: extractor not yet implemented",
-        )
+        if not self.is_extractor_calibrated:
+            return AdapterHealth(
+                name=self.name,
+                status="degraded",
+                last_error="scaffold: extractor not yet implemented",
+            )
+        return AdapterHealth(name=self.name, status="ok")
 
     async def close(self) -> None:
         await self.fetcher.close()
