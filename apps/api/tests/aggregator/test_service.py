@@ -10,7 +10,11 @@ import pytest
 from pydantic import HttpUrl
 
 from rentwise.adapters.base import AdapterCapabilities
-from rentwise.aggregator.service import AggregatorService
+from rentwise.adapters.scaffold_base import ScaffoldAdapterBase
+from rentwise.aggregator.service import (
+    AggregatorService,
+    _is_uncalibrated_scaffold,
+)
 from rentwise.models import (
     AdapterHealth,
     NormalizedQuery,
@@ -170,6 +174,41 @@ async def test_all_adapters_failing_does_not_poison_cache(session):
     assert adapter.calls == 1, "second call must retry, not serve poisoned empty cache"
     assert resp.cache_status == "miss"
     assert resp.source_health["craigslist"].status == "degraded"
+
+
+class _StubScaffold(ScaffoldAdapterBase):
+    """Concrete scaffold subclass that doesn't override `_extract`."""
+
+    name: str = "stub_scaffold"
+    base_url: str = "https://example.test"
+
+
+class _CalibratedScaffold(ScaffoldAdapterBase):
+    """Scaffold subclass with a real `_extract` (returns listings)."""
+
+    name: str = "calibrated_scaffold"
+    base_url: str = "https://example.test"
+
+    def _extract(self, html: str, query: NormalizedQuery) -> list[RawListing]:
+        return []
+
+
+def test_uncalibrated_scaffold_detected():
+    """`_is_uncalibrated_scaffold` returns True only for stub subclasses (#94)."""
+    stub = _StubScaffold(user_agent="rentwise-test/0.1")
+    assert _is_uncalibrated_scaffold(stub) is True
+
+
+def test_calibrated_scaffold_not_flagged():
+    """Subclass that overrides `_extract` is treated as production-ready (#94)."""
+    cal = _CalibratedScaffold(user_agent="rentwise-test/0.1")
+    assert _is_uncalibrated_scaffold(cal) is False
+
+
+def test_non_scaffold_adapter_not_flagged():
+    """A production adapter (FakeAdapter / Craigslist / etc.) isn't a scaffold."""
+    adapter = FakeAdapter(listings=[])
+    assert _is_uncalibrated_scaffold(adapter) is False
 
 
 @pytest.mark.asyncio

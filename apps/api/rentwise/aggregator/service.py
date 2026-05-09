@@ -40,6 +40,27 @@ from rentwise.storage.repositories import (
 log = structlog.get_logger(__name__)
 
 
+def _is_uncalibrated_scaffold(adapter: SourceAdapter) -> bool:
+    """True iff `adapter` is a `ScaffoldAdapterBase` subclass that hasn't
+    overridden `_extract`.
+
+    The scaffold's stub `_extract` returns ``[]`` plus a structlog
+    warning. When such an adapter is enabled, a successful HTTP fetch
+    paired with an empty result is the expected "I'm a stub" signal,
+    not "I found nothing matching" — surface it so the user sees why.
+
+    Imported lazily so the aggregator stays usable in environments where
+    the Playwright-based scaffold module wouldn't import.
+    """
+    try:
+        from rentwise.adapters.scaffold_base import ScaffoldAdapterBase
+    except Exception:  # pragma: no cover — import-time miss is non-fatal
+        return False
+    if not isinstance(adapter, ScaffoldAdapterBase):
+        return False
+    return type(adapter)._extract is ScaffoldAdapterBase._extract
+
+
 class AggregatorService:
     def __init__(
         self,
@@ -88,9 +109,11 @@ class AggregatorService:
         for adapter in self.adapters:
             projected, dropped = project_query_to_capabilities(req.query, adapter.capabilities)
             unsupported.update(dropped)
+            adapter_yielded = 0
             try:
                 seen: set[str] = set()
                 async for raw in adapter.search(projected):
+                    adapter_yielded += 1
                     if raw.source_listing_id in seen:
                         continue
                     seen.add(raw.source_listing_id)
@@ -119,8 +142,26 @@ class AggregatorService:
                             )
                     saved = await self.listing_repo.upsert(listing)
                     all_listings.append(saved)
-                await self.health_repo.set(adapter.name, "ok", error=None)
-                health[adapter.name] = AdapterHealth(name=adapter.name, status="ok")
+                # A successful search that produced zero rows from a known
+                # stub adapter is reported as degraded so the user sees
+                # *why* their enabled adapter isn't returning anything (#94).
+                # Only triggers for ScaffoldAdapterBase subclasses that
+                # haven't overridden `_extract` — production adapters that
+                # legitimately found no matches still report `ok`.
+                if adapter_yielded == 0 and _is_uncalibrated_scaffold(adapter):
+                    await self.health_repo.set(
+                        adapter.name,
+                        "degraded",
+                        error="scaffold: extractor not yet calibrated against live HTML",
+                    )
+                    health[adapter.name] = AdapterHealth(
+                        name=adapter.name,
+                        status="degraded",
+                        last_error="scaffold: extractor not yet calibrated against live HTML",
+                    )
+                else:
+                    await self.health_repo.set(adapter.name, "ok", error=None)
+                    health[adapter.name] = AdapterHealth(name=adapter.name, status="ok")
                 any_succeeded = True
             except Exception as exc:
                 log.warning("adapter.failed", adapter=adapter.name, error=str(exc))
