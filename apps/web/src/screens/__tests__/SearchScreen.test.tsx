@@ -406,9 +406,11 @@ describe("SearchScreen", () => {
     fireEvent.press(getByLabelText("Natural language"));
     fireEvent.changeText(getByLabelText("Search input"), "Dunbar");
     fireEvent.press(getByText("Search"));
-    // Sort button is not disabled during loading — toggling it fires
-    // the sort-effect's runSearch, which invalidates the parse.
+    // Sort affordance is a dropdown — open it, then pick a different
+    // option so `setSort` actually fires. The sort effect's runSearch
+    // is what invalidates the in-flight parse.
     fireEvent.press(getByLabelText("Sort by"));
+    fireEvent.press(getByLabelText("Sort by Price ↑"));
 
     // Wait for the sort-driven runSearch to land.
     await waitFor(() => {
