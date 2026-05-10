@@ -98,6 +98,10 @@ export function SearchScreen({ apiBaseUrl }: Props) {
   // it's still the latest. Prevents stale responses from overwriting newer ones
   // when calls overlap (e.g. rapid Search clicks, Search during Load more).
   const reqIdRef = useRef(0);
+  // Active in-flight stream's AbortController. A new search aborts the
+  // previous one so the backend can cancel its adapter tasks instead
+  // of finishing them in the background and wasting work (issue #113).
+  const streamAbortRef = useRef<AbortController | null>(null);
   // Same idea for the auto-parse path (#101 → #102 review): if the user
   // edits NL text and re-clicks Search before the in-flight translate
   // resolves, the slower response must NOT replace() the now-stale
@@ -146,12 +150,67 @@ export function SearchScreen({ apiBaseUrl }: Props) {
       setLastCall({ offset: nextOffset, append });
       setStatus("loading");
       setErrMsg("");
+      const reqQuery = queryOverride ?? query;
+
+      // Initial / fresh searches use the streaming endpoint so the user
+      // sees listings as they arrive (issue #113). "Load more" stays on
+      // legacy POST /search because the streaming endpoint has no
+      // offset/limit semantics yet — it ships the full result set.
+      const useStream = !append && nextOffset === 0;
+
+      if (useStream) {
+        // Cancel any prior in-flight stream so the backend stops its
+        // adapter tasks rather than racing this one to completion.
+        streamAbortRef.current?.abort();
+        const ac = new AbortController();
+        streamAbortRef.current = ac;
+
+        // Reset the visible list so streamed listings replace, not append.
+        setListings([]);
+        setTotal(0);
+        setUnsupported([]);
+        setSourceHealth({});
+        setOffset(0);
+
+        try {
+          for await (const ev of client.searchStream(
+            {
+              query: reqQuery,
+              limit: PAGE_SIZE,
+              offset: 0,
+              sort,
+              force_refresh: false,
+            },
+            { signal: ac.signal },
+          )) {
+            if (myId !== reqIdRef.current) return; // superseded
+            if (ev.event === "listing") {
+              setListings((prev) => [...prev, ev.data]);
+              setTotal((t) => t + 1);
+            } else if (ev.event === "complete") {
+              setTotal(ev.total);
+              setUnsupported(ev.unsupported_filters);
+              setSourceHealth(ev.source_health);
+              setStatus("ok");
+            }
+          }
+        } catch (e) {
+          if (myId !== reqIdRef.current) return; // superseded
+          // AbortError means we cancelled this stream because a newer
+          // search took over — that's not user-visible failure.
+          if (e instanceof DOMException && e.name === "AbortError") return;
+          setStatus("error");
+          setErrMsg(e instanceof Error ? e.message : String(e));
+        }
+        return;
+      }
+
       try {
         const res: SearchResponse = await client.search({
           // queryOverride is for the mount-from-URL path: replace() schedules
           // a state update but the closure here still captures the stale
           // empty query, so the caller passes the decoded query explicitly.
-          query: queryOverride ?? query,
+          query: reqQuery,
           limit: PAGE_SIZE,
           offset: nextOffset,
           sort,

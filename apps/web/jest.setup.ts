@@ -1,5 +1,22 @@
 import "@testing-library/react-native/extend-expect";
 
+// Force a single TextEncoder/TextDecoder/ReadableStream realm across
+// the test runtime. jsdom 22's defaults disagree on Uint8Array
+// identity, which makes ReadableStream chunks fail the `value
+// instanceof Uint8Array` check inside TextDecoder (silent ""). Pin
+// everything to Node's implementations — same realm = same Uint8Array
+// constructor — so the streaming search consumer (issue #113) tests
+// behave the same way as the production browser path.
+import { ReadableStream } from "node:stream/web";
+import { TextDecoder, TextEncoder } from "util";
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+(globalThis as any).TextEncoder = TextEncoder;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+(globalThis as any).TextDecoder = TextDecoder;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+(globalThis as any).ReadableStream = ReadableStream;
+
 // AsyncStorage doesn't exist in jsdom; use the official mock.
 jest.mock("@react-native-async-storage/async-storage", () =>
   require("@react-native-async-storage/async-storage/jest/async-storage-mock")

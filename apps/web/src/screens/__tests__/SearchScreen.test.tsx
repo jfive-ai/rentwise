@@ -57,6 +57,66 @@ const okResponse = () => ({
   clone: () => ({ text: async () => JSON.stringify(fixture) }),
 });
 
+// Issue #113: SearchScreen now uses POST /search/stream for fresh
+// searches. These helpers convert a SearchResponse-shaped fixture into
+// an NDJSON ReadableStream so tests can keep using `fixture` as their
+// source of truth.
+
+interface FetchResponseShape {
+  ok: boolean;
+  status: number;
+  body?: ReadableStream<Uint8Array> | null;
+  json?: () => Promise<unknown>;
+  text?: () => Promise<string>;
+  clone?: () => { text: () => Promise<string> };
+}
+
+function ndjsonBody(events: unknown[]): ReadableStream<Uint8Array> {
+  const enc = new TextEncoder();
+  return new ReadableStream<Uint8Array>({
+    start(c) {
+      for (const e of events) c.enqueue(enc.encode(JSON.stringify(e) + "\n"));
+      c.close();
+    },
+  });
+}
+
+function streamFromFixture(f: typeof fixture): FetchResponseShape {
+  const events = [
+    { event: "started", adapters: ["craigslist"] },
+    ...f.listings.map((l) => ({ event: "listing", data: l })),
+    {
+      event: "adapter_done",
+      adapter: "craigslist",
+      count: f.listings.length,
+      status: "ok",
+      error: null,
+    },
+    {
+      event: "complete",
+      total: f.total,
+      cache_status: f.cache_status,
+      unsupported_filters: f.unsupported_filters,
+      source_health: f.source_health,
+    },
+  ];
+  return {
+    ok: true,
+    status: 200,
+    body: ndjsonBody(events),
+    clone: () => ({ text: async () => "" }),
+  };
+}
+
+function urlAwareMock(): (url: string) => Promise<FetchResponseShape> {
+  return (url: string) => {
+    if (typeof url === "string" && url.endsWith("/search/stream")) {
+      return Promise.resolve(streamFromFixture(fixture));
+    }
+    return Promise.resolve(okResponse() as FetchResponseShape);
+  };
+}
+
 describe("SearchScreen", () => {
   beforeEach(() => {
     // Clear call history on the underlying jest.fn() (set in beforeAll). Jest's
@@ -64,9 +124,9 @@ describe("SearchScreen", () => {
     // call history of a pre-existing jest.fn(); without this, mock.calls leaks
     // across tests in this suite.
     (global.fetch as jest.Mock).mockClear?.();
-    jest.spyOn(global, "fetch").mockImplementation(() =>
-      Promise.resolve(okResponse() as never)
-    );
+    jest.spyOn(global, "fetch").mockImplementation(((input: string | URL | Request) =>
+      urlAwareMock()(typeof input === "string" ? input : input.toString())
+    ) as unknown as typeof fetch);
     window.localStorage.clear();
     mockSearchParams = {};
     mockReplace.mockReset();
@@ -109,12 +169,9 @@ describe("SearchScreen", () => {
   });
 
   it("renders the unsupported-filters banner when API returns non-empty list", async () => {
-    (global.fetch as jest.Mock).mockResolvedValueOnce({
-      ok: true,
-      status: 200,
-      json: async () => ({ ...fixture, unsupported_filters: ["pets"] }),
-      clone: () => ({ text: async () => JSON.stringify({ ...fixture, unsupported_filters: ["pets"] }) }),
-    });
+    (global.fetch as jest.Mock).mockResolvedValueOnce(
+      streamFromFixture({ ...fixture, unsupported_filters: ["pets"] } as typeof fixture),
+    );
     const { getByText } = renderScreen();
     fireEvent.press(getByText("Search"));
     await waitFor(() => expect(getByText(/pets/)).toBeTruthy());
@@ -124,7 +181,9 @@ describe("SearchScreen", () => {
     (global.fetch as jest.Mock).mockResolvedValueOnce({
       ok: false,
       status: 500,
+      body: null,
       json: async () => ({ error: "boom" }),
+      text: async () => '{"error":"boom"}',
       clone: () => ({ text: async () => '{"error":"boom"}' }),
     });
     const { getByText } = renderScreen();
@@ -148,12 +207,11 @@ describe("SearchScreen", () => {
   });
 
   it("Load more advances offset by limit", async () => {
-    // First call returns total=10 so "Load more" appears
-    (global.fetch as jest.Mock).mockResolvedValueOnce({
-      ok: true, status: 200,
-      json: async () => ({ ...fixture, total: 20 }),
-      clone: () => ({ text: async () => JSON.stringify({ ...fixture, total: 20 }) }),
-    });
+    // First call returns total=20 so "Load more" appears.
+    // Initial search uses /search/stream now, so emit it as NDJSON.
+    (global.fetch as jest.Mock).mockResolvedValueOnce(
+      streamFromFixture({ ...fixture, total: 20 }),
+    );
     const { getByText } = renderScreen();
     fireEvent.press(getByText("Search"));
     await waitFor(() => expect(getByText("20 listings")).toBeTruthy());
@@ -216,8 +274,11 @@ describe("SearchScreen", () => {
       clone: () => ({ text: async () => JSON.stringify(body) }),
     });
 
-    // Initial Search: total=20, 5 listings returned (page 1)
-    (global.fetch as jest.Mock).mockResolvedValueOnce(respond(rekey(1)));
+    // Initial Search uses /search/stream now (issue #113). Emit it as
+    // NDJSON; subsequent Load-more calls hit the legacy /search.
+    (global.fetch as jest.Mock).mockResolvedValueOnce(
+      streamFromFixture(rekey(1)),
+    );
     const { getByText, getAllByText } = renderScreen();
     fireEvent.press(getByText("Search"));
     await waitFor(() => expect(getByText("20 listings")).toBeTruthy());
@@ -281,13 +342,16 @@ describe("SearchScreen", () => {
           clone: () => ({ text: async () => "{}" }),
         } as never);
       }
-      if (url.endsWith("/search")) {
+      if (url.endsWith("/search") || url.endsWith("/search/stream")) {
         searchCallIdx = fetchSpy.mock.calls.length;
         // Assert ordering: translate must have happened first.
         expect(translateCalled).toBe(true);
         expect(JSON.parse(init!.body as string).query.neighborhoods).toEqual([
           "Dunbar",
         ]);
+      }
+      if (url.endsWith("/search/stream")) {
+        return Promise.resolve(streamFromFixture(fixture) as never);
       }
       return Promise.resolve(okResponse() as never);
     });
@@ -324,6 +388,9 @@ describe("SearchScreen", () => {
           }),
           clone: () => ({ text: async () => "{}" }),
         } as never);
+      }
+      if (url.endsWith("/search/stream")) {
+        return Promise.resolve(streamFromFixture(fixture) as never);
       }
       return Promise.resolve(okResponse() as never);
     });
@@ -384,13 +451,16 @@ describe("SearchScreen", () => {
             });
         }) as never;
       }
-      if (url.endsWith("/search")) {
+      if (url.endsWith("/search") || url.endsWith("/search/stream")) {
         const body = JSON.parse(init!.body as string) as {
           query: { neighborhoods: string[] };
         };
         if (body.query.neighborhoods.includes("Dunbar")) {
           staleParseCommitted = true;
         }
+      }
+      if (url.endsWith("/search/stream")) {
+        return Promise.resolve(streamFromFixture(fixture) as never);
       }
       return Promise.resolve(okResponse() as never);
     });
@@ -412,10 +482,15 @@ describe("SearchScreen", () => {
     fireEvent.press(getByLabelText("Sort by"));
     fireEvent.press(getByLabelText("Sort by Price ↑"));
 
-    // Wait for the sort-driven runSearch to land.
+    // Wait for the sort-driven runSearch to land. Both fresh searches
+    // hit /search/stream now (issue #113); the filter widens to count
+    // either endpoint so this test stays meaningful as the streaming
+    // rollout proceeds.
+    const isSearchUrl = (u: string) =>
+      u.endsWith("/search") || u.endsWith("/search/stream");
     await waitFor(() => {
       const searches = fetchSpy.mock.calls.filter((c) =>
-        (c[0] as string).endsWith("/search"),
+        isSearchUrl(c[0] as string),
       );
       expect(searches.length).toBe(2);
     });
@@ -428,9 +503,7 @@ describe("SearchScreen", () => {
     // Still exactly two searches — the initial filters-mode one plus
     // the sort-driven one. No third search from the dropped parse.
     expect(
-      fetchSpy.mock.calls.filter((c) =>
-        (c[0] as string).endsWith("/search"),
-      ),
+      fetchSpy.mock.calls.filter((c) => isSearchUrl(c[0] as string)),
     ).toHaveLength(2);
   });
 
@@ -467,8 +540,11 @@ describe("SearchScreen", () => {
 
     fireEvent.press(getByText("Search"));
     await waitFor(() => expect(getByText("5 listings")).toBeTruthy());
-    const lastSearch = (global.fetch as jest.Mock).mock.calls.find((c) =>
-      (c[0] as string).endsWith("/search")
+    const lastSearch = (global.fetch as jest.Mock).mock.calls.find(
+      (c) => {
+        const u = c[0] as string;
+        return u.endsWith("/search") || u.endsWith("/search/stream");
+      },
     );
     expect(lastSearch).toBeTruthy();
     expect(JSON.parse(lastSearch![1].body).query.neighborhoods).toEqual([
@@ -486,12 +562,7 @@ describe("SearchScreen", () => {
         { ...fixture.listings[0], id: "shared-b", canonical_id: "cluster-1", source: "rentals_ca" },
       ],
     };
-    (global.fetch as jest.Mock).mockResolvedValueOnce({
-      ok: true,
-      status: 200,
-      json: async () => clustered,
-      clone: () => ({ text: async () => JSON.stringify(clustered) }),
-    });
+    (global.fetch as jest.Mock).mockResolvedValueOnce(streamFromFixture(clustered));
 
     const { getByText, getAllByText, queryByText } = renderScreen();
     fireEvent.press(getByText("Search"));
@@ -552,9 +623,12 @@ describe("SearchScreen", () => {
     const { getByText } = renderScreen();
     // Auto-search runs; results render without us pressing Search.
     await waitFor(() => expect(getByText("5 listings")).toBeTruthy());
-    // Find the /search call and check its query body.
+    // Find the /search* call and check its query body.
     const searchCall = (global.fetch as jest.Mock).mock.calls.find(
-      (c) => (c[0] as string).endsWith("/search"),
+      (c) => {
+        const u = c[0] as string;
+        return u.endsWith("/search") || u.endsWith("/search/stream");
+      },
     )!;
     expect(JSON.parse(searchCall[1].body).query).toMatchObject({
       bedrooms_min: 2,
@@ -601,7 +675,9 @@ describe("SearchScreen", () => {
     expect(fetchSpy).toHaveBeenCalledTimes(1);
 
     // Resolve the in-flight response → state transitions back to idle.
-    resolveFirst!(okResponse());
+    // Initial search now hits /search/stream (issue #113), so we resolve
+    // with an NDJSON stream variant of the same fixture.
+    resolveFirst!(streamFromFixture(fixture));
     await waitFor(() => expect(getByText("5 listings")).toBeTruthy());
   });
 });
