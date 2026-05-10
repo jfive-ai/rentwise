@@ -215,9 +215,46 @@ class AggregatorService:
                     await self.health_repo.set(adapter.name, "ok", error=None)
                     health[adapter.name] = AdapterHealth(name=adapter.name, status="ok")
                 any_succeeded = True
+                # #109 follow-up: commit so the SQLite write lock is
+                # released between adapters. Without this commit, the
+                # write transaction stays open for the entire ~30-60 s
+                # request lifetime; any concurrent /search request
+                # exceeds busy_timeout and 503s.
+                await self.session.commit()
             except Exception as exc:
                 log.warning("adapter.failed", adapter=adapter.name, error=str(exc))
-                await self.health_repo.set(adapter.name, "degraded", error=str(exc))
+                # The exception may have left the session in a
+                # rolled-back state (e.g. an OperationalError mid-flush
+                # poisons the transaction). Roll back explicitly so the
+                # follow-up health write doesn't surface a
+                # PendingRollbackError. Best-effort: a rollback that
+                # itself fails is logged but not re-raised — we still
+                # want to try recording health and move on to the next
+                # adapter. (#109)
+                try:
+                    await self.session.rollback()
+                except Exception as rollback_exc:
+                    log.warning(
+                        "aggregator.rollback_failed",
+                        adapter=adapter.name,
+                        error=str(rollback_exc),
+                    )
+                try:
+                    await self.health_repo.set(adapter.name, "degraded", error=str(exc))
+                    await self.session.commit()
+                except Exception as health_exc:
+                    # Even health bookkeeping failed — log and keep
+                    # going. The user-visible response will still be
+                    # built from in-memory state.
+                    log.warning(
+                        "aggregator.health_write_failed",
+                        adapter=adapter.name,
+                        error=str(health_exc),
+                    )
+                    try:
+                        await self.session.rollback()
+                    except Exception:
+                        pass
                 health[adapter.name] = AdapterHealth(
                     name=adapter.name, status="degraded", last_error=str(exc)
                 )

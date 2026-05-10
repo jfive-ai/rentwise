@@ -256,6 +256,77 @@ async def test_legacy_bedrooms_alias_sorts_descending(session):
 
 
 @pytest.mark.asyncio
+async def test_per_adapter_commit_releases_write_lock(session, monkeypatch):
+    """#109 follow-up: each adapter's writes must be committed before the
+    next adapter starts, otherwise a single /search holds the SQLite
+    write lock for its entire 30-60 s lifetime and any concurrent
+    request 503s. We can't measure the lock directly here, but we
+    can prove the aggregator commits inside the adapter loop by
+    counting commits during search.
+    """
+    a = FakeAdapter(listings=[_raw(1)])
+    b = FakeAdapter(listings=[_raw(2)])
+    b.name = "rentalsca"  # type: ignore[misc]
+    svc = AggregatorService(adapters=[a, b], session=session, cache_ttl_seconds=900)
+
+    real_commit = session.commit
+    commit_count = 0
+
+    async def counting_commit():
+        nonlocal commit_count
+        commit_count += 1
+        await real_commit()
+
+    monkeypatch.setattr(session, "commit", counting_commit)
+
+    await svc.search(SearchRequest(query=NormalizedQuery(bedrooms_min=1)))
+
+    # Two successful adapters → at least two commits inside the loop.
+    # (The wrapper at http/search.py adds one more outside the
+    # aggregator; that one isn't exercised by this test.)
+    assert commit_count >= 2, (
+        f"expected per-adapter commits to release the SQLite write lock, "
+        f"got {commit_count} commits across 2 adapters"
+    )
+
+
+@pytest.mark.asyncio
+async def test_failing_adapter_rolls_back_before_health_write(session, monkeypatch):
+    """#109 follow-up: a failure mid-iteration leaves the session in a
+    poisoned state. The aggregator must rollback before writing the
+    degraded-health row, otherwise SQLAlchemy raises
+    PendingRollbackError and the wrapper turns it into HTTP 503.
+
+    We assert: rollback is invoked, *and* a fresh search after the
+    failure still works (the session was actually recovered).
+    """
+    failing = FakeAdapter(listings=[], should_raise=RuntimeError("boom"))
+    succeeding = FakeAdapter(listings=[_raw(99)])
+    succeeding.name = "rentalsca"  # type: ignore[misc]
+
+    svc = AggregatorService(adapters=[failing, succeeding], session=session, cache_ttl_seconds=900)
+
+    real_rollback = session.rollback
+    rollback_count = 0
+
+    async def counting_rollback():
+        nonlocal rollback_count
+        rollback_count += 1
+        await real_rollback()
+
+    monkeypatch.setattr(session, "rollback", counting_rollback)
+
+    resp = await svc.search(SearchRequest(query=NormalizedQuery(bedrooms_min=1)))
+
+    assert rollback_count >= 1, "must rollback after a failed adapter to clear session state"
+    # The succeeding adapter ran after the failing one — session was
+    # recovered, not stuck in PendingRollbackError.
+    assert resp.source_health["craigslist"].status == "degraded"
+    assert resp.source_health["rentalsca"].status == "ok"
+    assert any(str(x.source_listing_id) == "99" for x in resp.listings)
+
+
+@pytest.mark.asyncio
 async def test_all_adapters_failing_does_not_poison_cache(session):
     """Regression: previously an all-fail run would write listing_ids=[] as fresh,
     masking the outage for the full TTL on the next call."""
