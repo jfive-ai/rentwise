@@ -14,6 +14,7 @@ must never block a search.
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
@@ -40,6 +41,17 @@ log = structlog.get_logger(__name__)
 class EnrichmentConfig:
     enabled: bool = True
     cache_ttl_days: int = 30
+    # Transient geocoder failures (403, 429, timeouts, network errors) get
+    # a much shorter TTL than successes — long enough that one /search
+    # doesn't refire 12 doomed HTTP calls for the same blocked UA, but
+    # short enough that the next morning's search retries once the
+    # upstream issue clears. See issue #114 — Nominatim 403 storm.
+    failure_cache_ttl_seconds: int = 3600
+    # Hard wall-clock cap on a single geocode call. If the provider
+    # hangs past this, we cache the failure and ship the listing without
+    # coords — losing enrichment beats blocking the entire search
+    # (issue #114 + #113).
+    geocode_hard_timeout_seconds: float = 3.0
     provider: str = "nominatim"
     school_catchments_enabled: bool = True
     transit_enabled: bool = True
@@ -119,11 +131,30 @@ class EnrichmentService:
         )
 
     async def _fetch_and_cache(self, canonical: str) -> tuple[float | None, float | None]:
-        """Hit the geocoder, write the result (positive or negative) to cache."""
+        """Hit the geocoder, write the result (positive or negative) to cache.
+
+        Failure modes (issue #114):
+        - ``GeocodeError`` (403/429/network): cache short-lived failure,
+          return None. Without this, every search refires the doomed
+          HTTP call for every listing.
+        - Hard timeout: same — better to drop enrichment for one search
+          than block the entire request on a stuck provider.
+        - ``result is None`` (geocoder said "no match"): cache with the
+          long success TTL, since "this address doesn't exist" is
+          unlikely to change by tomorrow.
+        """
         try:
-            result = await self.geocoder.geocode(canonical)
+            result = await asyncio.wait_for(
+                self.geocoder.geocode(canonical),
+                timeout=self.config.geocode_hard_timeout_seconds,
+            )
+        except TimeoutError:
+            log.info("enrichment.geocode_timeout", address=canonical)
+            await self._cache_failure(canonical, reason="timeout")
+            return (None, None)
         except GeocodeError as exc:
             log.info("enrichment.geocode_failed", address=canonical, error=str(exc))
+            await self._cache_failure(canonical, reason=str(exc))
             return (None, None)
         now = datetime.now(UTC)
         await self.cache.upsert(
@@ -139,6 +170,32 @@ class EnrichmentService:
         if result is None:
             return (None, None)
         return (result.lat, result.lon)
+
+    async def _cache_failure(self, canonical: str, *, reason: str) -> None:
+        """Persist a short-lived negative cache row for a transient failure.
+
+        Encodes the failure reason in ``provider`` (e.g. ``nominatim:fail``)
+        so future readers can tell "geocoder unreachable" apart from
+        "geocoder said no result". The TTL comes from
+        ``failure_cache_ttl_seconds`` so we retry quickly after upstream
+        recovers.
+        """
+        now = datetime.now(UTC)
+        await self.cache.upsert(
+            GeocodeCacheEntry(
+                address_key=canonical,
+                lat=None,
+                lon=None,
+                provider=f"{self.config.provider}:fail",
+                fetched_at=now.isoformat(),
+                stale_after=(
+                    now + timedelta(seconds=self.config.failure_cache_ttl_seconds)
+                ).isoformat(),
+            )
+        )
+        # Tiny breadcrumb so log readers can correlate "every listing
+        # missing coords" with "every address recently 403'd".
+        log.info("enrichment.geocode_failure_cached", address=canonical, reason=reason)
 
     def _lookup_catchments(self, lat: float | None, lon: float | None) -> SchoolCatchments:
         if not self.config.school_catchments_enabled:
