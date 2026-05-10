@@ -34,10 +34,15 @@ def get_engine() -> AsyncEngine:
     # poisons the SQLAlchemy session, the aggregator's per-adapter
     # except block then writes health on the same session and gets
     # PendingRollbackError, and the wrapper at http/search.py turns
-    # everything into a generic HTTP 503. The fix is to give SQLite the
-    # standard server-friendly PRAGMAs (#109):
+    # everything into a generic HTTP 503. Server-friendly PRAGMAs (#109):
     #   - WAL: concurrent readers + a single writer, persistent on file.
-    #   - busy_timeout=5000: writers wait up to 5 s for the lock.
+    #   - busy_timeout=15000: writers wait up to 15 s for the lock. The
+    #     aggregator commits per-adapter so the actual lock window is
+    #     milliseconds, but a slow adapter inside one request can still
+    #     hold it for a few seconds during enrichment writes; 15 s is
+    #     comfortably above that without making genuinely-stuck
+    #     requests painful for the user. Bumped from 5 s in the #109
+    #     follow-up.
     #   - synchronous=NORMAL: safe with WAL, materially faster than FULL.
     #   - foreign_keys=ON: SQLite defaults this off; we want it on.
     # The listener is a no-op for non-SQLite URLs (Postgres is the
@@ -49,7 +54,7 @@ def get_engine() -> AsyncEngine:
             cursor = dbapi_connection.cursor()
             try:
                 cursor.execute("PRAGMA journal_mode=WAL")
-                cursor.execute("PRAGMA busy_timeout=5000")
+                cursor.execute("PRAGMA busy_timeout=15000")
                 cursor.execute("PRAGMA synchronous=NORMAL")
                 cursor.execute("PRAGMA foreign_keys=ON")
             finally:
