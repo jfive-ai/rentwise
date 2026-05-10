@@ -47,3 +47,17 @@ async def session(migrated_engine) -> AsyncSession:
     factory = async_sessionmaker(migrated_engine, expire_on_commit=False)
     async with factory() as s:
         yield s
+
+
+@pytest.fixture(autouse=True)
+async def _reset_playwright_pool():
+    """Tear down the process-wide Playwright pool between tests.
+
+    Without this, mock state from one test (fake browsers, fake
+    contexts) leaks into the next via the singleton, and tests that
+    patch ``async_playwright`` see stale objects.
+    """
+    yield
+    from rentwise.adapters.playwright_pool import PlaywrightPool
+
+    await PlaywrightPool.reset()

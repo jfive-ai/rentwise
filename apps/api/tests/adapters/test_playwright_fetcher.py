@@ -1,8 +1,10 @@
 """Tests for PlaywrightFetcher.
 
 We mock the Playwright objects entirely — these tests verify wiring
-(robots check, rate-limit, browser lifecycle), not real browser behavior.
-A separate slow integration test (out of scope here) would cover real Chromium.
+(robots check, rate-limit, page lifecycle), not real browser behavior.
+A separate slow integration test (out of scope here) would cover real
+Chromium. Browser-process lifecycle is owned by ``PlaywrightPool`` —
+see ``test_playwright_pool.py`` for those assertions.
 """
 
 from __future__ import annotations
@@ -13,6 +15,7 @@ import pytest
 
 from rentwise.adapters.base import RobotsDisallowedError
 from rentwise.adapters.playwright_fetcher import PlaywrightFetcher
+from rentwise.adapters.playwright_pool import PlaywrightPool
 
 
 @pytest.fixture
@@ -54,7 +57,9 @@ async def test_lazy_browser_start(fake_pw: MagicMock, fake_page: MagicMock) -> N
     with patch("rentwise.adapters.playwright_fetcher.async_playwright") as start_pw:
         start_pw.return_value.start = AsyncMock(return_value=fake_pw)
 
-        fetcher = PlaywrightFetcher(user_agent="RentWise/test")
+        # Use an injected pool so we control its lifetime in this test.
+        pool = PlaywrightPool()
+        fetcher = PlaywrightFetcher(user_agent="RentWise/test", pool=pool)
         # Override robots to always allow
         fetcher.robots.is_allowed = AsyncMock(return_value=True)
 
@@ -78,13 +83,15 @@ async def test_robots_disallowed_raises(fake_pw: MagicMock) -> None:
     with patch("rentwise.adapters.playwright_fetcher.async_playwright") as start_pw:
         start_pw.return_value.start = AsyncMock(return_value=fake_pw)
 
-        fetcher = PlaywrightFetcher(user_agent="RentWise/test")
+        pool = PlaywrightPool()
+        fetcher = PlaywrightFetcher(user_agent="RentWise/test", pool=pool)
         fetcher.robots.is_allowed = AsyncMock(return_value=False)
 
         with pytest.raises(RobotsDisallowedError):
             await fetcher.fetch_html("https://blocked.test/page")
 
         fake_pw.chromium.launch.assert_not_called()
+        await fetcher.close()
 
 
 async def test_passes_wait_for_selector(fake_pw: MagicMock, fake_page: MagicMock) -> None:
@@ -92,11 +99,13 @@ async def test_passes_wait_for_selector(fake_pw: MagicMock, fake_page: MagicMock
     with patch("rentwise.adapters.playwright_fetcher.async_playwright") as start_pw:
         start_pw.return_value.start = AsyncMock(return_value=fake_pw)
 
-        fetcher = PlaywrightFetcher(user_agent="RentWise/test")
+        pool = PlaywrightPool()
+        fetcher = PlaywrightFetcher(user_agent="RentWise/test", pool=pool)
         fetcher.robots.is_allowed = AsyncMock(return_value=True)
 
         await fetcher.fetch_html("https://example.test/", wait_for=".listing-card")
         fake_page.wait_for_selector.assert_awaited_once_with(".listing-card", timeout=10000)
+        await fetcher.close()
 
 
 async def test_close_is_idempotent(fake_pw: MagicMock) -> None:
@@ -104,7 +113,8 @@ async def test_close_is_idempotent(fake_pw: MagicMock) -> None:
     with patch("rentwise.adapters.playwright_fetcher.async_playwright") as start_pw:
         start_pw.return_value.start = AsyncMock(return_value=fake_pw)
 
-        fetcher = PlaywrightFetcher(user_agent="RentWise/test")
+        pool = PlaywrightPool()
+        fetcher = PlaywrightFetcher(user_agent="RentWise/test", pool=pool)
 
         await fetcher.close()  # never started — no-op
         await fetcher.close()  # double-close — no-op
@@ -117,10 +127,12 @@ async def test_page_closed_when_goto_raises(fake_pw: MagicMock, fake_page: Magic
         start_pw.return_value.start = AsyncMock(return_value=fake_pw)
         fake_page.goto = AsyncMock(side_effect=TimeoutError("nav timeout"))
 
-        fetcher = PlaywrightFetcher(user_agent="RentWise/test")
+        pool = PlaywrightPool()
+        fetcher = PlaywrightFetcher(user_agent="RentWise/test", pool=pool)
         fetcher.robots.is_allowed = AsyncMock(return_value=True)
 
         with pytest.raises(TimeoutError):
             await fetcher.fetch_html("https://slow.test/")
 
         fake_page.close.assert_awaited_once()
+        await fetcher.close()

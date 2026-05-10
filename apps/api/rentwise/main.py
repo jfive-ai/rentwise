@@ -252,6 +252,15 @@ def create_app() -> FastAPI:
     # start a real interval. Production sets RENTWISE_SCHEDULER_ENABLED=1.
     _wire_alert_scheduler(app)
 
+    @app.on_event("shutdown")
+    async def _close_playwright_pool() -> None:
+        # The shared Chromium owned by PlaywrightPool needs an explicit
+        # shutdown so the OS isn't left with orphaned Chromium processes
+        # after uvicorn exits.
+        from rentwise.adapters.playwright_pool import PlaywrightPool
+
+        await PlaywrightPool.reset()
+
     return app
 
 
