@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import SEARCH_FIXTURE from "../__fixtures__/search_response.json";
+import { mockSearch } from "./_stream";
 
 test("NL flow: type → parse → chips → search", async ({ page }) => {
   await page.route("**/translate-query", async (route) => {
@@ -21,13 +22,7 @@ test("NL flow: type → parse → chips → search", async ({ page }) => {
       }),
     });
   });
-  await page.route("**/search", async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify(SEARCH_FIXTURE),
-    });
-  });
+  await mockSearch(page, SEARCH_FIXTURE);
 
   await page.goto("/");
 
@@ -74,17 +69,7 @@ test("NL flow: '3 bedroom in dunbar' parses to chips and searches", async ({
       }),
     });
   });
-  await page.route("**/search", async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({
-        ...SEARCH_FIXTURE,
-        total: 0,
-        listings: [],
-      }),
-    });
-  });
+  await mockSearch(page, { ...SEARCH_FIXTURE, total: 0, listings: [] });
 
   await page.goto("/");
   await page.getByRole("button", { name: "Natural language" }).click();

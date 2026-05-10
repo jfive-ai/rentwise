@@ -1,14 +1,9 @@
 import { test, expect } from "@playwright/test";
 import fixture from "../__fixtures__/search_response.json";
+import { mockSearch } from "./_stream";
 
 test("filter search renders results, switches view, saves a card", async ({ page }) => {
-  await page.route("**/search", async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify(fixture),
-    });
-  });
+  await mockSearch(page, fixture);
 
   await page.goto("/");
 

@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import fixture from "../__fixtures__/search_response.json";
+import { mockSearch } from "./_stream";
 
 // Phase 7 PR-C-1: viewport-aware defaults. We render in real chromium at
 // two distinct viewport sizes and assert the initial layout matches what
@@ -7,13 +8,7 @@ import fixture from "../__fixtures__/search_response.json";
 
 test.describe("Responsive layout", () => {
   test.beforeEach(async ({ page }) => {
-    await page.route("**/search", async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify(fixture),
-      });
-    });
+    await mockSearch(page, fixture);
   });
 
   test("phone viewport: filters are collapsed and 'list' is the active view", async ({

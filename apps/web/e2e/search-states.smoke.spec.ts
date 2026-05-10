@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import fixture from "../__fixtures__/search_response.json";
+import { mockSearch, searchStreamBody } from "./_stream";
 
 // Bug 1 (today's report): when the only enabled adapter (Craigslist) returns
 // 403 from a non-residential IP, the API responds 200 with total=0 and
@@ -14,8 +15,18 @@ test.describe("Search states", () => {
     const inFlight = new Promise<void>((r) => {
       release = r;
     });
-    await page.route("**/search", async (route) => {
+    // Initial searches use /search/stream now (issue #113); the loading
+    // gate runs against that endpoint, while the legacy /search keeps
+    // its handler for any subsequent Load-more.
+    await page.route("**/search/stream", async (route) => {
       await inFlight;
+      await route.fulfill({
+        status: 200,
+        contentType: "application/x-ndjson",
+        body: searchStreamBody(fixture),
+      });
+    });
+    await page.route("**/search", async (route) => {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
@@ -52,25 +63,39 @@ test.describe("Search states", () => {
   test("adapter-failure banner names the source + first-line error", async ({
     page,
   }) => {
-    await page.route("**/search", async (route) => {
+    // Synthesize a streaming response where the only adapter reports
+    // degraded with the 403 error, total=0.
+    const events = [
+      { event: "started", adapters: ["craigslist"] },
+      {
+        event: "adapter_done",
+        adapter: "craigslist",
+        count: 0,
+        status: "degraded",
+        error: "Client error '403 Forbidden' for url 'https://vancouver.craigslist.org/search/apa?format=rss&hasPic=1'\nFor more information check: https://developer.mozilla.org/...",
+      },
+      {
+        event: "complete",
+        total: 0,
+        cache_status: "miss",
+        unsupported_filters: [],
+        source_health: {
+          craigslist: {
+            name: "craigslist",
+            status: "degraded",
+            last_successful_fetch: null,
+            last_error:
+              "Client error '403 Forbidden' for url 'https://vancouver.craigslist.org/search/apa?format=rss&hasPic=1'\nFor more information check: https://developer.mozilla.org/...",
+          },
+        },
+      },
+    ];
+    const ndjson = events.map((e) => JSON.stringify(e)).join("\n") + "\n";
+    await page.route("**/search/stream", async (route) => {
       await route.fulfill({
         status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
-          total: 0,
-          listings: [],
-          cache_status: "miss",
-          unsupported_filters: [],
-          source_health: {
-            craigslist: {
-              name: "craigslist",
-              status: "degraded",
-              last_successful_fetch: null,
-              last_error:
-                "Client error '403 Forbidden' for url 'https://vancouver.craigslist.org/search/apa?format=rss&hasPic=1'\nFor more information check: https://developer.mozilla.org/...",
-            },
-          },
-        }),
+        contentType: "application/x-ndjson",
+        body: ndjson,
       });
     });
 
@@ -104,24 +129,36 @@ test.describe("Search states", () => {
     // POST /search returned 200. The fix swaps router.replace for raw
     // history.replaceState so the URL still updates without nuking the
     // component tree.
-    await page.route("**/search", async (route) => {
+    const events = [
+      { event: "started", adapters: ["craigslist"] },
+      {
+        event: "adapter_done",
+        adapter: "craigslist",
+        count: 0,
+        status: "degraded",
+        error: "403 Forbidden",
+      },
+      {
+        event: "complete",
+        total: 0,
+        cache_status: "miss",
+        unsupported_filters: [],
+        source_health: {
+          craigslist: {
+            name: "craigslist",
+            status: "degraded",
+            last_successful_fetch: null,
+            last_error: "403 Forbidden",
+          },
+        },
+      },
+    ];
+    const ndjson = events.map((e) => JSON.stringify(e)).join("\n") + "\n";
+    await page.route("**/search/stream", async (route) => {
       await route.fulfill({
         status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
-          total: 0,
-          listings: [],
-          cache_status: "miss",
-          unsupported_filters: [],
-          source_health: {
-            craigslist: {
-              name: "craigslist",
-              status: "degraded",
-              last_successful_fetch: null,
-              last_error: "403 Forbidden",
-            },
-          },
-        }),
+        contentType: "application/x-ndjson",
+        body: ndjson,
       });
     });
 
@@ -141,25 +178,19 @@ test.describe("Search states", () => {
   test("zero results with all sources ok keeps the original 'No listings matched' copy", async ({
     page,
   }) => {
-    await page.route("**/search", async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
-          total: 0,
-          listings: [],
-          cache_status: "miss",
-          unsupported_filters: [],
-          source_health: {
-            craigslist: {
-              name: "craigslist",
-              status: "ok",
-              last_successful_fetch: "2026-05-08T12:00:00Z",
-              last_error: null,
-            },
-          },
-        }),
-      });
+    await mockSearch(page, {
+      total: 0,
+      listings: [],
+      cache_status: "miss",
+      unsupported_filters: [],
+      source_health: {
+        craigslist: {
+          name: "craigslist",
+          status: "ok",
+          last_successful_fetch: "2026-05-08T12:00:00Z",
+          last_error: null,
+        },
+      },
     });
 
     await page.goto("/");
