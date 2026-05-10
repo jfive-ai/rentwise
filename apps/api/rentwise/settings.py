@@ -138,6 +138,21 @@ class Settings(BaseSettings):
         default=30,
         validation_alias="RENTWISE_GEOCODE_CACHE_TTL_DAYS",
     )
+    # Issue #114 — bound the per-listing geocode wall time so a stuck
+    # Nominatim doesn't block the search. After this we cache the
+    # failure and ship the listing without coords.
+    rentwise_geocode_hard_timeout_seconds: float = Field(
+        default=3.0,
+        validation_alias="RENTWISE_GEOCODE_HARD_TIMEOUT_SECONDS",
+    )
+    # Issue #114 — TTL for *failure* cache rows (403/429/timeout). Much
+    # shorter than the success TTL so we retry quickly after upstream
+    # clears, but long enough that one search's 12 listings don't each
+    # refire the doomed HTTP call.
+    rentwise_geocode_failure_cache_ttl_seconds: int = Field(
+        default=3600,
+        validation_alias="RENTWISE_GEOCODE_FAILURE_CACHE_TTL_SECONDS",
+    )
 
     # --- Phase 4 PR-C: photo hashing + dedup ---
     rentwise_photo_hash_enabled: bool = Field(

@@ -383,3 +383,96 @@ async def test_enrich_skips_phash_when_disabled(make_service, session):
 
     out = await svc.enrich(listing)
     assert out.phash is None
+
+
+# -------------------------------------------------------------------------
+# Issue #114 — Nominatim 403 storm: cache failures + hard timeout
+# -------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_enrich_caches_geocode_error_for_short_ttl(make_service, session):
+    """A GeocodeError (e.g. 403) writes a short-lived failure row.
+
+    Without this, every /search refires the doomed HTTP call for every
+    listing — exactly the behavior in issue #114.
+    """
+    geocoder = FakeGeocoder(raises=GeocodeError("http_403"))
+    svc = make_service(geocoder)
+    listing = _listing()
+
+    out = await svc.enrich(listing)
+    assert out.lat is None and out.lon is None
+    assert out.address_normalized is not None
+
+    # Failure row exists, marked with the `:fail` suffix so future
+    # readers can tell it apart from a "no result found" success.
+    cached = await GeocodeCacheRepo(session).get(out.address_normalized)
+    assert cached is not None
+    assert cached.lat is None and cached.lon is None
+    assert cached.provider.endswith(":fail")
+    # TTL is bounded — the failure row's stale_after is in the future
+    # but well within the 1h default window (well below the 30d
+    # success TTL).
+    stale_after = datetime.fromisoformat(cached.stale_after)
+    delta = stale_after - datetime.now(UTC)
+    assert timedelta(seconds=0) < delta <= timedelta(hours=2)
+
+
+@pytest.mark.asyncio
+async def test_enrich_failure_cache_short_circuits_subsequent_calls(make_service, session):
+    """A cached failure row prevents the geocoder from being called again."""
+    geocoder = FakeGeocoder(raises=GeocodeError("http_403"))
+    svc = make_service(geocoder)
+    listing = _listing()
+
+    await svc.enrich(listing)
+    assert len(geocoder.calls) == 1
+
+    # Second enrich for the same address must not refire the doomed
+    # HTTP call — the negative cache row is still fresh.
+    await svc.enrich(_listing())
+    assert len(geocoder.calls) == 1, "second enrich must hit the failure cache"
+
+
+@pytest.mark.asyncio
+async def test_enrich_geocode_hard_timeout_caches_failure(make_service, session):
+    """A hung geocoder is bounded by ``geocode_hard_timeout_seconds``."""
+    import asyncio
+
+    class _HangingGeocoder:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        async def geocode(self, query: str):
+            self.calls += 1
+            await asyncio.sleep(60)  # would block the search forever
+            return None
+
+    geocoder = _HangingGeocoder()
+    svc = EnrichmentService(
+        cache_repo=GeocodeCacheRepo(session),
+        geocoder=geocoder,  # type: ignore[arg-type]
+        config=EnrichmentConfig(
+            cache_ttl_days=30,
+            failure_cache_ttl_seconds=3600,
+            geocode_hard_timeout_seconds=0.05,  # tight cap for the test
+            photo_hash_enabled=False,
+        ),
+    )
+    listing = _listing()
+
+    start = datetime.now(UTC)
+    out = await svc.enrich(listing)
+    elapsed = (datetime.now(UTC) - start).total_seconds()
+
+    assert out.lat is None and out.lon is None
+    # The hard cap is 0.05s; we allow generous slack for scheduler jitter.
+    assert elapsed < 1.0, f"hard timeout not enforced (took {elapsed:.2f}s)"
+
+    # Failure row was written so we don't refire the doomed call.
+    assert out.address_normalized is not None
+    cached = await GeocodeCacheRepo(session).get(out.address_normalized)
+    assert cached is not None
+    assert cached.lat is None
+    assert cached.provider.endswith(":fail")
