@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { mockSearch } from "./_stream";
 
 /**
  * Issues #92 / #93 / #94 / #95 integration smoke.
@@ -47,53 +48,47 @@ test("Dunbar filter triggers neighborhood overlay fetch + Open-original opens ne
     });
   });
 
-  await page.route("**/search", async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({
-        total: 1,
-        cache_status: "miss",
-        unsupported_filters: [],
-        source_health: {
-          craigslist: {
-            name: "craigslist",
-            status: "ok",
-            last_successful_fetch: "2026-05-09T00:00:00Z",
-            last_error: null,
-          },
-        },
-        listings: [
-          {
-            id: "00000000-0000-0000-0000-000000000001",
-            canonical_id: "00000000-0000-0000-0000-000000000001",
-            source: "craigslist",
-            source_url: "https://vancouver.craigslist.org/van/apa/d/dunbar-1.html",
-            source_listing_id: "1",
-            title: "Bright 2br in Dunbar",
-            address: "4750 W 16th Ave",
-            address_normalized: null,
-            lat: 49.255,
-            lon: -123.185,
-            bedrooms: 2,
-            bathrooms: 1,
-            price_cad: 2900,
-            pets_allowed: null,
-            furnished: null,
-            available_date: null,
-            posted_at: "2026-05-08T10:00:00Z",
-            last_seen_at: "2026-05-09T00:00:00Z",
-            photos: [],
-            description_snippet: "Inside the Dunbar-Southlands polygon.",
-            neighborhood: "Dunbar-Southlands",
-            school_catchments: { elementary: null, middle: null, secondary: "Lord Byng" },
-            nearest_transit: null,
-            walkscore: null,
-            raw_metadata: {},
-          },
-        ],
-      }),
-    });
+  await mockSearch(page, {
+    total: 1,
+    cache_status: "miss",
+    unsupported_filters: [],
+    source_health: {
+      craigslist: {
+        name: "craigslist",
+        status: "ok",
+        last_successful_fetch: "2026-05-09T00:00:00Z",
+        last_error: null,
+      },
+    },
+    listings: [
+      {
+        id: "00000000-0000-0000-0000-000000000001",
+        canonical_id: "00000000-0000-0000-0000-000000000001",
+        source: "craigslist",
+        source_url: "https://vancouver.craigslist.org/van/apa/d/dunbar-1.html",
+        source_listing_id: "1",
+        title: "Bright 2br in Dunbar",
+        address: "4750 W 16th Ave",
+        address_normalized: null,
+        lat: 49.255,
+        lon: -123.185,
+        bedrooms: 2,
+        bathrooms: 1,
+        price_cad: 2900,
+        pets_allowed: null,
+        furnished: null,
+        available_date: null,
+        posted_at: "2026-05-08T10:00:00Z",
+        last_seen_at: "2026-05-09T00:00:00Z",
+        photos: [],
+        description_snippet: "Inside the Dunbar-Southlands polygon.",
+        neighborhood: "Dunbar-Southlands",
+        school_catchments: { elementary: null, middle: null, secondary: "Lord Byng" },
+        nearest_transit: null,
+        walkscore: null,
+        raw_metadata: {},
+      },
+    ],
   });
 
   await page.goto("/?neighborhoods=Dunbar");
