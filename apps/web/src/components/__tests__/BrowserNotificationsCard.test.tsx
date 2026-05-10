@@ -15,6 +15,7 @@ beforeAll(() => {
 function makeClient(overrides: Partial<ApiClient>): ApiClient {
   const base: ApiClient = {
     search: jest.fn(),
+    searchStream: jest.fn(),
     translateQuery: jest.fn(),
     getSettings: jest.fn(),
     putSettings: jest.fn(),

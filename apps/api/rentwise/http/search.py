@@ -2,13 +2,17 @@
 
 from __future__ import annotations
 
+import json
+from collections.abc import AsyncIterator
 from functools import lru_cache
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from rentwise.adapters.base import SourceAdapter
 from rentwise.aggregator.service import AggregatorService
+from rentwise.aggregator.streaming import stream_search
 from rentwise.dedup.service import DedupConfig, DedupService
 from rentwise.enrichment.geocode import Geocoder, NominatimGeocoder
 from rentwise.enrichment.neighborhoods import NeighborhoodLookup
@@ -16,7 +20,7 @@ from rentwise.enrichment.photo_hash import HttpxPhotoHasher, PhotoHasher
 from rentwise.enrichment.service import EnrichmentConfig, EnrichmentService
 from rentwise.models import SearchRequest, SearchResponse
 from rentwise.settings import settings
-from rentwise.storage.db import session_dep
+from rentwise.storage.db import get_sessionmaker, session_dep
 from rentwise.storage.repositories import GeocodeCacheRepo, PhotoHashCacheRepo
 
 
@@ -134,6 +138,8 @@ def build_router() -> APIRouter:
                 config=EnrichmentConfig(
                     enabled=settings.rentwise_geocode_enabled,
                     cache_ttl_days=settings.rentwise_geocode_cache_ttl_days,
+                    failure_cache_ttl_seconds=(settings.rentwise_geocode_failure_cache_ttl_seconds),
+                    geocode_hard_timeout_seconds=(settings.rentwise_geocode_hard_timeout_seconds),
                     photo_hash_enabled=settings.rentwise_photo_hash_enabled,
                     photo_hash_cache_ttl_days=settings.rentwise_photo_hash_cache_ttl_days,
                 ),
@@ -162,5 +168,50 @@ def build_router() -> APIRouter:
         except Exception:
             await session.rollback()
             raise HTTPException(status_code=503, detail="storage_unavailable") from None
+
+    @router.post("/search/stream")
+    async def search_stream(
+        request: SearchRequest,
+        adapters: list[SourceAdapter] = Depends(get_adapters),
+        geocoder: Geocoder = Depends(get_geocoder),
+        photo_hasher: PhotoHasher = Depends(get_photo_hasher),
+        neighborhoods: NeighborhoodLookup = Depends(get_neighborhood_lookup),
+    ) -> StreamingResponse:
+        """NDJSON streaming counterpart of POST /search (issue #113).
+
+        Adapters run in parallel; listings stream out as they arrive.
+        Each adapter task owns its own AsyncSession (AsyncSession is not
+        concurrent-safe), so this endpoint deliberately does NOT depend
+        on the request-scoped ``session_dep`` — it grabs a sessionmaker.
+        """
+        sessionmaker = get_sessionmaker()
+        enrichment_config = EnrichmentConfig(
+            enabled=settings.rentwise_geocode_enabled,
+            cache_ttl_days=settings.rentwise_geocode_cache_ttl_days,
+            failure_cache_ttl_seconds=(settings.rentwise_geocode_failure_cache_ttl_seconds),
+            geocode_hard_timeout_seconds=(settings.rentwise_geocode_hard_timeout_seconds),
+            photo_hash_enabled=settings.rentwise_photo_hash_enabled,
+            photo_hash_cache_ttl_days=settings.rentwise_photo_hash_cache_ttl_days,
+        )
+        dedup_config = DedupConfig(
+            enabled=settings.rentwise_dedup_enabled,
+            threshold=settings.rentwise_dedup_confidence_threshold,
+        )
+
+        async def _ndjson() -> AsyncIterator[bytes]:
+            async for ev in stream_search(
+                req=request,
+                adapters=adapters,
+                sessionmaker=sessionmaker,
+                cache_ttl_seconds=settings.search_cache_ttl_seconds,
+                enrichment_config=enrichment_config,
+                dedup_config=dedup_config,
+                geocoder=geocoder,
+                photo_hasher=photo_hasher,
+                neighborhoods=neighborhoods,
+            ):
+                yield (json.dumps(ev) + "\n").encode("utf-8")
+
+        return StreamingResponse(_ndjson(), media_type="application/x-ndjson")
 
     return router

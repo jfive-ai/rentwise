@@ -204,3 +204,101 @@ describe("settings", () => {
     expect(r.error).toBe("kaboom");
   });
 });
+
+describe("searchClient.searchStream (issue #113)", () => {
+  const baseUrl = "http://api.test";
+
+  beforeEach(() => {
+    jest.spyOn(global, "fetch");
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  function bodyFromLines(lines: string[]): ReadableStream<Uint8Array> {
+    const enc = new TextEncoder();
+    return new ReadableStream<Uint8Array>({
+      start(controller) {
+        for (const line of lines) controller.enqueue(enc.encode(line));
+        controller.close();
+      },
+    });
+  }
+
+  it("yields events in order: started → listing → adapter_done → complete", async () => {
+    (global.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      body: bodyFromLines([
+        '{"event":"started","adapters":["craigslist"]}\n',
+        '{"event":"listing","data":{"id":"1","title":"x"}}\n',
+        '{"event":"adapter_done","adapter":"craigslist","count":1,"status":"ok","error":null}\n',
+        '{"event":"complete","total":1,"cache_status":"miss","unsupported_filters":[],"source_health":{}}\n',
+      ]),
+      clone: () => ({ text: async () => "" }),
+    });
+
+    const events = [];
+    for await (const ev of searchClient(baseUrl).searchStream({ query: emptyQuery() })) {
+      events.push(ev.event);
+    }
+    expect(events).toEqual(["started", "listing", "adapter_done", "complete"]);
+  });
+
+  it("handles split frames (a chunk ends mid-line)", async () => {
+    (global.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      body: bodyFromLines([
+        '{"event":"start',  // chunk ends mid-key
+        'ed","adapters":[]}\n{"event":"complete","total":0,',
+        '"cache_status":"miss","unsupported_filters":[],"source_health":{}}\n',
+      ]),
+      clone: () => ({ text: async () => "" }),
+    });
+
+    const events = [];
+    for await (const ev of searchClient(baseUrl).searchStream({ query: emptyQuery() })) {
+      events.push(ev.event);
+    }
+    expect(events).toEqual(["started", "complete"]);
+  });
+
+  it("yields a trailing line that ended without a newline", async () => {
+    (global.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      body: bodyFromLines([
+        '{"event":"started","adapters":[]}\n',
+        '{"event":"complete","total":0,"cache_status":"miss","unsupported_filters":[],"source_health":{}}',
+      ]),
+      clone: () => ({ text: async () => "" }),
+    });
+
+    const events = [];
+    for await (const ev of searchClient(baseUrl).searchStream({ query: emptyQuery() })) {
+      events.push(ev.event);
+    }
+    expect(events).toEqual(["started", "complete"]);
+  });
+
+  it("throws ApiError on non-2xx", async () => {
+    (global.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: false,
+      status: 503,
+      body: null,
+      json: async () => ({ detail: "down" }),
+      text: async () => "down",
+      clone: () => ({ text: async () => "down" }),
+    });
+
+    await expect((async () => {
+      // Force iteration so the generator runs.
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      for await (const _ev of searchClient(baseUrl).searchStream({ query: emptyQuery() })) {
+        // unreachable
+      }
+    })()).rejects.toMatchObject({ name: "ApiError", status: 503 });
+  });
+});

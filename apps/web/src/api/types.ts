@@ -101,6 +101,27 @@ export interface SearchResponse {
   source_health: Record<string, AdapterHealth>;
 }
 
+// --- Issue #113: streaming /search/stream events. Mirrors the dict
+// shapes emitted by apps/api/rentwise/aggregator/streaming.py. ---
+
+export type SearchStreamEvent =
+  | { event: "started"; adapters: string[] }
+  | { event: "listing"; data: NormalizedListing }
+  | {
+      event: "adapter_done";
+      adapter: string;
+      count: number;
+      status: "ok" | "degraded" | "down";
+      error: string | null;
+    }
+  | {
+      event: "complete";
+      total: number;
+      cache_status: CacheStatus;
+      unsupported_filters: string[];
+      source_health: Record<string, AdapterHealth>;
+    };
+
 export interface TranslateQueryRequest {
   text: string;
 }
