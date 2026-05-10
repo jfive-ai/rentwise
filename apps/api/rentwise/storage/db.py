@@ -9,6 +9,7 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 from functools import lru_cache
 
+from sqlalchemy import event
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -21,12 +22,40 @@ from rentwise.settings import settings
 
 @lru_cache(maxsize=1)
 def get_engine() -> AsyncEngine:
-    return create_async_engine(
+    engine = create_async_engine(
         settings.database_url,
         future=True,
         echo=False,
         pool_pre_ping=True,
     )
+    # SQLite ships with single-writer file locking and a 0 ms busy
+    # timeout, so any two concurrent /search requests immediately raise
+    # `OperationalError: database is locked`. That OperationalError
+    # poisons the SQLAlchemy session, the aggregator's per-adapter
+    # except block then writes health on the same session and gets
+    # PendingRollbackError, and the wrapper at http/search.py turns
+    # everything into a generic HTTP 503. The fix is to give SQLite the
+    # standard server-friendly PRAGMAs (#109):
+    #   - WAL: concurrent readers + a single writer, persistent on file.
+    #   - busy_timeout=5000: writers wait up to 5 s for the lock.
+    #   - synchronous=NORMAL: safe with WAL, materially faster than FULL.
+    #   - foreign_keys=ON: SQLite defaults this off; we want it on.
+    # The listener is a no-op for non-SQLite URLs (Postgres is the
+    # multi-user upgrade path documented in docs/architecture.md).
+    if settings.database_url.startswith("sqlite"):
+
+        @event.listens_for(engine.sync_engine, "connect")
+        def _set_sqlite_pragmas(dbapi_connection, _record):  # type: ignore[no-untyped-def]
+            cursor = dbapi_connection.cursor()
+            try:
+                cursor.execute("PRAGMA journal_mode=WAL")
+                cursor.execute("PRAGMA busy_timeout=5000")
+                cursor.execute("PRAGMA synchronous=NORMAL")
+                cursor.execute("PRAGMA foreign_keys=ON")
+            finally:
+                cursor.close()
+
+    return engine
 
 
 @lru_cache(maxsize=1)
