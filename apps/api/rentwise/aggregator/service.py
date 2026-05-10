@@ -162,6 +162,18 @@ class AggregatorService:
             projected, dropped = project_query_to_capabilities(req.query, adapter.capabilities)
             unsupported.update(dropped)
             adapter_yielded = 0
+            adapter_error: Exception | None = None
+            # Snapshot the in-memory listings list so we can roll back
+            # this adapter's contribution if its writes don't make it
+            # to the DB (Codex review on #111). Without this, an
+            # adapter that yields N listings then raises a non-DB
+            # error (parsing, network mid-iteration) would have its
+            # rows persisted by the per-adapter commit; an adapter
+            # that triggers session-poisoning (e.g. OperationalError
+            # mid-flush) needs the in-memory copies dropped so the
+            # search cache doesn't reference rolled-back rows.
+            snapshot = len(all_listings)
+
             try:
                 seen: set[str] = set()
                 async for raw in adapter.search(projected):
@@ -194,43 +206,31 @@ class AggregatorService:
                             )
                     saved = await self.listing_repo.upsert(listing)
                     all_listings.append(saved)
-                # A successful search that produced zero rows from a known
-                # stub adapter is reported as degraded so the user sees
-                # *why* their enabled adapter isn't returning anything (#94).
-                # Only triggers for ScaffoldAdapterBase subclasses that
-                # haven't overridden `_extract` — production adapters that
-                # legitimately found no matches still report `ok`.
-                if adapter_yielded == 0 and _is_uncalibrated_scaffold(adapter):
-                    await self.health_repo.set(
-                        adapter.name,
-                        "degraded",
-                        error="scaffold: extractor not yet calibrated against live HTML",
-                    )
-                    health[adapter.name] = AdapterHealth(
-                        name=adapter.name,
-                        status="degraded",
-                        last_error="scaffold: extractor not yet calibrated against live HTML",
-                    )
-                else:
-                    await self.health_repo.set(adapter.name, "ok", error=None)
-                    health[adapter.name] = AdapterHealth(name=adapter.name, status="ok")
-                any_succeeded = True
-                # #109 follow-up: commit so the SQLite write lock is
-                # released between adapters. Without this commit, the
-                # write transaction stays open for the entire ~30-60 s
-                # request lifetime; any concurrent /search request
-                # exceeds busy_timeout and 503s.
-                await self.session.commit()
             except Exception as exc:
                 log.warning("adapter.failed", adapter=adapter.name, error=str(exc))
-                # The exception may have left the session in a
-                # rolled-back state (e.g. an OperationalError mid-flush
-                # poisons the transaction). Roll back explicitly so the
-                # follow-up health write doesn't surface a
-                # PendingRollbackError. Best-effort: a rollback that
-                # itself fails is logged but not re-raised — we still
-                # want to try recording health and move on to the next
-                # adapter. (#109)
+                adapter_error = exc
+
+            # Try to commit per-adapter writes. Two reasons (#109):
+            # 1. Releases the SQLite write lock so a concurrent /search
+            #    isn't blocked for the full request lifetime.
+            # 2. Persists partial progress when the adapter raised a
+            #    non-DB error after some flushes succeeded.
+            # If the adapter raised a DB-poisoning error
+            # (OperationalError, IntegrityError mid-flush), the commit
+            # raises and we rollback to clear the session — those
+            # rows are unrecoverable, so drop the in-memory copies
+            # back to the snapshot so we don't write dangling UUIDs
+            # into the search cache (Codex review on #111).
+            commit_failed = False
+            try:
+                await self.session.commit()
+            except Exception as commit_exc:
+                commit_failed = True
+                log.warning(
+                    "aggregator.commit_failed",
+                    adapter=adapter.name,
+                    error=str(commit_exc),
+                )
                 try:
                     await self.session.rollback()
                 except Exception as rollback_exc:
@@ -239,25 +239,54 @@ class AggregatorService:
                         adapter=adapter.name,
                         error=str(rollback_exc),
                     )
-                try:
-                    await self.health_repo.set(adapter.name, "degraded", error=str(exc))
-                    await self.session.commit()
-                except Exception as health_exc:
-                    # Even health bookkeeping failed — log and keep
-                    # going. The user-visible response will still be
-                    # built from in-memory state.
-                    log.warning(
-                        "aggregator.health_write_failed",
-                        adapter=adapter.name,
-                        error=str(health_exc),
-                    )
-                    try:
-                        await self.session.rollback()
-                    except Exception:
-                        pass
-                health[adapter.name] = AdapterHealth(
-                    name=adapter.name, status="degraded", last_error=str(exc)
+                del all_listings[snapshot:]
+
+            # Record health on a session that's been freshly
+            # committed-or-rolled-back, then commit the health row
+            # so it's visible to /health endpoints regardless of
+            # what the next adapter does. Commit failure also marks
+            # the adapter degraded — its writes weren't persisted, so
+            # reporting "ok" would be misleading.
+            if adapter_error is not None:
+                health_status: Literal["ok", "degraded", "down"] = "degraded"
+                health_error: str | None = str(adapter_error)
+            elif commit_failed:
+                health_status = "degraded"
+                health_error = "commit_failed: in-memory listings dropped"
+            elif adapter_yielded == 0 and _is_uncalibrated_scaffold(adapter):
+                # A successful search that produced zero rows from a
+                # known stub adapter is reported as degraded so the
+                # user sees *why* their enabled adapter isn't
+                # returning anything (#94).
+                health_status = "degraded"
+                health_error = "scaffold: extractor not yet calibrated against live HTML"
+            else:
+                health_status = "ok"
+                health_error = None
+
+            try:
+                await self.health_repo.set(adapter.name, health_status, error=health_error)
+                await self.session.commit()
+            except Exception as health_exc:
+                log.warning(
+                    "aggregator.health_write_failed",
+                    adapter=adapter.name,
+                    error=str(health_exc),
                 )
+                try:
+                    await self.session.rollback()
+                except Exception:
+                    pass
+            health[adapter.name] = AdapterHealth(
+                name=adapter.name, status=health_status, last_error=health_error
+            )
+
+            # `any_succeeded` gates the cache writeback at the end of
+            # the request; it must reflect "we actually have data
+            # safely persisted", not just "the adapter ran without
+            # raising". A commit failure invalidates that guarantee.
+            if adapter_error is None and not commit_failed:
+                any_succeeded = True
 
         # Apply enrichment-dependent filters AFTER ingestion. These can't be
         # pushed into the adapter URL params because they depend on

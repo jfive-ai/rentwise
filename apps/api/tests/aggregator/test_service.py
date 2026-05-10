@@ -291,14 +291,11 @@ async def test_per_adapter_commit_releases_write_lock(session, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_failing_adapter_rolls_back_before_health_write(session, monkeypatch):
-    """#109 follow-up: a failure mid-iteration leaves the session in a
-    poisoned state. The aggregator must rollback before writing the
-    degraded-health row, otherwise SQLAlchemy raises
-    PendingRollbackError and the wrapper turns it into HTTP 503.
-
-    We assert: rollback is invoked, *and* a fresh search after the
-    failure still works (the session was actually recovered).
+async def test_failing_adapter_does_not_block_subsequent_adapters(session):
+    """#109 follow-up: a failed adapter must not prevent later adapters
+    from running. The original bug was that an OperationalError
+    mid-flush poisoned the session and the aggregator's health write
+    re-raised PendingRollbackError, escaping to the 503 wrapper.
     """
     failing = FakeAdapter(listings=[], should_raise=RuntimeError("boom"))
     succeeding = FakeAdapter(listings=[_raw(99)])
@@ -306,24 +303,119 @@ async def test_failing_adapter_rolls_back_before_health_write(session, monkeypat
 
     svc = AggregatorService(adapters=[failing, succeeding], session=session, cache_ttl_seconds=900)
 
-    real_rollback = session.rollback
-    rollback_count = 0
-
-    async def counting_rollback():
-        nonlocal rollback_count
-        rollback_count += 1
-        await real_rollback()
-
-    monkeypatch.setattr(session, "rollback", counting_rollback)
-
     resp = await svc.search(SearchRequest(query=NormalizedQuery(bedrooms_min=1)))
 
-    assert rollback_count >= 1, "must rollback after a failed adapter to clear session state"
-    # The succeeding adapter ran after the failing one — session was
-    # recovered, not stuck in PendingRollbackError.
     assert resp.source_health["craigslist"].status == "degraded"
     assert resp.source_health["rentalsca"].status == "ok"
     assert any(str(x.source_listing_id) == "99" for x in resp.listings)
+
+
+@pytest.mark.asyncio
+async def test_partial_adapter_failure_preserves_already_flushed_listings(session):
+    """Codex review on #111 (P1): an adapter that yields some listings
+    and then raises a *non-DB* error (parsing, network) must keep the
+    rows it successfully flushed. Previously the unconditional
+    `session.rollback()` discarded the DB rows while their UUIDs
+    stayed in `all_listings`, so the search cache referenced rows
+    that didn't exist and subsequent cache hits returned fewer
+    results than `total_count`.
+
+    A second succeeding adapter is included so `any_succeeded`
+    becomes True and the cache write happens — that's where the
+    original bug manifested.
+    """
+    from rentwise.storage.repositories import ListingRepo
+
+    class PartiallyFailingAdapter:
+        name = "padmapper"
+        base_url = "https://padmapper.com"
+        method = "browser"
+        rate_limit_per_second = 1.0
+        capabilities: ClassVar[AdapterCapabilities] = {
+            "supported_filters": {"bedrooms_min", "price_max"}
+        }
+
+        async def search(self, query: NormalizedQuery) -> AsyncIterator[RawListing]:
+            for src_id in ("p1", "p2"):
+                yield RawListing(
+                    source="padmapper",
+                    source_url=HttpUrl(f"https://padmapper.com/{src_id}"),
+                    source_listing_id=src_id,
+                    title=f"$2000 / 1br - {src_id}",
+                    bedrooms=1.0,
+                    price_cad=2000,
+                    posted_at=datetime.now(UTC),
+                )
+            raise RuntimeError("network failure mid-iteration")
+
+        async def fetch_listing(self, listing_id: str):
+            return None
+
+        async def health_check(self) -> AdapterHealth:
+            return AdapterHealth(name=self.name, status="ok")
+
+    succeeding = FakeAdapter(listings=[_raw(99)])
+    svc = AggregatorService(
+        adapters=[PartiallyFailingAdapter(), succeeding],
+        session=session,
+        cache_ttl_seconds=900,
+    )
+    resp = await svc.search(SearchRequest(query=NormalizedQuery(bedrooms_min=1)))
+
+    # All three listings survived: padmapper's partial p1+p2 plus
+    # craigslist's 99.
+    ids = {str(x.source_listing_id) for x in resp.listings}
+    assert ids == {"p1", "p2", "99"}, f"expected partial listings to survive, got {ids}"
+    assert resp.source_health["padmapper"].status == "degraded"
+    assert resp.source_health["craigslist"].status == "ok"
+
+    # And they're actually in the DB — not phantoms in `all_listings`
+    # that would dangle in the search cache.
+    repo = ListingRepo(session)
+    assert await repo.get_by_source("padmapper", "p1") is not None
+    assert await repo.get_by_source("padmapper", "p2") is not None
+    assert await repo.get_by_source("craigslist", "99") is not None
+
+
+@pytest.mark.asyncio
+async def test_db_poisoning_failure_drops_in_memory_listings(session, monkeypatch):
+    """Codex review on #111 (P1) flip side: when the per-adapter
+    `commit` fails (the session is genuinely poisoned by a DB error),
+    rollback the session AND drop the in-memory listings back to the
+    pre-adapter snapshot. Otherwise dangling UUIDs end up in the
+    search cache and subsequent cache hits return fewer rows than
+    `total_count` claims.
+    """
+    adapter = FakeAdapter(listings=[_raw(1), _raw(2)])
+    svc = AggregatorService(adapters=[adapter], session=session, cache_ttl_seconds=900)
+
+    # Force the per-adapter `commit` (called inside the aggregator
+    # loop) to fail exactly once, simulating a session poisoned by a
+    # DB-layer error mid-flush. Subsequent commits (the health write
+    # and the final cache write) must still succeed.
+    real_commit = session.commit
+    fail_next: list[bool] = [True]
+
+    async def flaky_commit():
+        if fail_next[0]:
+            fail_next[0] = False
+            await real_commit()  # actually commit so DB state is consistent
+            raise RuntimeError("simulated session poisoning")
+        await real_commit()
+
+    monkeypatch.setattr(session, "commit", flaky_commit)
+
+    resp = await svc.search(SearchRequest(query=NormalizedQuery(bedrooms_min=1)))
+
+    # The adapter's listings were dropped from the in-memory list
+    # because we treated the (simulated) commit failure as
+    # poisoning. The response should have zero listings even
+    # though the adapter yielded two.
+    assert resp.listings == [], (
+        f"in-memory listings must be dropped on commit failure to avoid "
+        f"dangling UUIDs in the search cache, got {len(resp.listings)}"
+    )
+    assert resp.source_health["craigslist"].status == "degraded"
 
 
 @pytest.mark.asyncio
