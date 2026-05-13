@@ -5,15 +5,30 @@ adapters serially against a single shared session and only returns
 once everything has drained. This module implements the streaming
 counterpart:
 
-- Adapters run in **parallel** via :class:`asyncio.TaskGroup`.
-- Each adapter task owns its **own** ``AsyncSession`` — SQLAlchemy
-  AsyncSession is not safe for concurrent use, and per-task sessions
-  sidestep the cross-task hazard.
+- Adapter tasks run in **parallel** via :class:`asyncio.gather` and
+  do **pure network fetch** — they push :class:`RawListing` items
+  onto a shared queue, with no DB writes of their own.
+- A single coordinator session owns enrichment, dedup, listing
+  upsert, and the per-adapter ``source_health`` row. Sequencing all
+  writes on one session means:
+    1. Cross-adapter ``canonical_id`` merging keeps working — when
+       two adapters emit the same property, the coordinator's
+       :class:`DedupService` sees the first adapter's row already in
+       the DB and merges the second into the same canonical cluster.
+    2. Concurrent UNIQUE-key writes on ``geocode_cache`` can't race;
+       only the coordinator writes to it.
 - Listings flow through a shared :class:`asyncio.Queue` so the route
   handler can yield NDJSON events to the client incrementally.
+- Nominatim's 1-req/sec global rate limit means parallel enrichment
+  across adapters wouldn't help anyway — serial enrichment on the
+  coordinator session is fine.
 
 Cache writeback (the persistent ``Search`` row) happens once at the
-end of the stream on a fresh session.
+end of the stream on the coordinator session. If every adapter
+failed AND a stale cache row exists, the stream replays the stale
+listings tagged ``cache_status="stale"`` — matching the legacy
+``/search`` fallback so a transient upstream outage doesn't erase
+the user's previous results.
 
 The legacy non-streaming path stays in ``service.py`` so the
 saved-search alert scheduler keeps working unchanged.
@@ -215,119 +230,59 @@ async def stream_search(
                 }
                 return
 
-    # Fresh fetch path. Parallel adapters, per-task sessions.
+    # Fresh fetch path. Adapter tasks run in parallel doing **network
+    # fetch only** — no DB writes. A single coordinator session owns
+    # enrichment, dedup, listing upsert and source-health writes, so:
+    #   1. Cross-adapter ``canonical_id`` merging still works (the
+    #      coordinator's DedupService sees every adapter's rows).
+    #   2. Concurrent geocode_cache UNIQUE writes can't race — only
+    #      the coordinator writes to it.
+    # Nominatim is already global-rate-limited to 1 req/sec, so
+    # parallelizing enrichment across adapters wouldn't help anyway.
     yield {"event": "started", "adapters": [a.name for a in adapters]}
 
-    queue: asyncio.Queue[NormalizedListing | _AdapterDone] = asyncio.Queue()
+    queue: asyncio.Queue[Any] = asyncio.Queue()
     accumulated: list[NormalizedListing] = []
     health: dict[str, AdapterHealth] = {}
     unsupported: set[str] = set()
     any_succeeded = False
 
     async def drain_one(adapter: SourceAdapter) -> None:
-        """Run one adapter end-to-end on its own session. Push listings
-        as they arrive; push a single :class:`_AdapterDone` on exit.
+        """Pure network-fetch loop: push RawListings, then _AdapterDone.
+
+        No DB writes happen here — the coordinator handles enrichment,
+        dedup, upsert, and the source-health row.
         """
         projected, dropped = project_query_to_capabilities(req.query, adapter.capabilities)
         unsupported.update(dropped)
         yielded = 0
         adapter_error: Exception | None = None
 
-        async with sessionmaker() as session:
-            enrichment = EnrichmentService(
-                cache_repo=GeocodeCacheRepo(session),
-                geocoder=geocoder,
-                config=enrichment_config,
-                neighborhoods=neighborhoods,
-                photo_hasher=photo_hasher,
-                photo_hash_cache=PhotoHashCacheRepo(session),
-            )
-            dedup = DedupService(session, config=dedup_config)
-            listing_repo = ListingRepo(session)
+        try:
+            seen: set[str] = set()
+            async for raw in adapter.search(projected):
+                if raw.source_listing_id in seen:
+                    continue
+                seen.add(raw.source_listing_id)
+                yielded += 1
+                await queue.put(raw)
+        except Exception as exc:
+            adapter_error = exc
+            log.warning("stream.adapter_failed", adapter=adapter.name, error=str(exc))
 
-            try:
-                seen: set[str] = set()
-                async for raw in adapter.search(projected):
-                    if raw.source_listing_id in seen:
-                        continue
-                    seen.add(raw.source_listing_id)
-                    listing = _raw_to_normalized(raw)
-                    try:
-                        listing = await enrichment.enrich(listing)
-                    except Exception as exc:
-                        log.info(
-                            "stream.enrichment_unhandled_error",
-                            source=adapter.name,
-                            error=str(exc),
-                        )
-                    try:
-                        listing = await dedup.assign_canonical(listing)
-                    except Exception as exc:
-                        log.info(
-                            "stream.dedup_unhandled_error",
-                            source=adapter.name,
-                            error=str(exc),
-                        )
-                    if not _listing_passes_post_filters(
-                        listing, req.query, neighborhoods=neighborhoods
-                    ):
-                        continue
-                    saved = await listing_repo.upsert(listing)
-                    yielded += 1
-                    await queue.put(saved)
-            except Exception as exc:
-                adapter_error = exc
-                log.warning("stream.adapter_failed", adapter=adapter.name, error=str(exc))
+        if adapter_error is not None:
+            status: Literal["ok", "degraded", "down"] = "degraded"
+            err: str | None = str(adapter_error)
+        elif yielded == 0 and _is_uncalibrated_scaffold(adapter):
+            status = "degraded"
+            err = "scaffold: extractor not yet calibrated against live HTML"
+        else:
+            status = "ok"
+            err = None
 
-            # Per-adapter commit so a slow source doesn't hold the
-            # write lock for the full request (mirror of issue #109).
-            commit_failed = False
-            try:
-                await session.commit()
-            except Exception as commit_exc:
-                commit_failed = True
-                log.warning("stream.commit_failed", adapter=adapter.name, error=str(commit_exc))
-                try:
-                    await session.rollback()
-                except Exception:
-                    pass
+        health[adapter.name] = AdapterHealth(name=adapter.name, status=status, last_error=err)
+        await queue.put(_AdapterDone(name=adapter.name, count=yielded, status=status, error=err))
 
-            # Source-health write on its own commit so /health endpoints
-            # see consistent state regardless of the next adapter.
-            if adapter_error is not None:
-                status: Literal["ok", "degraded", "down"] = "degraded"
-                err: str | None = str(adapter_error)
-            elif commit_failed:
-                status = "degraded"
-                err = "commit_failed"
-            elif yielded == 0 and _is_uncalibrated_scaffold(adapter):
-                status = "degraded"
-                err = "scaffold: extractor not yet calibrated against live HTML"
-            else:
-                status = "ok"
-                err = None
-
-            try:
-                await SourceHealthRepo(session).set(adapter.name, status, error=err)
-                await session.commit()
-            except Exception as health_exc:
-                log.warning(
-                    "stream.health_write_failed",
-                    adapter=adapter.name,
-                    error=str(health_exc),
-                )
-                try:
-                    await session.rollback()
-                except Exception:
-                    pass
-
-            health[adapter.name] = AdapterHealth(name=adapter.name, status=status, last_error=err)
-            await queue.put(
-                _AdapterDone(name=adapter.name, count=yielded, status=status, error=err)
-            )
-
-    # Coordinator: spawn adapter tasks, drain the queue while they run,
-    # cap waiting on the queue once all tasks are done.
     pending_adapters = len(adapters)
 
     async def _all_adapters() -> None:
@@ -336,56 +291,124 @@ async def stream_search(
         # and reports via the queue.
         await asyncio.gather(*[drain_one(a) for a in adapters], return_exceptions=True)
 
-    coordinator = asyncio.create_task(_all_adapters())
+    async with sessionmaker() as coord_session:
+        coord_enrichment = EnrichmentService(
+            cache_repo=GeocodeCacheRepo(coord_session),
+            geocoder=geocoder,
+            config=enrichment_config,
+            neighborhoods=neighborhoods,
+            photo_hasher=photo_hasher,
+            photo_hash_cache=PhotoHashCacheRepo(coord_session),
+        )
+        coord_dedup = DedupService(coord_session, config=dedup_config)
+        coord_repo = ListingRepo(coord_session)
+        coord_health = SourceHealthRepo(coord_session)
 
-    try:
-        while pending_adapters > 0:
-            try:
-                # Cap the wait so we periodically re-check coordinator
-                # state — without this, an adapter that hangs forever
-                # before pushing _AdapterDone would deadlock the stream.
-                item = await asyncio.wait_for(queue.get(), timeout=0.5)
-            except TimeoutError:
-                if coordinator.done():
-                    # Coordinator finished but queue is empty? Drain
-                    # whatever's left and break out.
-                    while not queue.empty():
-                        item = queue.get_nowait()
-                        async for ev in _emit(item, accumulated):
-                            yield ev
-                        if isinstance(item, _AdapterDone):
-                            pending_adapters -= 1
-                    break
-                continue
-            async for ev in _emit(item, accumulated):
-                yield ev
+        coordinator = asyncio.create_task(_all_adapters())
+
+        async def _handle(item: Any) -> AsyncIterator[dict[str, Any]]:
+            """Enrich + dedup + upsert a raw listing, or surface adapter_done."""
+            nonlocal any_succeeded
             if isinstance(item, _AdapterDone):
-                pending_adapters -= 1
-                if status_ok_or_degraded(item):
-                    any_succeeded = any_succeeded or (item.error is None)
-    finally:
-        if not coordinator.done():
-            # Client disconnected mid-stream → cancel adapter tasks.
-            coordinator.cancel()
+                # Persist source-health on the coordinator session.
+                try:
+                    await coord_health.set(item.name, item.status, error=item.error)
+                    await coord_session.commit()
+                except Exception as exc:
+                    log.warning(
+                        "stream.health_write_failed",
+                        adapter=item.name,
+                        error=str(exc),
+                    )
+                    try:
+                        await coord_session.rollback()
+                    except Exception:
+                        pass
+                yield {
+                    "event": "adapter_done",
+                    "adapter": item.name,
+                    "count": item.count,
+                    "status": item.status,
+                    "error": item.error,
+                }
+                if item.error is None and item.status == "ok":
+                    any_succeeded = True
+                return
+
+            # RawListing → normalize → enrich → post-filter → dedup → upsert
+            raw = item
+            listing = _raw_to_normalized(raw)
             try:
-                await coordinator
-            except (asyncio.CancelledError, Exception):
-                pass
-
-    # Aggregator-level un-supported filters that are actually handled
-    # by post-filters → strip them from the response (mirrors service.py).
-    unsupported.discard("school_catchment")
-    unsupported.discard("transit_max_walk_minutes")
-    unsupported.discard("neighborhoods")
-
-    cache_status: Literal["fresh", "stale", "miss"] = "miss"
-
-    # Cache writeback uses a fresh session so we don't depend on any
-    # adapter task's session lifecycle.
-    if any_succeeded:
-        async with sessionmaker() as session:
+                listing = await coord_enrichment.enrich(listing)
+            except Exception as exc:
+                log.info("stream.enrichment_unhandled_error", error=str(exc))
+            if not _listing_passes_post_filters(listing, req.query, neighborhoods=neighborhoods):
+                return
             try:
-                await SearchRepo(session).upsert(
+                listing = await coord_dedup.assign_canonical(listing)
+            except Exception as exc:
+                log.info("stream.dedup_unhandled_error", error=str(exc))
+            saved = await coord_repo.upsert(listing)
+            # Per-listing commit so a slow source doesn't hold the
+            # SQLite write lock for the whole request (#109).
+            try:
+                await coord_session.commit()
+            except Exception as commit_exc:
+                log.warning("stream.listing_commit_failed", error=str(commit_exc))
+                try:
+                    await coord_session.rollback()
+                except Exception:
+                    pass
+            accumulated.append(saved)
+            yield {"event": "listing", "data": saved.model_dump(mode="json")}
+
+        try:
+            while pending_adapters > 0:
+                try:
+                    # Cap the wait so we periodically re-check
+                    # coordinator state — without this, an adapter
+                    # that hangs forever before pushing _AdapterDone
+                    # would deadlock the stream.
+                    item = await asyncio.wait_for(queue.get(), timeout=0.5)
+                except TimeoutError:
+                    if coordinator.done():
+                        # Coordinator finished but queue is empty? Drain
+                        # whatever's left and break out.
+                        while not queue.empty():
+                            item = queue.get_nowait()
+                            async for ev in _handle(item):
+                                yield ev
+                            if isinstance(item, _AdapterDone):
+                                pending_adapters -= 1
+                        break
+                    continue
+                async for ev in _handle(item):
+                    yield ev
+                if isinstance(item, _AdapterDone):
+                    pending_adapters -= 1
+        finally:
+            if not coordinator.done():
+                # Client disconnected mid-stream → cancel adapter tasks.
+                coordinator.cancel()
+                try:
+                    await coordinator
+                except (asyncio.CancelledError, Exception):
+                    pass
+
+        # Aggregator-level un-supported filters that are actually handled
+        # by post-filters → strip them from the response (mirrors service.py).
+        unsupported.discard("school_catchment")
+        unsupported.discard("transit_max_walk_minutes")
+        unsupported.discard("neighborhoods")
+
+        cache_status: Literal["fresh", "stale", "miss"] = "miss"
+
+        if any_succeeded:
+            # Cache writeback on the same coordinator session that did
+            # the listing upserts — the listings are already committed
+            # per-listing above, so this just records the cache row.
+            try:
+                await SearchRepo(coord_session).upsert(
                     CachedSearch(
                         cache_key=key,
                         query_json=canonical_query_json(req.query),
@@ -393,13 +416,37 @@ async def stream_search(
                         total_count=len(accumulated),
                     )
                 )
-                await session.commit()
+                await coord_session.commit()
             except Exception as exc:
                 log.warning("stream.cache_writeback_failed", error=str(exc))
                 try:
-                    await session.rollback()
+                    await coord_session.rollback()
                 except Exception:
                     pass
+        else:
+            # Every adapter failed. If a stale cache row exists, replay
+            # it as listing events tagged "stale" so a transient outage
+            # doesn't erase the user's previous results (matches the
+            # legacy /search fallback — codex review on #113).
+            try:
+                cached = await SearchRepo(coord_session).get(key)
+            except Exception as exc:
+                log.warning("stream.stale_lookup_failed", error=str(exc))
+                cached = None
+            if cached is not None and not accumulated:
+                try:
+                    stale = await ListingRepo(coord_session).list_by_ids(cached.listing_ids)
+                except Exception as exc:
+                    log.warning("stream.stale_load_failed", error=str(exc))
+                    stale = []
+                if stale:
+                    cache_status = "stale"
+                    for listing in stale:
+                        accumulated.append(listing)
+                        yield {
+                            "event": "listing",
+                            "data": listing.model_dump(mode="json"),
+                        }
 
     yield {
         "event": "complete",
@@ -408,28 +455,3 @@ async def stream_search(
         "unsupported_filters": sorted(unsupported),
         "source_health": {name: h.model_dump(mode="json") for name, h in sorted(health.items())},
     }
-
-
-async def _emit(
-    item: NormalizedListing | _AdapterDone,
-    accumulated: list[NormalizedListing],
-) -> AsyncIterator[dict[str, Any]]:
-    if isinstance(item, _AdapterDone):
-        yield {
-            "event": "adapter_done",
-            "adapter": item.name,
-            "count": item.count,
-            "status": item.status,
-            "error": item.error,
-        }
-    else:
-        accumulated.append(item)
-        yield {
-            "event": "listing",
-            "data": item.model_dump(mode="json"),
-        }
-
-
-def status_ok_or_degraded(d: _AdapterDone) -> bool:
-    """Sentinel guard so we can extend statuses without a type-checker fight."""
-    return d.status in ("ok", "degraded", "down")
