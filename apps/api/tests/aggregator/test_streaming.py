@@ -245,3 +245,119 @@ async def test_cache_hit_short_circuits_adapter_call(smaker):
     complete = next(e for e in events if e["event"] == "complete")
     assert complete["cache_status"] == "fresh"
     assert complete["total"] == 2
+
+
+# -------------------------------------------------------------------------
+# Codex review (#113) — cross-adapter dedup + stale-cache fallback
+# -------------------------------------------------------------------------
+
+
+def _raw_with(
+    *,
+    source: str,
+    sid: str,
+    address: str | None = None,
+    title: str = "$2000 / 1br - listing",
+) -> RawListing:
+    return RawListing(
+        source=source,
+        source_url=HttpUrl(f"https://example.com/{source}/{sid}"),
+        source_listing_id=sid,
+        title=title,
+        address=address,
+        bedrooms=1.0,
+        price_cad=2000,
+        posted_at=datetime.now(UTC),
+    )
+
+
+@pytest.mark.asyncio
+async def test_cross_adapter_dedup_assigns_shared_canonical(smaker):
+    """Two adapters emit the same property — they must share canonical_id.
+
+    Regression for the codex review on #113: per-adapter sessions used
+    to hide each adapter's writes from the other's DedupService, so two
+    rows for the same address kept self-canonical IDs. The coordinator
+    now owns dedup + persistence on one session, so the second listing
+    sees the first one already in the DB and merges.
+    """
+    addr = "1234 W 4th Ave, Vancouver, BC"
+    a1 = FakeAdapter([_raw_with(source="craigslist", sid="1", address=addr)], name="craigslist")
+    a2 = FakeAdapter([_raw_with(source="rentals_ca", sid="2", address=addr)], name="rentals_ca")
+
+    # Dedup needs enrichment to populate `address_normalized` (the key
+    # the candidate-lookup uses). Use a stub geocoder that returns
+    # nothing (None) so coords stay null but the canonical address is
+    # still computed.
+    kwargs = dict(
+        req=SearchRequest(query=NormalizedQuery()),
+        adapters=[a1, a2],
+        sessionmaker=smaker,
+        cache_ttl_seconds=900,
+        enrichment_config=EnrichmentConfig(
+            enabled=True,
+            cache_ttl_days=30,
+            photo_hash_enabled=False,
+        ),
+        dedup_config=DedupConfig(enabled=True, threshold=0.5),
+        geocoder=_StubGeocoder(),
+        photo_hasher=_StubPhotoHasher(),
+        neighborhoods=NeighborhoodLookup(),
+    )
+
+    listings: list[dict] = []
+    async for ev in stream_search(**kwargs):
+        if ev["event"] == "listing":
+            listings.append(ev["data"])
+
+    assert len(listings) == 2
+    cids = {ll["canonical_id"] for ll in listings}
+    assert len(cids) == 1, f"both listings should share one canonical_id; got {cids}"
+
+
+@pytest.mark.asyncio
+async def test_all_adapters_failing_falls_back_to_stale_cache(smaker):
+    """When every adapter fails AND a stale cache row exists, the stream
+    must replay the cached listings tagged ``cache_status='stale'`` so a
+    transient upstream outage doesn't erase the user's previous results.
+    Matches the legacy /search fallback (codex review on #113).
+    """
+    # First run: succeeds, caches results.
+    ok = FakeAdapter([_raw(1), _raw(2)], name="craigslist")
+    async for _ev in stream_search(**_kwargs(smaker, [ok])):
+        pass
+
+    # Force the cache row stale by walking the clock past the TTL.
+    # Easier: re-run with the same query but adapters that all raise.
+    # The previous run wrote a cache row that we'll treat as stale.
+    bad = FakeAdapter([], should_raise=RuntimeError("upstream down"), name="craigslist")
+    # cache_ttl_seconds=0 → the previous row reads as not-fresh and we
+    # take the fresh-fetch path; with every adapter failing, the stale
+    # fallback kicks in.
+    kwargs = _kwargs(smaker, [bad])
+    kwargs["cache_ttl_seconds"] = 0
+
+    events = []
+    async for ev in stream_search(**kwargs):
+        events.append(ev)
+
+    complete = next(e for e in events if e["event"] == "complete")
+    assert complete["cache_status"] == "stale"
+    assert complete["total"] == 2
+    listings = [e for e in events if e["event"] == "listing"]
+    assert len(listings) == 2
+
+
+@pytest.mark.asyncio
+async def test_all_adapters_failing_without_cache_is_empty_miss(smaker):
+    """No stale cache + every adapter failing → empty miss (no listings,
+    cache_status='miss'). Don't invent listings out of thin air."""
+    bad = FakeAdapter([], should_raise=RuntimeError("upstream down"))
+    events = []
+    async for ev in stream_search(**_kwargs(smaker, [bad])):
+        events.append(ev)
+
+    complete = next(e for e in events if e["event"] == "complete")
+    assert complete["cache_status"] == "miss"
+    assert complete["total"] == 0
+    assert not [e for e in events if e["event"] == "listing"]
