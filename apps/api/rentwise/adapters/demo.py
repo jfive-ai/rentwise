@@ -158,8 +158,69 @@ _LOADERS = {
 
 
 _PRESET_CAPABILITIES: AdapterCapabilities = {
-    "supported_filters": set(),  # Demo data is small; aggregator post-filters.
+    # Declare the same filter set Craigslist supports so
+    # `project_query_to_capabilities` does NOT strip price / bedroom /
+    # keyword constraints before reaching `search()`. We apply them
+    # ourselves below — without this, demo searches would return rows
+    # that violate the user's filters (`price_max`, `bedrooms_*`, …),
+    # which makes demo mode useless as an API/UI smoke test.
+    "supported_filters": {
+        "bedrooms_min",
+        "bedrooms_max",
+        "price_min",
+        "price_max",
+        "free_text_keywords",
+    },
 }
+
+
+def _matches_query(raw: RawListing, query: NormalizedQuery) -> bool:
+    """True iff this fixture row should be yielded for ``query``.
+
+    Mirrors the obvious interpretations of each declared filter:
+
+    - ``price_min`` / ``price_max``: rows with no ``price_cad`` are
+      dropped when *either* bound is set (we can't confirm the row
+      satisfies it, and silently returning unpriced rows past a
+      ``price_max`` filter is the same kind of wrong this fix is
+      preventing).
+    - ``bedrooms_min`` / ``bedrooms_max``: same treatment — unknown
+      bedroom counts are dropped when either bound is set.
+    - ``free_text_keywords``: ALL keywords must appear as a casefold
+      substring across the title + address + description_snippet
+      (joined). Matches the "AND of keywords" intent of the filter UI;
+      no keywords → no constraint.
+    """
+    pmin = query.price_min
+    pmax = query.price_max
+    if pmin is not None or pmax is not None:
+        if raw.price_cad is None:
+            return False
+        if pmin is not None and raw.price_cad < pmin:
+            return False
+        if pmax is not None and raw.price_cad > pmax:
+            return False
+
+    bmin = query.bedrooms_min
+    bmax = query.bedrooms_max
+    if bmin is not None or bmax is not None:
+        if raw.bedrooms is None:
+            return False
+        if bmin is not None and raw.bedrooms < bmin:
+            return False
+        if bmax is not None and raw.bedrooms > bmax:
+            return False
+
+    keywords = query.free_text_keywords or []
+    if keywords:
+        haystack = " ".join(
+            filter(None, [raw.title, raw.address, raw.description_snippet])
+        ).casefold()
+        for kw in keywords:
+            if kw.casefold() not in haystack:
+                return False
+
+    return True
 
 
 class FixtureAdapter:
@@ -167,7 +228,8 @@ class FixtureAdapter:
 
     Implements ``SourceAdapter`` so the aggregator can treat it identically
     to a live adapter. No network is touched; ``health_check`` always
-    reports ``ok``.
+    reports ``ok``. Honors the same price / bedroom / keyword filter
+    contract declared in ``_PRESET_CAPABILITIES``.
     """
 
     method: Literal["api", "rss", "browser"] = "api"
@@ -182,9 +244,9 @@ class FixtureAdapter:
         self.capabilities: AdapterCapabilities = self._capabilities
 
     async def search(self, query: NormalizedQuery) -> AsyncIterator[RawListing]:
-        _ = query  # Aggregator post-filters; demo emits everything.
         for raw in self._listings:
-            yield raw
+            if _matches_query(raw, query):
+                yield raw
 
     async def fetch_listing(self, listing_id: str) -> RawListing | None:
         for raw in self._listings:
