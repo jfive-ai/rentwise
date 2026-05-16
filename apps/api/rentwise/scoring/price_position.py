@@ -75,9 +75,7 @@ def compute_positions(
         grouped.setdefault(_bucket(listing), []).append(listing.price_cad)
 
     medians = {
-        k: int(statistics.median(prices))
-        for k, prices in grouped.items()
-        if len(prices) >= 1
+        k: int(statistics.median(prices)) for k, prices in grouped.items() if len(prices) >= 1
     }
     samples = {k: len(prices) for k, prices in grouped.items()}
 

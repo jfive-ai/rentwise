@@ -15,6 +15,7 @@ import { NLSearchBar } from "@/src/components/NLSearchBar";
 import { ParsedQueryChips } from "@/src/components/ParsedQueryChips";
 import { ResultsToolbar, type ViewMode } from "@/src/components/ResultsToolbar";
 import { CompareDrawer } from "@/src/components/CompareDrawer";
+import { NeighborhoodInsightsPanel } from "@/src/components/NeighborhoodInsightsPanel";
 import { findSimilar } from "@/src/lib/findSimilar";
 import {
   applyBiasAll as applyPersonalizationAll,
@@ -98,6 +99,10 @@ export function SearchScreen({ apiBaseUrl }: Props) {
   const [selectedListingId, setSelectedListingId] = useState<string | null>(null);
   // Issue #121 — compare-set: 2-4 listings ticked via per-card checkbox.
   const [compareIds, setCompareIds] = useState<Set<string>>(() => new Set());
+  // Issue #124 — neighborhood insights panel data. Reset each search.
+  const [insights, setInsights] = useState<
+    SearchResponse["neighborhood_insights"]
+  >(null);
   const [compareOpen, setCompareOpen] = useState(false);
   const [overlays, setOverlays] = useState<{ catchments: boolean; skytrain: boolean }>({
     catchments: false,
@@ -186,6 +191,7 @@ export function SearchScreen({ apiBaseUrl }: Props) {
         setUnsupported([]);
         setSourceHealth({});
         setOffset(0);
+        setInsights(null);
 
         try {
           for await (const ev of client.searchStream(
@@ -210,6 +216,9 @@ export function SearchScreen({ apiBaseUrl }: Props) {
                   flagMap[l.id] ? { ...l, quality_flags: flagMap[l.id] } : l,
                 ),
               );
+            } else if (ev.event === "neighborhood_insights") {
+              // Issue #124 — finalizer with per-area summary panel.
+              setInsights(ev.data);
             } else if (ev.event === "price_position") {
               // Issue #123 — finalizer with market-position data.
               const positions = ev.positions;
@@ -260,6 +269,11 @@ export function SearchScreen({ apiBaseUrl }: Props) {
         setUnsupported(res.unsupported_filters);
         setSourceHealth(res.source_health);
         setOffset(nextOffset);
+        // Issue #124 — pagination-pass returns the panel inline; preserve
+        // it across "Load more" so the user doesn't lose the area context.
+        if (!append) {
+          setInsights(res.neighborhood_insights ?? null);
+        }
         setStatus("ok");
       } catch (e) {
         if (myId !== reqIdRef.current) return; // superseded
@@ -490,6 +504,7 @@ export function SearchScreen({ apiBaseUrl }: Props) {
         ]}
         contentContainerStyle={styles.resultsContent}
       >
+        <NeighborhoodInsightsPanel insights={insights ?? null} />
         <ResultsToolbar
           total={total}
           sort={sort}

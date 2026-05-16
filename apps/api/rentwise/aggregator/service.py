@@ -23,6 +23,7 @@ from rentwise.aggregator.freshness import (
 from rentwise.dedup.service import DedupService
 from rentwise.enrichment.neighborhoods import NeighborhoodLookup
 from rentwise.enrichment.service import EnrichmentService
+from rentwise.insights.neighborhood import compute_insights as _compute_insights
 from rentwise.models import (
     AdapterHealth,
     NormalizedListing,
@@ -189,6 +190,8 @@ class AggregatorService:
                 total=cached.total_count,
                 cache_status="fresh",
                 unsupported=[],
+                query=req.query,
+                full_pool=listings,
             )
 
         all_listings: list[NormalizedListing] = []
@@ -243,6 +246,14 @@ class AggregatorService:
                                 error=str(exc),
                             )
                     saved = await self.listing_repo.upsert(listing)
+                    # ListingRepo._to_pydantic doesn't surface row.neighborhood
+                    # (pre-existing behavior — enrichment populates it fresh
+                    # per request). Re-attach the pre-persistence value so the
+                    # post-filter step + insights computation can read it.
+                    if saved.neighborhood is None and listing.neighborhood:
+                        saved = saved.model_copy(
+                            update={"neighborhood": listing.neighborhood}
+                        )
                     all_listings.append(saved)
             except Exception as exc:
                 log.warning("adapter.failed", adapter=adapter.name, error=str(exc))
@@ -361,6 +372,8 @@ class AggregatorService:
                 cache_status="miss",
                 unsupported=sorted(unsupported),
                 health=health,
+                query=req.query,
+                full_pool=all_listings,
             )
 
         # All adapters failed — do not poison the cache.
@@ -374,6 +387,8 @@ class AggregatorService:
                 cache_status="stale",
                 unsupported=sorted(unsupported),
                 health=health,
+                query=req.query,
+                full_pool=stale_listings,
             )
 
         # No stale cache either — return empty miss with degraded health.
@@ -393,13 +408,34 @@ class AggregatorService:
         cache_status: Literal["fresh", "stale", "miss"],
         unsupported: list[str],
         health: dict[str, AdapterHealth] | None = None,
+        query: NormalizedQuery | None = None,
+        full_pool: list[NormalizedListing] | None = None,
     ) -> SearchResponse:
+        # Issue #124 — compute insights against the *full* pool (pre-pagination)
+        # rather than the displayed slice. Caller passes both; defaults make
+        # legacy callers (early-return paths with no pool) return None.
+        insights = None
+        if query is not None and full_pool is not None:
+            from rentwise.models import NeighborhoodInsightsModel
+
+            raw = _compute_insights(full_pool, query)
+            if raw is not None:
+                insights = NeighborhoodInsightsModel(
+                    area_name=raw.area_name,
+                    listing_count=raw.listing_count,
+                    median_rent_overall=raw.median_rent_overall,
+                    median_rent_by_bedrooms=raw.median_rent_by_bedrooms,
+                    source_breakdown=raw.source_breakdown,
+                    nearby_skytrain_stations=raw.nearby_skytrain_stations,
+                    schools=raw.schools,
+                )
         return SearchResponse(
             listings=listings,
             total=total,
             cache_status=cache_status,
             unsupported_filters=unsupported,
             source_health=health or {},
+            neighborhood_insights=insights,
         )
 
     def _apply_post_filters(
@@ -570,7 +606,10 @@ class AggregatorService:
             last_seen_at=datetime.now(UTC),
             photos=raw.photos,
             description_snippet=raw.description_snippet,
-            neighborhood=None,
+            # Pull a pre-attached neighborhood hint out of raw_metadata if
+            # present (e.g. demo fixtures populate this). Real adapters
+            # leave it None — enrichment fills it from geocoding.
+            neighborhood=(raw.raw_metadata or {}).get("neighborhood_hint"),
             school_catchments=SchoolCatchments(),
             raw_metadata=raw.raw_metadata,
         )

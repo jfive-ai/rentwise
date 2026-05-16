@@ -93,7 +93,9 @@ def test_per_neighborhood_grouping() -> None:
     another neighborhood doesn't shift this one's median."""
     kits = [_l(price=p, bedrooms=2, neighborhood="Kitsilano") for p in (2900, 3000, 3100)]
     mp_target = _l(price=2000, bedrooms=2, neighborhood="Mt Pleasant")
-    mp_pool = [_l(price=p, bedrooms=2, neighborhood="Mt Pleasant") for p in (2000, 2200, 2100, 2050)]
+    mp_pool = [
+        _l(price=p, bedrooms=2, neighborhood="Mt Pleasant") for p in (2000, 2200, 2100, 2050)
+    ]
     res = compute_positions([*kits, mp_target, *mp_pool])[str(mp_target.id)]
     # Median in Mt Pleasant is ~2125. 2000 is ~-6%.
     assert res.delta_pct is not None

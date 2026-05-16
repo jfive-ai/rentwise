@@ -42,7 +42,9 @@ W_NEIGHBORHOOD = 15
 W_FRESHNESS = 10
 W_COMPLETENESS = 10
 W_POLICIES = 5
-TOTAL_WEIGHT = W_PRICE + W_BEDROOMS + W_TRANSIT + W_NEIGHBORHOOD + W_FRESHNESS + W_COMPLETENESS + W_POLICIES
+TOTAL_WEIGHT = (
+    W_PRICE + W_BEDROOMS + W_TRANSIT + W_NEIGHBORHOOD + W_FRESHNESS + W_COMPLETENESS + W_POLICIES
+)
 assert TOTAL_WEIGHT == 100, "Match score weights must sum to 100"
 
 
@@ -233,9 +235,7 @@ def explain(breakdown: ScoreBreakdown, query: NormalizedQuery) -> str:
     do we fall through to the top positive contributors.
     """
     # Constraint-failures take precedence — they explain low scores.
-    if (
-        query.price_min is not None or query.price_max is not None
-    ) and breakdown.price == 0:
+    if (query.price_min is not None or query.price_max is not None) and breakdown.price == 0:
         return "out of price range"
     if (
         query.bedrooms_min is not None or query.bedrooms_max is not None

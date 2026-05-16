@@ -109,7 +109,9 @@ def test_terse_no_address_requires_both_short_snippet_and_no_address() -> None:
 
 def test_price_outlier_low_fires_when_two_sigma_below() -> None:
     # 5 normal 2BR craigslist listings around $3000 + one suspiciously cheap.
-    pool = [_listing(price=p, source="craigslist", bedrooms=2) for p in [2900, 3000, 3050, 3100, 2950]]
+    pool = [
+        _listing(price=p, source="craigslist", bedrooms=2) for p in [2900, 3000, 3050, 3100, 2950]
+    ]
     bad = _listing(price=400, source="craigslist", bedrooms=2)
     pool.append(bad)
     ctx = build_context(pool)
@@ -127,7 +129,9 @@ def test_price_outlier_low_does_not_fire_for_small_sample() -> None:
 
 def test_price_outlier_low_scoped_per_source() -> None:
     """A $2k listing on rentals_ca shouldn't flag because most REW.ca rows are $1M+."""
-    rew_pool = [_listing(price=p, source="rew", bedrooms=2) for p in [1_200_000, 1_300_000, 1_400_000]]
+    rew_pool = [
+        _listing(price=p, source="rew", bedrooms=2) for p in [1_200_000, 1_300_000, 1_400_000]
+    ]
     rental = _listing(price=2500, source="rentals_ca", bedrooms=2)
     rental_pool = [_listing(price=p, source="rentals_ca", bedrooms=2) for p in [2400, 2600, 2500]]
     ctx = build_context([*rew_pool, rental, *rental_pool])
