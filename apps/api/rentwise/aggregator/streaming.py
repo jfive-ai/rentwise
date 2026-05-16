@@ -72,6 +72,7 @@ from rentwise.quality.flags import build_context as _quality_build_ctx
 from rentwise.quality.flags import compute_flags as _quality_compute
 from rentwise.scoring.match import explain as _match_explain
 from rentwise.scoring.match import score_listing as _match_score
+from rentwise.scoring.price_position import compute_positions as _price_positions
 from rentwise.storage.repositories import (
     CachedSearch,
     GeocodeCacheRepo,
@@ -497,6 +498,22 @@ async def stream_search(
         flags_map = {lid: f for lid, f in flags_map.items() if f}
         if flags_map:
             yield {"event": "quality_flags", "flags": flags_map}
+
+        # Issue #123 — price position needs the whole pool (median per
+        # bucket). Same finalizer pattern as quality flags.
+        positions = _price_positions(accumulated)
+        # Compress: only listings that have a meaningful position (sample >= 3).
+        position_payload = {
+            lid: {
+                "label": p.label,
+                "delta_pct": p.delta_pct,
+                "sample_size": p.sample_size,
+            }
+            for lid, p in positions.items()
+            if p.sample_size >= 3
+        }
+        if position_payload:
+            yield {"event": "price_position", "positions": position_payload}
 
     yield {
         "event": "complete",

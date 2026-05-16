@@ -207,6 +207,21 @@ export function SearchScreen({ apiBaseUrl }: Props) {
                   flagMap[l.id] ? { ...l, quality_flags: flagMap[l.id] } : l,
                 ),
               );
+            } else if (ev.event === "price_position") {
+              // Issue #123 — finalizer with market-position data.
+              const positions = ev.positions;
+              setListings((prev) =>
+                prev.map((l) =>
+                  positions[l.id]
+                    ? {
+                        ...l,
+                        price_position_label: positions[l.id].label,
+                        price_position_delta_pct: positions[l.id].delta_pct,
+                        price_position_sample_size: positions[l.id].sample_size,
+                      }
+                    : l,
+                ),
+              );
             } else if (ev.event === "complete") {
               setTotal(ev.total);
               setUnsupported(ev.unsupported_filters);

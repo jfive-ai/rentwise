@@ -92,6 +92,11 @@ export interface NormalizedListing {
   // Issue #120 — quality / scam-signal flag wire names (see backend's
   // QualityFlag enum). UI renders labels via QUALITY_FLAG_LABELS.
   quality_flags?: string[];
+  // Issue #123 — price-position chip data. ``delta_pct`` is positive for
+  // above-median, negative for below. ``label`` is user-facing text.
+  price_position_label?: string | null;
+  price_position_delta_pct?: number | null;
+  price_position_sample_size?: number | null;
   raw_metadata: Record<string, unknown>;
 }
 
@@ -129,6 +134,15 @@ export type SearchStreamEvent =
   // known, so the backend emits a finalizer mapping {listing_id: flags}
   // just before "complete". Frontend patches its listing state.
   | { event: "quality_flags"; flags: Record<string, string[]> }
+  // Issue #123 — same pattern for price position (also needs the pool
+  // for the median computation).
+  | {
+      event: "price_position";
+      positions: Record<
+        string,
+        { label: string; delta_pct: number | null; sample_size: number }
+      >;
+    }
   | {
       event: "complete";
       total: number;

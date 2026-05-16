@@ -166,6 +166,12 @@ class NormalizedListing(BaseModel):
     # for the user-facing strings.
     quality_flags: list[str] = Field(default_factory=list)
 
+    # Issue #123 — price-position chip data. ``label`` is the user-facing
+    # text; ``delta_pct`` is positive for above-median, negative for below.
+    price_position_label: str | None = None
+    price_position_delta_pct: int | None = None
+    price_position_sample_size: int | None = None
+
 
 class AdapterHealth(BaseModel):
     """Status of one source adapter."""

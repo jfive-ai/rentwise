@@ -36,6 +36,7 @@ from rentwise.quality.flags import build_context as _quality_build_ctx
 from rentwise.quality.flags import compute_flags as _quality_compute
 from rentwise.scoring.match import explain as _match_explain
 from rentwise.scoring.match import score_listing as _match_score
+from rentwise.scoring.price_position import compute_positions as _price_positions
 from rentwise.storage.repositories import (
     CachedSearch,
     ListingRepo,
@@ -60,14 +61,19 @@ def _apply_match_scores(
     flag heuristics need cross-listing stats (medians, contact reuse).
     """
     ctx = _quality_build_ctx(listings)
+    positions = _price_positions(listings)
     for i, listing in enumerate(listings):
         breakdown = _match_score(listing, query)
         flags = _quality_compute(listing, ctx)
+        pos = positions.get(str(listing.id))
         listings[i] = listing.model_copy(
             update={
                 "match_score": breakdown.total,
                 "match_explanation": _match_explain(breakdown, query),
                 "quality_flags": [f.value for f in flags],
+                "price_position_label": pos.label if pos else None,
+                "price_position_delta_pct": pos.delta_pct if pos else None,
+                "price_position_sample_size": pos.sample_size if pos else None,
             }
         )
     return listings

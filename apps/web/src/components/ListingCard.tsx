@@ -64,6 +64,24 @@ export function ListingCard({
             ✨ {listing.match_explanation}
           </Text>
         ) : null}
+        {listing.price_position_label &&
+          listing.price_position_label !== "Not enough comparables" && (
+            <Text
+              style={{
+                color:
+                  (listing.price_position_delta_pct ?? 0) < 0
+                    ? "#16a34a"
+                    : (listing.price_position_delta_pct ?? 0) > 0
+                      ? "#b91c1c"
+                      : t.textMuted,
+                fontSize: 11,
+                fontWeight: "600",
+              }}
+              numberOfLines={1}
+            >
+              📊 {listing.price_position_label}
+            </Text>
+          )}
         <QualityChips flags={listing.quality_flags} />
         <View style={styles.metaRow}>
           <Text style={[styles.price, { color: t.text }]}>{formatPrice(listing.price_cad)}</Text>
