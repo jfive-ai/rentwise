@@ -3,6 +3,8 @@
 export type PetPolicy = "required" | "ok" | "no" | "any";
 export type FurnishedPolicy = "yes" | "no" | "any";
 export type SortOrder =
+  // Issue #119 — best-match-first; default when query has constraints.
+  | "match_desc"
   | "newest"
   | "price_asc"
   | "price_desc"
@@ -81,6 +83,9 @@ export interface NormalizedListing {
   school_catchments: SchoolCatchments;
   nearest_transit: TransitInfo | null;
   walkscore: number | null;
+  // Issue #119 — deterministic Match Score (0-100) and one-line explanation.
+  match_score?: number | null;
+  match_explanation?: string | null;
   raw_metadata: Record<string, unknown>;
 }
 

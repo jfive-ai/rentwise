@@ -104,6 +104,7 @@ export function ListingTable({
           sort={sort}
           onPress={() => onSortChange(nextForColumn("source", sort))}
         />
+        <Header label="Match" />
         <Header label="" />
       </View>
       <FlatList
@@ -217,6 +218,25 @@ function Row({
       </View>
       <View style={styles.cell}>
         <Text style={{ color: t.textMuted }}>{listing.source}</Text>
+      </View>
+      <View style={styles.cell}>
+        {listing.match_score != null ? (
+          <Text
+            style={{
+              color:
+                listing.match_score >= 80
+                  ? "#16a34a"
+                  : listing.match_score >= 60
+                    ? "#d97706"
+                    : t.textMuted,
+              fontWeight: "700",
+            }}
+          >
+            {listing.match_score}
+          </Text>
+        ) : (
+          <Text style={{ color: t.textMuted }}>—</Text>
+        )}
       </View>
       <View style={[styles.cell, styles.actionsCell]}>
         <Pressable accessibilityRole="button" accessibilityLabel="Save" onPress={() => onAction("saved", !acts.saved)}>

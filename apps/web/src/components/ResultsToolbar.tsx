@@ -8,6 +8,8 @@ export type ViewMode = "cards" | "list" | "map" | "split";
 // Each entry shows up in the sort menu; the legacy "bedrooms" alias is
 // intentionally absent so users always pick a directional option.
 const SORT_OPTIONS: { value: SortOrder; label: string }[] = [
+  // Issue #119 — best-match-first.
+  { value: "match_desc", label: "Best match" },
   { value: "newest", label: "Newest" },
   { value: "title_asc", label: "Title A→Z" },
   { value: "title_desc", label: "Title Z→A" },
@@ -20,6 +22,7 @@ const SORT_OPTIONS: { value: SortOrder; label: string }[] = [
 ];
 
 const SORT_LABEL: Record<SortOrder, string> = {
+  match_desc: "Best match",
   newest: "Newest",
   title_asc: "Title A→Z",
   title_desc: "Title Z→A",

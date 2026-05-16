@@ -154,6 +154,13 @@ class NormalizedListing(BaseModel):
 
     raw_metadata: dict[str, Any] = Field(default_factory=dict)
 
+    # Issue #119 — deterministic 0-100 Match Score and one-line explanation.
+    # Set by the aggregator AFTER enrichment + dedup, against the active
+    # NormalizedQuery. ``None`` for cached responses that pre-date scoring
+    # or for code paths that bypassed the aggregator.
+    match_score: int | None = Field(default=None, ge=0, le=100)
+    match_explanation: str | None = Field(default=None, max_length=120)
+
 
 class AdapterHealth(BaseModel):
     """Status of one source adapter."""
@@ -165,6 +172,8 @@ class AdapterHealth(BaseModel):
 
 
 class SortOrder(StrEnum):
+    # Issue #119 — default when the query has at least one constraint set.
+    MATCH_DESC = "match_desc"
     NEWEST = "newest"
     PRICE_ASC = "price_asc"
     PRICE_DESC = "price_desc"

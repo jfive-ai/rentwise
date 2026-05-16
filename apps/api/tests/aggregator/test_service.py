@@ -256,6 +256,106 @@ async def test_legacy_bedrooms_alias_sorts_descending(session):
 
 
 @pytest.mark.asyncio
+async def test_match_score_applied_on_cache_hit(session):
+    """Codex P1 on PR #127: cached responses must include match_score so
+    MATCH_DESC sort works and the badge appears on repeat searches."""
+    adapter = FakeAdapter(
+        listings=[
+            RawListing(
+                source="craigslist",
+                source_url=HttpUrl("https://x/1"),
+                source_listing_id="1",
+                title="A",
+                bedrooms=2,
+                price_cad=2500,
+                posted_at=datetime.now(UTC),
+            ),
+        ]
+    )
+    svc = AggregatorService(adapters=[adapter], session=session, cache_ttl_seconds=900)
+    req = SearchRequest(query=NormalizedQuery(price_max=3000), sort=SortOrder.MATCH_DESC)
+    miss = await svc.search(req)
+    await session.commit()
+    assert miss.cache_status == "miss"
+    assert miss.listings[0].match_score is not None
+    miss_score = miss.listings[0].match_score
+    # Second identical request hits the cache; scoring must still run.
+    hit = await svc.search(req)
+    assert hit.cache_status == "fresh"
+    assert hit.listings[0].match_score is not None
+    assert hit.listings[0].match_score == miss_score
+    assert hit.listings[0].match_explanation
+
+
+@pytest.mark.asyncio
+async def test_match_score_attached_to_every_listing(session):
+    """Issue #119: every listing in the response carries a 0-100 score."""
+    adapter = FakeAdapter(
+        listings=[
+            RawListing(
+                source="craigslist",
+                source_url=HttpUrl("https://x/1"),
+                source_listing_id="1",
+                title="cheap 2BR",
+                bedrooms=2,
+                price_cad=2500,
+                posted_at=datetime.now(UTC),
+            ),
+            RawListing(
+                source="craigslist",
+                source_url=HttpUrl("https://x/2"),
+                source_listing_id="2",
+                title="expensive 2BR",
+                bedrooms=2,
+                price_cad=4500,
+                posted_at=datetime.now(UTC),
+            ),
+        ]
+    )
+    svc = AggregatorService(adapters=[adapter], session=session, cache_ttl_seconds=900)
+    resp = await svc.search(SearchRequest(query=NormalizedQuery(price_max=3000)))
+    for r in resp.listings:
+        assert r.match_score is not None
+        assert 0 <= r.match_score <= 100
+
+
+@pytest.mark.asyncio
+async def test_match_desc_sorts_best_fit_first(session):
+    """Issue #119: MATCH_DESC sort puts in-budget listings above out-of-budget."""
+    adapter = FakeAdapter(
+        listings=[
+            RawListing(
+                source="craigslist",
+                source_url=HttpUrl("https://x/over"),
+                source_listing_id="over",
+                title="over budget",
+                bedrooms=2,
+                price_cad=4500,
+                posted_at=datetime.now(UTC),
+                address="A St",
+                description_snippet="d",
+            ),
+            RawListing(
+                source="craigslist",
+                source_url=HttpUrl("https://x/inb"),
+                source_listing_id="inb",
+                title="in budget",
+                bedrooms=2,
+                price_cad=2500,
+                posted_at=datetime.now(UTC),
+                address="B St",
+                description_snippet="d",
+            ),
+        ]
+    )
+    svc = AggregatorService(adapters=[adapter], session=session, cache_ttl_seconds=900)
+    resp = await svc.search(
+        SearchRequest(query=NormalizedQuery(price_max=3000), sort=SortOrder.MATCH_DESC)
+    )
+    assert [r.source_listing_id for r in resp.listings] == ["inb", "over"]
+
+
+@pytest.mark.asyncio
 async def test_per_adapter_commit_releases_write_lock(session, monkeypatch):
     """#109 follow-up: each adapter's writes must be committed before the
     next adapter starts, otherwise a single /search holds the SQLite
