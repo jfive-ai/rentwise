@@ -16,12 +16,23 @@ interface Props {
    * for a per-source link list.
    */
   alternates?: NormalizedListing[];
+  /** Issue #121: ticked for side-by-side comparison. */
+  compareChecked?: boolean;
+  /** Issue #121: toggle the compare-tick for this card. */
+  onCompareToggle?: (checked: boolean) => void;
 }
 
 const formatPrice = (n: number | null): string =>
   n == null ? "—" : `$${n.toLocaleString("en-CA")}`;
 
-export function ListingCard({ listing, actions, onAction, alternates }: Props) {
+export function ListingCard({
+  listing,
+  actions,
+  onAction,
+  alternates,
+  compareChecked = false,
+  onCompareToggle,
+}: Props) {
   const t = useTheme();
   const [expanded, setExpanded] = useState(false);
   const photo = listing.photos[0];
@@ -94,6 +105,13 @@ export function ListingCard({ listing, actions, onAction, alternates }: Props) {
         )}
 
         <View style={styles.actions}>
+          {onCompareToggle && (
+            <ActionBtn
+              label={compareChecked ? "✓ Compare" : "+ Compare"}
+              active={compareChecked}
+              onPress={() => onCompareToggle(!compareChecked)}
+            />
+          )}
           <ActionBtn label="Save" active={!!actions.saved} onPress={() => onAction("saved", !actions.saved)} />
           <ActionBtn label="Hide" active={!!actions.hidden} onPress={() => onAction("hidden", !actions.hidden)} />
           <ActionBtn label="Contacted" active={!!actions.contacted} onPress={() => onAction("contacted", !actions.contacted)} />

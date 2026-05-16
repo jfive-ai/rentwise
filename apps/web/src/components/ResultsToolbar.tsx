@@ -47,6 +47,10 @@ interface Props {
   onSave?: () => void;
   /** Hide Save when there are no results yet (no search row to save). */
   canSave?: boolean;
+  /** Issue #121: number of listings currently ticked for comparison. */
+  compareCount?: number;
+  /** Issue #121: open the comparison modal. */
+  onCompare?: () => void;
 }
 
 export function ResultsToolbar({
@@ -58,6 +62,8 @@ export function ResultsToolbar({
   onOpenSaved,
   onSave,
   canSave = false,
+  compareCount = 0,
+  onCompare,
 }: Props) {
   const t = useTheme();
   const [sortOpen, setSortOpen] = useState(false);
@@ -140,6 +146,22 @@ export function ResultsToolbar({
           style={[styles.btn, { borderColor: t.border }]}
         >
           <Text style={{ color: t.text }}>Saved</Text>
+        </Pressable>
+      )}
+      {/* Issue #121 — compare button appears once 2+ listings are ticked. */}
+      {onCompare && compareCount >= 2 && (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Compare ${compareCount} listings`}
+          onPress={onCompare}
+          style={[
+            styles.btn,
+            { borderColor: t.accent, backgroundColor: t.accent },
+          ]}
+        >
+          <Text style={{ color: "#fff", fontWeight: "700" }}>
+            ⇄ Compare ({compareCount})
+          </Text>
         </Pressable>
       )}
 
