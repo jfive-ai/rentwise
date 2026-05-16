@@ -109,11 +109,23 @@ export interface AdapterHealth {
   last_error: string | null;
 }
 
+export interface NeighborhoodInsights {
+  area_name: string;
+  listing_count: number;
+  median_rent_overall: number | null;
+  median_rent_by_bedrooms: Record<string, number>;
+  source_breakdown: Record<string, number>;
+  nearby_skytrain_stations: string[];
+  schools: string[];
+}
+
 export interface SearchResponse {
   listings: NormalizedListing[];
   total: number;
   cache_status: CacheStatus;
   unsupported_filters: string[];
+  // Issue #124 — present when the search has a clear area focus.
+  neighborhood_insights?: NeighborhoodInsights | null;
   source_health: Record<string, AdapterHealth>;
 }
 
@@ -134,6 +146,8 @@ export type SearchStreamEvent =
   // known, so the backend emits a finalizer mapping {listing_id: flags}
   // just before "complete". Frontend patches its listing state.
   | { event: "quality_flags"; flags: Record<string, string[]> }
+  // Issue #124 — neighborhood insights finalizer.
+  | { event: "neighborhood_insights"; data: NeighborhoodInsights }
   // Issue #123 — same pattern for price position (also needs the pool
   // for the median computation).
   | {

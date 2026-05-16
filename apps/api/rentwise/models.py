@@ -207,9 +207,27 @@ class SearchRequest(BaseModel):
     sort: SortOrder = SortOrder.NEWEST
 
 
+class NeighborhoodInsightsModel(BaseModel):
+    """Issue #124 — per-area panel returned alongside listings.
+
+    Wire model mirroring :class:`rentwise.insights.neighborhood.NeighborhoodInsights`.
+    Only sent when the search has a clear area focus.
+    """
+
+    area_name: str
+    listing_count: int
+    median_rent_overall: int | None = None
+    median_rent_by_bedrooms: dict[str, int] = Field(default_factory=dict)
+    source_breakdown: dict[str, int] = Field(default_factory=dict)
+    nearby_skytrain_stations: list[str] = Field(default_factory=list)
+    schools: list[str] = Field(default_factory=list)
+
+
 class SearchResponse(BaseModel):
     listings: list[NormalizedListing]
     total: int
     cache_status: Literal["fresh", "stale", "miss"]
     unsupported_filters: list[str]
     source_health: dict[str, AdapterHealth]
+    # Issue #124 — surfaces when the search has a clear area focus.
+    neighborhood_insights: NeighborhoodInsightsModel | None = None

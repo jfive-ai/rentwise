@@ -34,6 +34,21 @@ _FIXTURES_DIR = Path(__file__).resolve().parents[2] / "tests" / "fixtures"
 _ADAPTER_FIXTURES_DIR = Path(__file__).resolve().parents[2] / "tests" / "adapters"
 
 
+def _annotate_neighborhood(rows: list[RawListing]) -> list[RawListing]:
+    """Attach ``raw_metadata['neighborhood_hint']`` so demo listings carry a
+    neighborhood through the aggregator even without geocoding."""
+    out: list[RawListing] = []
+    for r in rows:
+        hint = _infer_neighborhood(r.title, r.address)
+        if hint:
+            meta = dict(r.raw_metadata or {})
+            meta["neighborhood_hint"] = hint
+            out.append(r.model_copy(update={"raw_metadata": meta}))
+        else:
+            out.append(r)
+    return out
+
+
 def _load_craigslist() -> list[RawListing]:
     from datetime import UTC, datetime
 
@@ -62,23 +77,61 @@ def _load_craigslist() -> list[RawListing]:
             price_cad=400,
             posted_at=datetime.now(UTC),
             description_snippet="wire deposit",
+            raw_metadata={"neighborhood_hint": "Downtown"},
         )
     )
-    return out
+    return _annotate_neighborhood(out)
 
 
 def _load_livrent() -> list[RawListing]:
     path = _ADAPTER_FIXTURES_DIR / "livrent" / "fixtures" / "search_page.html"
     html = path.read_text()
     adapter = LivRentAdapter(user_agent="RentWise-demo/0.1")
-    return adapter._extract(html, NormalizedQuery())
+    return _annotate_neighborhood(adapter._extract(html, NormalizedQuery()))
 
 
 def _load_rentalsca() -> list[RawListing]:
     path = _ADAPTER_FIXTURES_DIR / "rentalsca" / "fixtures" / "search_page.html"
     html = path.read_text()
     adapter = RentalsCaAdapter(user_agent="RentWise-demo/0.1")
-    return adapter._extract(html)
+    return _annotate_neighborhood(adapter._extract(html))
+
+
+_KNOWN_AREAS = (
+    "Kitsilano",
+    "Mount Pleasant",
+    "Mt Pleasant",
+    "Downtown",
+    "West End",
+    "Strathcona",
+    "Renfrew-Collingwood",
+    "Renfrew",
+    "Dunbar",
+    "Marpole",
+    "Killarney",
+    "Hastings",
+    "Sunset",
+    "Riley Park",
+    "Fairview",
+    "Coquitlam",
+    "Richmond",
+)
+
+
+def _infer_neighborhood(*texts: str | None) -> str | None:
+    """Best-effort substring match against the canonical area names.
+
+    Used by the demo loader to populate ``raw_metadata['neighborhood_hint']``
+    so the aggregator can surface a value on NormalizedListing.neighborhood
+    even though we don't geocode in demo mode.
+    """
+    haystack = " ".join(t for t in texts if t).casefold()
+    if not haystack:
+        return None
+    for area in _KNOWN_AREAS:
+        if area.casefold() in haystack:
+            return area
+    return None
 
 
 def _load_synthetic_testid(source: str, fixture_dir: str, base_url: str) -> list[RawListing]:
@@ -149,6 +202,7 @@ def _load_synthetic_testid(source: str, fixture_dir: str, base_url: str) -> list
         addr_m = addr_re.search(inner)
         address = unescape(addr_m.group("a")).strip() if addr_m else None
 
+        hint = _infer_neighborhood(title, address)
         try:
             out.append(
                 RawListing(
@@ -160,6 +214,7 @@ def _load_synthetic_testid(source: str, fixture_dir: str, base_url: str) -> list
                     bedrooms=bedrooms,
                     price_cad=price,
                     posted_at=now,
+                    raw_metadata={"neighborhood_hint": hint} if hint else {},
                 )
             )
         except ValidationError as exc:

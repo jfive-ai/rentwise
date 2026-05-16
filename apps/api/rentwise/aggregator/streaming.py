@@ -62,6 +62,7 @@ from rentwise.enrichment.geocode import Geocoder
 from rentwise.enrichment.neighborhoods import NeighborhoodLookup
 from rentwise.enrichment.photo_hash import PhotoHasher
 from rentwise.enrichment.service import EnrichmentConfig, EnrichmentService
+from rentwise.insights.neighborhood import compute_insights as _compute_insights
 from rentwise.models import (
     AdapterHealth,
     NormalizedListing,
@@ -133,7 +134,7 @@ def _raw_to_normalized(raw: Any) -> NormalizedListing:
         last_seen_at=datetime.now(UTC),
         photos=raw.photos,
         description_snippet=raw.description_snippet,
-        neighborhood=None,
+        neighborhood=(raw.raw_metadata or {}).get("neighborhood_hint"),
         school_catchments=SchoolCatchments(),
         raw_metadata=raw.raw_metadata,
     )
@@ -220,6 +221,18 @@ async def stream_search(
                 cache_ttl_seconds,
             ):
                 listings = await ListingRepo(session).list_by_ids(cached.listing_ids)
+                # Restore neighborhood from raw_metadata.neighborhood_hint
+                # because the DB column doesn't carry the enriched value
+                # (pre-existing behavior — enrichment ran fresh per request,
+                # the row stays None). Without this, cached responses lose
+                # insights + the personalization "in your neighborhood" hint.
+                restored = []
+                for listing in listings:
+                    hint = (listing.raw_metadata or {}).get("neighborhood_hint")
+                    if listing.neighborhood is None and hint:
+                        listing = listing.model_copy(update={"neighborhood": hint})
+                    restored.append(listing)
+                listings = restored
                 # Codex P2 on PR #128 — also compute quality flags so the
                 # ⚠ chips appear on cache hits (cross-listing flags need
                 # the full pool, so we compute once before emitting).
@@ -249,6 +262,21 @@ async def stream_search(
                 flags_map = {lid: f for lid, f in flags_map.items() if f}
                 if flags_map:
                     yield {"event": "quality_flags", "flags": flags_map}
+                # Issue #124 — emit insights from cached listings too.
+                cached_insights = _compute_insights(listings, req.query)
+                if cached_insights is not None:
+                    yield {
+                        "event": "neighborhood_insights",
+                        "data": {
+                            "area_name": cached_insights.area_name,
+                            "listing_count": cached_insights.listing_count,
+                            "median_rent_overall": cached_insights.median_rent_overall,
+                            "median_rent_by_bedrooms": cached_insights.median_rent_by_bedrooms,
+                            "source_breakdown": cached_insights.source_breakdown,
+                            "nearby_skytrain_stations": cached_insights.nearby_skytrain_stations,
+                            "schools": cached_insights.schools,
+                        },
+                    }
                 yield {
                     "event": "complete",
                     "total": cached.total_count,
@@ -377,6 +405,11 @@ async def stream_search(
             except Exception as exc:
                 log.info("stream.dedup_unhandled_error", error=str(exc))
             saved = await coord_repo.upsert(listing)
+            # Pre-existing: ListingRepo._to_pydantic doesn't surface neighborhood
+            # (enrichment normally sets it fresh per request). Carry the value
+            # forward so demo-mode insights computation can read it.
+            if saved.neighborhood is None and listing.neighborhood:
+                saved = saved.model_copy(update={"neighborhood": listing.neighborhood})
             # Issue #119 — attach Match Score before yielding so the
             # client can render the badge as listings stream in.
             breakdown = _match_score(saved, req.query)
@@ -498,6 +531,22 @@ async def stream_search(
         flags_map = {lid: f for lid, f in flags_map.items() if f}
         if flags_map:
             yield {"event": "quality_flags", "flags": flags_map}
+
+        # Issue #124 — neighborhood insights need the whole pool too.
+        insights = _compute_insights(accumulated, req.query)
+        if insights is not None:
+            yield {
+                "event": "neighborhood_insights",
+                "data": {
+                    "area_name": insights.area_name,
+                    "listing_count": insights.listing_count,
+                    "median_rent_overall": insights.median_rent_overall,
+                    "median_rent_by_bedrooms": insights.median_rent_by_bedrooms,
+                    "source_breakdown": insights.source_breakdown,
+                    "nearby_skytrain_stations": insights.nearby_skytrain_stations,
+                    "schools": insights.schools,
+                },
+            }
 
         # Issue #123 — price position needs the whole pool (median per
         # bucket). Same finalizer pattern as quality flags.
