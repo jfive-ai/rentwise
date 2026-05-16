@@ -417,11 +417,21 @@ export function SearchScreen({ apiBaseUrl }: Props) {
   const hasMore = listings.length < total;
   // Issue #125 — bias the match score by past save/hide actions
   // BEFORE clustering, so a "like ones you've saved" hint travels with
-  // the listing into every view.
-  const personalizedListings = useMemo(
-    () => applyPersonalizationAll(listings, profile),
-    [listings, profile],
-  );
+  // the listing into every view. Codex P1 on PR #132: re-sort by
+  // (match_score desc) after biasing so the ±5 nudge actually moves
+  // the ranking — without this, the badge text changed but the row
+  // order didn't, defeating the whole point.
+  const personalizedListings = useMemo(() => {
+    const biased = applyPersonalizationAll(listings, profile);
+    if (sort !== "match_desc" || !profile.hasSignal) return biased;
+    // Stable re-sort: higher match_score first, ties keep the API
+    // order (which is already match_desc from the backend).
+    return [...biased].sort((a, b) => {
+      const sa = a.match_score ?? -1;
+      const sb = b.match_score ?? -1;
+      return sb - sa;
+    });
+  }, [listings, profile, sort]);
   // Phase 4 PR-D: collapse cross-source duplicates into one card per
   // canonical_id. Sort + pagination still operate on the flat list at
   // the API layer; clustering is purely a presentation step.
