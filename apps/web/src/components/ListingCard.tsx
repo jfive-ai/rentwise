@@ -160,9 +160,7 @@ export function ListingCard({
  * reads at a glance. Explanation appears below the score in small grey.
  */
 function MatchBadge({ score, explanation }: { score: number; explanation: string | null }) {
-  const t = useTheme();
-  const bg =
-    score >= 80 ? "#16a34a" : score >= 60 ? "#d97706" : "#6b7280";
+  const bg = score >= 80 ? "#16a34a" : score >= 60 ? "#d97706" : "#6b7280";
   return (
     <View
       style={[
