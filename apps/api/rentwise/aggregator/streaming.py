@@ -220,21 +220,35 @@ async def stream_search(
                 cache_ttl_seconds,
             ):
                 listings = await ListingRepo(session).list_by_ids(cached.listing_ids)
+                # Codex P2 on PR #128 — also compute quality flags so the
+                # ⚠ chips appear on cache hits (cross-listing flags need
+                # the full pool, so we compute once before emitting).
+                qctx = _quality_build_ctx(listings)
                 yield {"event": "started", "adapters": [a.name for a in adapters]}
                 for listing in listings:
                     # Issue #119 — score cached listings on the way out so
                     # the badge appears even on cache hits.
                     breakdown = _match_score(listing, req.query)
+                    flags = _quality_compute(listing, qctx)
                     scored = listing.model_copy(
                         update={
                             "match_score": breakdown.total,
                             "match_explanation": _match_explain(breakdown, req.query),
+                            "quality_flags": [f.value for f in flags],
                         }
                     )
                     yield {
                         "event": "listing",
                         "data": scored.model_dump(mode="json"),
                     }
+                # Mirror the fresh-fetch finalizer for consistency.
+                flags_map = {
+                    str(li.id): [f.value for f in _quality_compute(li, qctx)]
+                    for li in listings
+                }
+                flags_map = {lid: f for lid, f in flags_map.items() if f}
+                if flags_map:
+                    yield {"event": "quality_flags", "flags": flags_map}
                 yield {
                     "event": "complete",
                     "total": cached.total_count,
