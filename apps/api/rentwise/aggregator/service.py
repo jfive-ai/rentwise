@@ -169,6 +169,12 @@ class AggregatorService:
         ):
             ids = cached.listing_ids
             listings = await self.listing_repo.list_by_ids(ids)
+            # Issue #119 (Codex P1 on PR #127): score cached listings against
+            # the current query so MATCH_DESC sort + the badge work the same
+            # on cache hits as on cache misses. Without this every cached row
+            # has match_score=None, MATCH_DESC silently falls back to newest,
+            # and match_explanation disappears on repeat searches.
+            listings = _apply_match_scores(listings, req.query)
             return self._build_response(
                 listings=self._sorted_paginated(listings, req),
                 total=cached.total_count,
@@ -353,6 +359,9 @@ class AggregatorService:
         if cached is not None:
             stale_ids = cached.listing_ids
             stale_listings = await self.listing_repo.list_by_ids(stale_ids)
+            # Issue #119 (Codex P1 on PR #127): same as the fresh cache hit —
+            # stale listings still need scoring so MATCH_DESC works.
+            stale_listings = _apply_match_scores(stale_listings, req.query)
             return self._build_response(
                 listings=self._sorted_paginated(stale_listings, req),
                 total=cached.total_count,
