@@ -37,6 +37,10 @@ def _to_pydantic(row: Listing) -> NormalizedListing:
         title=row.title,
         address=row.address_raw,
         address_normalized=row.address_normalized,
+        # Codex P1 on PR #133: surface the persisted neighborhood column —
+        # was hardcoded to None on insert and ignored on read, so cached
+        # listings lost their area assignment between requests.
+        neighborhood=row.neighborhood,
         lat=row.lat,
         lon=row.lon,
         bedrooms=row.bedrooms,
@@ -109,7 +113,11 @@ class ListingRepo:
                 snippet=listing.description_snippet,
                 address_raw=listing.address,
                 address_normalized=listing.address_normalized,
-                neighborhood=None,
+                # Codex P1 on PR #133 — was hardcoded None, dropping the
+                # enriched neighborhood on every insert. Now we persist
+                # the value the caller assigned (geocode lookup or, in
+                # demo mode, the raw_metadata hint).
+                neighborhood=listing.neighborhood,
                 lat=listing.lat,
                 lon=listing.lon,
                 bedrooms=listing.bedrooms,
@@ -149,6 +157,12 @@ class ListingRepo:
             existing.title = listing.title
             existing.snippet = listing.description_snippet
             existing.address_normalized = listing.address_normalized
+            # Codex P1 on PR #133 — keep neighborhood in sync on updates.
+            # Don't overwrite a previously-set value with None, since
+            # subsequent re-enrichment with a stuck geocoder would erase
+            # known data.
+            if listing.neighborhood is not None:
+                existing.neighborhood = listing.neighborhood
             existing.lat = listing.lat
             existing.lon = listing.lon
             existing.bedrooms = listing.bedrooms
