@@ -76,6 +76,17 @@ class Settings(BaseSettings):
         validation_alias="RENTWISE_PADMAPPER_ENABLED",
     )
 
+    # --- Demo mode (fixture-backed adapters) ---
+    # When true, _build_adapters replaces all live adapters with
+    # FixtureAdapter instances populated from the test fixtures bundled
+    # in tests/. Lets the full pipeline run end-to-end in environments
+    # where the live sites are unreachable (CI, ephemeral containers,
+    # offline development). OFF in production.
+    rentwise_demo_mode: bool = Field(
+        default=False,
+        validation_alias="RENTWISE_DEMO_MODE",
+    )
+
     # --- Phase 8 PR-E: Zumper / REW.ca / liv.rent direct adapters ---
     # All three are scaffolds and disabled by default. See
     # docs/operational-rules.md "Source notes" for the per-site TOS reality
