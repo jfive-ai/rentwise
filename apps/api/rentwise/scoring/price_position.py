@@ -67,10 +67,15 @@ def compute_positions(
     Listings with no price or no bedrooms aren't groupable, so they
     get the "Not enough comparables" placeholder (sample_size = 0).
     """
-    # Group prices per bucket.
+    # Group prices per bucket. Codex P2 on PR #131: skip listings without
+    # a neighborhood — bucketing ungeocoded rows together can produce
+    # "X% below median" chips on rows that aren't actually in a shared
+    # area. Those rows fall through to "Not enough comparables".
     grouped: dict[tuple[float | None, str | None], list[int]] = {}
     for listing in listings:
         if listing.price_cad is None or listing.bedrooms is None:
+            continue
+        if listing.neighborhood is None:
             continue
         grouped.setdefault(_bucket(listing), []).append(listing.price_cad)
 
@@ -84,7 +89,14 @@ def compute_positions(
     out: dict[str, PricePosition] = {}
     for listing in listings:
         lid = str(listing.id)
-        if listing.price_cad is None or listing.bedrooms is None:
+        if (
+            listing.price_cad is None
+            or listing.bedrooms is None
+            or listing.neighborhood is None
+        ):
+            # Codex P2 on PR #131 — also covers the no-neighborhood case
+            # so we don't mislead users with "X% below median" labels on
+            # rows where the comparison set isn't actually an area match.
             out[lid] = PricePosition(
                 sample_size=0,
                 median=None,
