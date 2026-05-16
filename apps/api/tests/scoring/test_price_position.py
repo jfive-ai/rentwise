@@ -88,6 +88,16 @@ def test_unpriced_listing_returns_placeholder() -> None:
     assert res.sample_size == 0
 
 
+def test_no_neighborhood_returns_placeholder() -> None:
+    """Codex P2 on PR #131 — ungeocoded rows aren't grouped so they
+    don't get a "X% below median" chip from rows in unrelated areas."""
+    pool = [_l(price=p, bedrooms=2, neighborhood=None) for p in (2500, 3000, 3500, 4000)]
+    target = pool[0]
+    res = compute_positions(pool)[str(target.id)]
+    assert res.label == "Not enough comparables"
+    assert res.delta_pct is None
+
+
 def test_per_neighborhood_grouping() -> None:
     """A listing's bucket includes neighborhood — bumping prices in
     another neighborhood doesn't shift this one's median."""
