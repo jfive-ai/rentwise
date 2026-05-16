@@ -243,6 +243,12 @@ def explain(breakdown: ScoreBreakdown, query: NormalizedQuery) -> str:
         return "wrong bedroom count"
     if query.neighborhoods and breakdown.neighborhood == 0:
         return "not in your neighborhood"
+    if query.transit_max_walk_minutes is not None and breakdown.transit == 0:
+        # Codex P2 on PR #127 — surface transit failures with the same
+        # priority as other constrained axes so a user tuning
+        # transit_max_walk_minutes sees why a listing was demoted instead
+        # of a generic positive blurb like "fresh listing".
+        return "too far from transit"
 
     candidates: list[tuple[str, float]] = []
     if query.price_min is not None or query.price_max is not None:
