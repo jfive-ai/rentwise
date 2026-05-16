@@ -80,6 +80,9 @@ export interface NormalizedListing {
   last_seen_at: string;
   photos: string[];
   description_snippet: string | null;
+  // Vancouver local-area name (per City of Vancouver Open Data) where
+  // this listing's geocoded coordinates fall. `null` if unlocated.
+  neighborhood?: string | null;
   school_catchments: SchoolCatchments;
   nearest_transit: TransitInfo | null;
   walkscore: number | null;

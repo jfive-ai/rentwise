@@ -20,6 +20,8 @@ interface Props {
   compareChecked?: boolean;
   /** Issue #121: toggle the compare-tick for this card. */
   onCompareToggle?: (checked: boolean) => void;
+  /** Issue #122: run a "more like this" derived search. */
+  onFindSimilar?: () => void;
 }
 
 const formatPrice = (n: number | null): string =>
@@ -32,6 +34,7 @@ export function ListingCard({
   alternates,
   compareChecked = false,
   onCompareToggle,
+  onFindSimilar,
 }: Props) {
   const t = useTheme();
   const [expanded, setExpanded] = useState(false);
@@ -115,6 +118,13 @@ export function ListingCard({
           <ActionBtn label="Save" active={!!actions.saved} onPress={() => onAction("saved", !actions.saved)} />
           <ActionBtn label="Hide" active={!!actions.hidden} onPress={() => onAction("hidden", !actions.hidden)} />
           <ActionBtn label="Contacted" active={!!actions.contacted} onPress={() => onAction("contacted", !actions.contacted)} />
+          {onFindSimilar && (
+            <ActionBtn
+              label="↻ Find similar"
+              active={false}
+              onPress={onFindSimilar}
+            />
+          )}
           <ActionBtn
             label="Open original"
             active={false}

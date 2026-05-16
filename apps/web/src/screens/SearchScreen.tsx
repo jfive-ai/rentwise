@@ -15,6 +15,7 @@ import { NLSearchBar } from "@/src/components/NLSearchBar";
 import { ParsedQueryChips } from "@/src/components/ParsedQueryChips";
 import { ResultsToolbar, type ViewMode } from "@/src/components/ResultsToolbar";
 import { CompareDrawer } from "@/src/components/CompareDrawer";
+import { findSimilar } from "@/src/lib/findSimilar";
 import { ListingCard } from "@/src/components/ListingCard";
 import { ListingTable } from "@/src/components/ListingTable";
 import { MapView } from "@/src/components/MapView";
@@ -501,6 +502,17 @@ export function SearchScreen({ apiBaseUrl }: Props) {
                     }
                     return next;
                   });
+                }}
+                onFindSimilar={() => {
+                  // Issue #122 — derive a query from this listing and re-search.
+                  const derived = findSimilar(primary);
+                  replace(derived);
+                  setCompareIds(new Set());
+                  // Kick off the search with the derived query directly so we
+                  // don't depend on a query-change useEffect (none exists; the
+                  // app intentionally batches NL parses + filter edits behind
+                  // explicit Search clicks).
+                  void runSearch(0, false, derived);
                 }}
               />
             ))}
