@@ -96,13 +96,26 @@ def compose_alert(
 ) -> EmailAlert:
     """Render an :class:`EmailAlert` for ``listings`` under a saved search.
 
+    Issue #126 — adds a Digest narrative paragraph at the top before the
+    bare list. Both text and HTML bodies include it so non-HTML mail
+    clients still get the summary.
+
     Pure / deterministic — tested directly without smtplib.
     """
+    # Local import to avoid a cycle at module-load time.
+    from rentwise.notifications.digest import build_digest
+
     n = len(listings)
     title = label or "your saved search"
     subject = f"RentWise: {n} new listing{'s' if n != 1 else ''} for {title}"
+    digest = build_digest(listings)
 
-    lines = [f"{n} new match{'es' if n != 1 else ''} for: {title}", ""]
+    lines: list[str] = []
+    if digest is not None:
+        lines.append(digest.narrative)
+        lines.append("")
+    lines.append(f"{n} new match{'es' if n != 1 else ''} for: {title}")
+    lines.append("")
     html_rows: list[str] = []
     for li in listings:
         price = f"${li.price_cad:,}" if li.price_cad is not None else "—"
@@ -122,7 +135,19 @@ def compose_alert(
 
     saved_link = f"{app_base_url.rstrip('/')}/?saved={cache_key}"
     lines.append(f"View on RentWise: {saved_link}")
+
+    digest_html = ""
+    if digest is not None:
+        digest_html = (
+            '<div style="background:#f8fafc;border-left:4px solid #16a34a;'
+            'padding:12px 16px;margin-bottom:16px;border-radius:4px;">'
+            f"<p style=\"margin:0;font-size:15px;line-height:1.4;\">"
+            f"{_html_escape(digest.narrative)}"
+            "</p></div>"
+        )
+
     html_body = (
+        f"{digest_html}"
         f"<p>{n} new match{'es' if n != 1 else ''} for "
         f"<strong>{_html_escape(title)}</strong>:</p>"
         f"<ul>{''.join(html_rows)}</ul>"
