@@ -32,6 +32,8 @@ from rentwise.models import (
     SearchResponse,
     SortOrder,
 )
+from rentwise.quality.flags import build_context as _quality_build_ctx
+from rentwise.quality.flags import compute_flags as _quality_compute
 from rentwise.scoring.match import explain as _match_explain
 from rentwise.scoring.match import score_listing as _match_score
 from rentwise.storage.repositories import (
@@ -47,18 +49,25 @@ log = structlog.get_logger(__name__)
 def _apply_match_scores(
     listings: list[NormalizedListing], query: NormalizedQuery
 ) -> list[NormalizedListing]:
-    """Attach Match Score + explanation to every listing in-place.
+    """Attach Match Score + explanation + quality flags to every listing.
 
     Returns the same list (mutated for cheapness — every reference up to
     here points to a freshly-constructed NormalizedListing from
     `_raw_to_normalized`, so there's no shared-state hazard).
+
+    Quality flags (#120) live alongside the score so we only loop the
+    listing pool once. Context is built once for the whole pool — the
+    flag heuristics need cross-listing stats (medians, contact reuse).
     """
+    ctx = _quality_build_ctx(listings)
     for i, listing in enumerate(listings):
         breakdown = _match_score(listing, query)
+        flags = _quality_compute(listing, ctx)
         listings[i] = listing.model_copy(
             update={
                 "match_score": breakdown.total,
                 "match_explanation": _match_explain(breakdown, query),
+                "quality_flags": [f.value for f in flags],
             }
         )
     return listings

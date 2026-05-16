@@ -68,6 +68,8 @@ from rentwise.models import (
     SchoolCatchments,
     SearchRequest,
 )
+from rentwise.quality.flags import build_context as _quality_build_ctx
+from rentwise.quality.flags import compute_flags as _quality_compute
 from rentwise.scoring.match import explain as _match_explain
 from rentwise.scoring.match import score_listing as _match_score
 from rentwise.storage.repositories import (
@@ -467,6 +469,20 @@ async def stream_search(
                             "event": "listing",
                             "data": listing.model_dump(mode="json"),
                         }
+
+    # Issue #120 — cross-listing quality flags need the whole pool to be
+    # known (medians, contact reuse). Compute once here and emit as a
+    # finalizer event the client can use to patch listing state.
+    if accumulated:
+        ctx = _quality_build_ctx(accumulated)
+        flags_map = {
+            str(listing.id): [f.value for f in _quality_compute(listing, ctx)]
+            for listing in accumulated
+        }
+        # Drop entries with no flags to keep the payload small.
+        flags_map = {lid: f for lid, f in flags_map.items() if f}
+        if flags_map:
+            yield {"event": "quality_flags", "flags": flags_map}
 
     yield {
         "event": "complete",

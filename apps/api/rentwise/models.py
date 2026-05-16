@@ -161,6 +161,11 @@ class NormalizedListing(BaseModel):
     match_score: int | None = Field(default=None, ge=0, le=100)
     match_explanation: str | None = Field(default=None, max_length=120)
 
+    # Issue #120 — quality / scam signal flags. Stable wire-format names;
+    # see rentwise.quality.flags.QualityFlag for the enum + FLAG_LABELS
+    # for the user-facing strings.
+    quality_flags: list[str] = Field(default_factory=list)
+
 
 class AdapterHealth(BaseModel):
     """Status of one source adapter."""

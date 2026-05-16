@@ -189,6 +189,14 @@ export function SearchScreen({ apiBaseUrl }: Props) {
             if (ev.event === "listing") {
               setListings((prev) => [...prev, ev.data]);
               setTotal((t) => t + 1);
+            } else if (ev.event === "quality_flags") {
+              // Issue #120 — finalizer with cross-listing flags.
+              const flagMap = ev.flags;
+              setListings((prev) =>
+                prev.map((l) =>
+                  flagMap[l.id] ? { ...l, quality_flags: flagMap[l.id] } : l,
+                ),
+              );
             } else if (ev.event === "complete") {
               setTotal(ev.total);
               setUnsupported(ev.unsupported_filters);
