@@ -192,6 +192,11 @@ export function SearchScreen({ apiBaseUrl }: Props) {
         setSourceHealth({});
         setOffset(0);
         setInsights(null);
+        // Codex P2 on PR #129: prune compare-set when starting a new search.
+        // Stale IDs from the previous result set would otherwise still count
+        // toward the toolbar threshold and the modal would open on a shorter
+        // filtered list.
+        setCompareIds(new Set());
 
         try {
           for await (const ev of client.searchStream(
@@ -582,6 +587,17 @@ export function SearchScreen({ apiBaseUrl }: Props) {
                   const derived = findSimilar(primary);
                   replace(derived);
                   setCompareIds(new Set());
+                  // Codex P2 on PR #130 — sync the derived query to the URL
+                  // so refresh / back / share recover the same results.
+                  if (typeof window !== "undefined") {
+                    const qs = encodeQueryToParams(derived).toString();
+                    const path = window.location.pathname;
+                    window.history.replaceState(
+                      null,
+                      "",
+                      qs ? `${path}?${qs}` : path,
+                    );
+                  }
                   // Kick off the search with the derived query directly so we
                   // don't depend on a query-change useEffect (none exists; the
                   // app intentionally batches NL parses + filter edits behind

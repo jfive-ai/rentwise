@@ -285,3 +285,15 @@ def test_explain_handles_weak_match() -> None:
     s = score_listing(listing, q, now=_FIXED_NOW)
     text = explain(s, q)
     assert "out of price range" in text
+
+
+def test_explain_surfaces_transit_failure() -> None:
+    """Codex P2 on PR #127 — when transit_max_walk_minutes is set and the
+    listing's walk is more than 2x the cap, score_transit returns 0. The
+    explanation must surface that as the top reason, not a generic
+    positive blurb."""
+    listing = _make_listing(transit_walk=40)  # 4x a 10-min cap
+    q = NormalizedQuery(transit_max_walk_minutes=10)
+    s = score_listing(listing, q, now=_FIXED_NOW)
+    text = explain(s, q)
+    assert "too far from transit" in text
