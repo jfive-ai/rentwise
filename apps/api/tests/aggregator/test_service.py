@@ -256,6 +256,38 @@ async def test_legacy_bedrooms_alias_sorts_descending(session):
 
 
 @pytest.mark.asyncio
+async def test_match_score_applied_on_cache_hit(session):
+    """Codex P1 on PR #127: cached responses must include match_score so
+    MATCH_DESC sort works and the badge appears on repeat searches."""
+    adapter = FakeAdapter(
+        listings=[
+            RawListing(
+                source="craigslist",
+                source_url=HttpUrl("https://x/1"),
+                source_listing_id="1",
+                title="A",
+                bedrooms=2,
+                price_cad=2500,
+                posted_at=datetime.now(UTC),
+            ),
+        ]
+    )
+    svc = AggregatorService(adapters=[adapter], session=session, cache_ttl_seconds=900)
+    req = SearchRequest(query=NormalizedQuery(price_max=3000), sort=SortOrder.MATCH_DESC)
+    miss = await svc.search(req)
+    await session.commit()
+    assert miss.cache_status == "miss"
+    assert miss.listings[0].match_score is not None
+    miss_score = miss.listings[0].match_score
+    # Second identical request hits the cache; scoring must still run.
+    hit = await svc.search(req)
+    assert hit.cache_status == "fresh"
+    assert hit.listings[0].match_score is not None
+    assert hit.listings[0].match_score == miss_score
+    assert hit.listings[0].match_explanation
+
+
+@pytest.mark.asyncio
 async def test_match_score_attached_to_every_listing(session):
     """Issue #119: every listing in the response carries a 0-100 score."""
     adapter = FakeAdapter(

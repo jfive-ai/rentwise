@@ -178,6 +178,11 @@ export function SearchScreen({ apiBaseUrl }: Props) {
         setUnsupported([]);
         setSourceHealth({});
         setOffset(0);
+        // Codex P2 on PR #129: prune compare-set when starting a new search.
+        // Stale IDs from the previous result set would otherwise still count
+        // toward the toolbar threshold and the modal would open on a shorter
+        // filtered list.
+        setCompareIds(new Set());
 
         try {
           for await (const ev of client.searchStream(

@@ -116,7 +116,11 @@ export function recommend(listings: NormalizedListing[]): BestPick[] {
     });
   }
   const closest = bestOn(listings, "transit");
-  if (closest && closest !== bestMatch) {
+  // Codex P2 on PR #129: dedup against ALL prior picks, not just the
+  // best-match pick. The same listing was emitting twice when it was
+  // both cheapest and closest-to-transit (and best-match was someone
+  // else), wasting a recommendation slot.
+  if (closest && !out.some((p) => p.listingId === closest)) {
     const l = byId.get(closest)!;
     out.push({
       axis: "transit",
