@@ -53,21 +53,27 @@ def build_digest(new_listings: list[NormalizedListing]) -> Digest | None:
     n = len(new_listings)
     sources = sorted({item.source for item in new_listings})
 
-    # Top pick: highest match_score (#119); fall back to first row if
-    # nothing was scored.
+    # Top pick: highest match_score (#119); fall back to the first row
+    # when nothing was scored. Codex P2 on PR #134: the original code
+    # documented the fallback but didn't implement it, so unscored
+    # batches silently dropped the top-pick section.
     scored = [item for item in new_listings if item.match_score is not None]
-    top_pick = None
+    top_pick: DigestPick | None = None
     if scored:
         winner = max(scored, key=lambda item: item.match_score or 0)
         score = winner.match_score
         price = f" at ${winner.price_cad:,}" if winner.price_cad is not None else ""
         reason = f"score {score}{price}"
         top_pick = DigestPick(listing=winner, reason=reason)
+    else:
+        winner = new_listings[0]
+        price = f" at ${winner.price_cad:,}" if winner.price_cad is not None else ""
+        top_pick = DigestPick(listing=winner, reason=f"first new listing{price}")
 
     # Best-on-price: cheapest, but only when there are at least two priced
     # listings so the "best on price" framing means something.
     priced = [item for item in new_listings if item.price_cad is not None]
-    best_price = None
+    best_price: DigestPick | None = None
     if len(priced) >= 2:
         cheapest = min(priced, key=lambda item: item.price_cad or 0)
         # Use the price-position chip (#123) when available so the framing
@@ -78,6 +84,11 @@ def build_digest(new_listings: list[NormalizedListing]) -> Digest | None:
         else:
             reason = f"${cheapest.price_cad:,}"
         best_price = DigestPick(listing=cheapest, reason=reason)
+    # Codex P2 on PR #134: drop best_price entirely when it points at the
+    # same listing as top_pick so callers using the structured fields
+    # don't see two picks for one listing — matches the rendered narrative.
+    if best_price is not None and top_pick is not None and best_price.listing.id == top_pick.listing.id:
+        best_price = None
 
     # Quality warnings (#120).
     flagged_count = sum(1 for item in new_listings if item.quality_flags)

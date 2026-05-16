@@ -97,6 +97,23 @@ def test_best_price_skipped_when_same_as_top_pick() -> None:
     assert d is not None
     assert d.top_pick is not None and d.top_pick.listing.title == "B"
     assert "Best on price" not in d.narrative
+    # Codex P2 on PR #134: structured field must also be cleared so
+    # downstream consumers (LLM rewrite layer, alt UI) see consistent
+    # data, not two picks for the same listing.
+    assert d.best_price is None
+
+
+def test_top_pick_falls_back_when_no_match_scores() -> None:
+    """Codex P2 on PR #134: when no listing has a match_score, the
+    digest should surface the first listing as the top pick instead
+    of silently dropping the section."""
+    a = _l(title="A", price=2500, match_score=None)
+    b = _l(title="B", price=1900, match_score=None)
+    d = build_digest([a, b])
+    assert d is not None
+    assert d.top_pick is not None
+    assert d.top_pick.listing.title == "A"
+    assert "Top pick" in d.narrative
 
 
 def test_flagged_count_surfaces_in_narrative() -> None:
@@ -111,7 +128,9 @@ def test_flagged_count_surfaces_in_narrative() -> None:
 
 
 def test_uses_price_position_when_below_median() -> None:
-    a = _l(title="A", price=2500, match_score=60)
+    # A is the top match (highest score), B is the cheapest with a
+    # below-median chip — different listings so best_price isn't dropped.
+    a = _l(title="A", price=2500, match_score=80)
     b = _l(title="B", price=1900, match_score=70, price_position="20% below median")
     d = build_digest([a, b])
     assert d is not None
