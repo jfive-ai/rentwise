@@ -35,6 +35,10 @@ _ADAPTER_FIXTURES_DIR = Path(__file__).resolve().parents[2] / "tests" / "adapter
 
 
 def _load_craigslist() -> list[RawListing]:
+    from datetime import UTC, datetime
+
+    from pydantic import HttpUrl
+
     path = _FIXTURES_DIR / "craigslist" / "sample_jsonsearch.json"
     payload = json.loads(path.read_text())
     entries = payload[0] if isinstance(payload[0], list) else []
@@ -43,6 +47,23 @@ def _load_craigslist() -> list[RawListing]:
         raw = _cl_parse(entry)
         if raw is not None:
             out.append(raw)
+    # Add a deliberately suspicious listing so the #120 quality-flag UI
+    # has something to render in demo mode. Cheap-by-an-order-of-
+    # magnitude, no address, terse description — fires
+    # price_outlier_low + missing_essentials + terse_no_address.
+    out.append(
+        RawListing(
+            source="craigslist",
+            source_url=HttpUrl("https://vancouver.craigslist.org/demo/scam-bait-1"),
+            source_listing_id="scam-bait-1",
+            title="$400 Luxury Downtown 2BR — owner abroad",
+            address=None,
+            bedrooms=2,
+            price_cad=400,
+            posted_at=datetime.now(UTC),
+            description_snippet="wire deposit",
+        )
+    )
     return out
 
 

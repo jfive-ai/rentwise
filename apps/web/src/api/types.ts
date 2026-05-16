@@ -86,6 +86,9 @@ export interface NormalizedListing {
   // Issue #119 — deterministic Match Score (0-100) and one-line explanation.
   match_score?: number | null;
   match_explanation?: string | null;
+  // Issue #120 — quality / scam-signal flag wire names (see backend's
+  // QualityFlag enum). UI renders labels via QUALITY_FLAG_LABELS.
+  quality_flags?: string[];
   raw_metadata: Record<string, unknown>;
 }
 
@@ -119,6 +122,10 @@ export type SearchStreamEvent =
       status: "ok" | "degraded" | "down";
       error: string | null;
     }
+  // Issue #120 — cross-listing quality flags need the full pool to be
+  // known, so the backend emits a finalizer mapping {listing_id: flags}
+  // just before "complete". Frontend patches its listing state.
+  | { event: "quality_flags"; flags: Record<string, string[]> }
   | {
       event: "complete";
       total: number;

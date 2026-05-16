@@ -3,6 +3,7 @@ import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 import type { NormalizedListing } from "@/src/api/types";
 import type { ActionFlag, ListingActions } from "@/src/storage/listingActions";
 import { openExternalUrl } from "@/src/lib/openUrl";
+import { QualityChips } from "@/src/components/QualityChips";
 import { useTheme } from "@/src/theme";
 
 interface Props {
@@ -49,6 +50,7 @@ export function ListingCard({ listing, actions, onAction, alternates }: Props) {
             ✨ {listing.match_explanation}
           </Text>
         ) : null}
+        <QualityChips flags={listing.quality_flags} />
         <View style={styles.metaRow}>
           <Text style={[styles.price, { color: t.text }]}>{formatPrice(listing.price_cad)}</Text>
           {listing.bedrooms != null && <Text style={{ color: t.textMuted }}>{listing.bedrooms} bd</Text>}
