@@ -23,6 +23,14 @@ from rentwise.storage.repositories import GeocodeCacheRepo, PhotoHashCacheRepo
 @lru_cache(maxsize=1)
 def _build_adapters() -> tuple[SourceAdapter, ...]:
     """Build adapter instances once per process so rate-limit state is shared."""
+    # Demo mode short-circuits live adapters with fixture-backed ones so the
+    # full pipeline (aggregator → enrichment → API → UI) works in sandboxed
+    # environments where the live sites are unreachable.
+    if settings.rentwise_demo_mode:
+        from rentwise.adapters.demo import build_demo_adapters
+
+        return tuple(build_demo_adapters())
+
     from rentwise.adapters.craigslist.adapter import CraigslistAdapter
 
     adapters: list[SourceAdapter] = [

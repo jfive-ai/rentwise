@@ -97,6 +97,21 @@ The default is a free OpenRouter model that works without a paid account; you ca
 
 You can now use the app with **just Craigslist** as a source — that's enough to verify the end-to-end pipeline.
 
+### Demo mode (no network required)
+
+Want to see the full pipeline (search → aggregate → enrich → render) without
+hitting any live site? Start the API with `RENTWISE_DEMO_MODE=true` and every
+source is backed by the bundled test fixture instead of a network call:
+
+```bash
+RENTWISE_DEMO_MODE=true uvicorn rentwise.main:app --reload
+```
+
+You'll get ~15 fixture listings spread across all six sources
+(craigslist, liv.rent, rentals_ca, padmapper, zumper, rew) with `source_health` =
+`ok` for each. Useful for offline development, CI smoke tests, and the
+end-to-end screenshots in `docs/screenshots/`.
+
 ### 4. Saved searches + email alerts (optional)
 
 1. Run a search you'd like to keep tracking.
