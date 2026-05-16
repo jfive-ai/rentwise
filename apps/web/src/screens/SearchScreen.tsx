@@ -16,6 +16,14 @@ import { ParsedQueryChips } from "@/src/components/ParsedQueryChips";
 import { ResultsToolbar, type ViewMode } from "@/src/components/ResultsToolbar";
 import { CompareDrawer } from "@/src/components/CompareDrawer";
 import { findSimilar } from "@/src/lib/findSimilar";
+import {
+  applyBiasAll as applyPersonalizationAll,
+  buildProfile as buildPersonalizationProfile,
+} from "@/src/lib/personalization";
+import {
+  loadSnapshots,
+  rememberSnapshot,
+} from "@/src/storage/listingSnapshots";
 import { ListingCard } from "@/src/components/ListingCard";
 import { ListingTable } from "@/src/components/ListingTable";
 import { MapView } from "@/src/components/MapView";
@@ -361,16 +369,62 @@ export function SearchScreen({ apiBaseUrl }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sort]);
 
-  const handleAction = useCallback(async (id: string, flag: ActionFlag, value: boolean) => {
-    const next = await setAction(id, flag, value);
-    setActions(next);
+  // Issue #125 — personalization profile from local action history.
+  const [profile, setProfile] = useState(() =>
+    buildPersonalizationProfile({}, {}),
+  );
+  useEffect(() => {
+    let cancelled = false;
+    void Promise.all([loadActions(), loadSnapshots()]).then(([acts, snaps]) => {
+      if (cancelled) return;
+      setProfile(buildPersonalizationProfile(acts, snaps));
+    });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
+  const handleAction = useCallback(
+    async (id: string, flag: ActionFlag, value: boolean) => {
+      const next = await setAction(id, flag, value);
+      setActions(next);
+      // Issue #125 — snapshot the listing's features when saved/hidden so
+      // we can read them into the personalization profile later.
+      const listing = listings.find((l) => l.id === id);
+      if (listing && (flag === "saved" || flag === "hidden")) {
+        await rememberSnapshot(id, listing);
+        const snaps = await loadSnapshots();
+        setProfile(buildPersonalizationProfile(next, snaps));
+      }
+    },
+    [listings],
+  );
+
   const hasMore = listings.length < total;
+  // Issue #125 — bias the match score by past save/hide actions
+  // BEFORE clustering, so a "like ones you've saved" hint travels with
+  // the listing into every view. Codex P1 on PR #132: re-sort by
+  // (match_score desc) after biasing so the ±5 nudge actually moves
+  // the ranking — without this, the badge text changed but the row
+  // order didn't, defeating the whole point.
+  const personalizedListings = useMemo(() => {
+    const biased = applyPersonalizationAll(listings, profile);
+    if (sort !== "match_desc" || !profile.hasSignal) return biased;
+    // Stable re-sort: higher match_score first, ties keep the API
+    // order (which is already match_desc from the backend).
+    return [...biased].sort((a, b) => {
+      const sa = a.match_score ?? -1;
+      const sb = b.match_score ?? -1;
+      return sb - sa;
+    });
+  }, [listings, profile, sort]);
   // Phase 4 PR-D: collapse cross-source duplicates into one card per
   // canonical_id. Sort + pagination still operate on the flat list at
   // the API layer; clustering is purely a presentation step.
-  const clusters = useMemo(() => groupByCanonical(listings), [listings]);
+  const clusters = useMemo(
+    () => groupByCanonical(personalizedListings),
+    [personalizedListings],
+  );
 
   return (
     <View style={[styles.root, stacked && styles.rootStacked, { backgroundColor: t.bg }]}>
@@ -551,7 +605,7 @@ export function SearchScreen({ apiBaseUrl }: Props) {
         ) : view === "map" ? (
           <View style={{ minHeight: 480 }}>
             <MapView
-              listings={listings}
+              listings={personalizedListings}
               selectedListingId={selectedListingId}
               onSelectListing={setSelectedListingId}
               onHoverListing={setSelectedListingId}
@@ -571,7 +625,7 @@ export function SearchScreen({ apiBaseUrl }: Props) {
           <View style={styles.split}>
             <View style={styles.splitMap}>
               <MapView
-                listings={listings}
+                listings={personalizedListings}
                 selectedListingId={selectedListingId}
                 onSelectListing={setSelectedListingId}
                 onHoverListing={setSelectedListingId}
@@ -588,7 +642,7 @@ export function SearchScreen({ apiBaseUrl }: Props) {
             </View>
             <View style={styles.splitList}>
               <ListingTable
-                listings={listings}
+                listings={personalizedListings}
                 sort={sort}
                 onSortChange={setSort}
                 actions={actions}
@@ -602,7 +656,7 @@ export function SearchScreen({ apiBaseUrl }: Props) {
         ) : (
           <View style={{ minHeight: 400 }}>
             <ListingTable
-              listings={listings}
+              listings={personalizedListings}
               sort={sort}
               onSortChange={setSort}
               actions={actions}

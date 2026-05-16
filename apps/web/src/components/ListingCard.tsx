@@ -60,7 +60,7 @@ export function ListingCard({
       <View style={styles.body}>
         <Text style={[styles.title, { color: t.text }]} numberOfLines={2}>{listing.title}</Text>
         {listing.match_explanation ? (
-          <Text style={{ color: t.textMuted, fontSize: 11 }} numberOfLines={1}>
+          <Text style={{ color: t.textMuted, fontSize: 11 }} numberOfLines={2}>
             ✨ {listing.match_explanation}
           </Text>
         ) : null}
