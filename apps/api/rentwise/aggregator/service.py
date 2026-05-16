@@ -26,11 +26,14 @@ from rentwise.enrichment.service import EnrichmentService
 from rentwise.models import (
     AdapterHealth,
     NormalizedListing,
+    NormalizedQuery,
     SchoolCatchments,
     SearchRequest,
     SearchResponse,
     SortOrder,
 )
+from rentwise.scoring.match import explain as _match_explain
+from rentwise.scoring.match import score_listing as _match_score
 from rentwise.storage.repositories import (
     CachedSearch,
     ListingRepo,
@@ -39,6 +42,26 @@ from rentwise.storage.repositories import (
 )
 
 log = structlog.get_logger(__name__)
+
+
+def _apply_match_scores(
+    listings: list[NormalizedListing], query: NormalizedQuery
+) -> list[NormalizedListing]:
+    """Attach Match Score + explanation to every listing in-place.
+
+    Returns the same list (mutated for cheapness — every reference up to
+    here points to a freshly-constructed NormalizedListing from
+    `_raw_to_normalized`, so there's no shared-state hazard).
+    """
+    for i, listing in enumerate(listings):
+        breakdown = _match_score(listing, query)
+        listings[i] = listing.model_copy(
+            update={
+                "match_score": breakdown.total,
+                "match_explanation": _match_explain(breakdown, query),
+            }
+        )
+    return listings
 
 
 class _ReverseStr:
@@ -293,6 +316,9 @@ class AggregatorService:
         # geocoded coords + lookup tables, so the adapter strips them and
         # we filter the post-enriched rows here.
         all_listings = self._apply_post_filters(all_listings, req.query)
+        # Issue #119 — Match Score. Runs after post-filter so it operates
+        # on the rows the user will actually see. Deterministic; no I/O.
+        all_listings = _apply_match_scores(all_listings, req.query)
         # The adapter capability check considers these "unsupported", but
         # PR-B handles them at the aggregator layer — peel them out of
         # the response so clients see them as supported.
@@ -474,6 +500,10 @@ class AggregatorService:
         # for asc, and (is_null, -value) for desc on numeric fields.
         def key(x: NormalizedListing) -> Any:
             s = req.sort
+            if s == SortOrder.MATCH_DESC:
+                # Higher score first; tied scores fall back to newest.
+                ms = x.match_score
+                return (ms is None, -(ms if ms is not None else 0), -(x.posted_at.timestamp()))
             if s == SortOrder.PRICE_ASC:
                 p = x.price_cad
                 return (p is None, p if p is not None else 0)

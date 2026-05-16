@@ -68,7 +68,9 @@ export function SearchScreen({ apiBaseUrl }: Props) {
   // On narrow viewports the filter pane is collapsed by default to give the
   // results room to breathe. The user can expand it via the toolbar toggle.
   const [filtersOpen, setFiltersOpen] = useState<boolean>(!stacked);
-  const [sort, setSort] = useState<SortOrder>("newest");
+  // Issue #119 — default to Best Match so the new ranking is the first
+  // experience. Users can still pick Newest / Price etc. from the menu.
+  const [sort, setSort] = useState<SortOrder>("match_desc");
   const [listings, setListings] = useState<NormalizedListing[]>([]);
   const [total, setTotal] = useState<number>(0);
   const [unsupported, setUnsupported] = useState<string[]>([]);

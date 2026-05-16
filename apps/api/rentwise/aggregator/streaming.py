@@ -68,6 +68,8 @@ from rentwise.models import (
     SchoolCatchments,
     SearchRequest,
 )
+from rentwise.scoring.match import explain as _match_explain
+from rentwise.scoring.match import score_listing as _match_score
 from rentwise.storage.repositories import (
     CachedSearch,
     GeocodeCacheRepo,
@@ -217,9 +219,18 @@ async def stream_search(
                 listings = await ListingRepo(session).list_by_ids(cached.listing_ids)
                 yield {"event": "started", "adapters": [a.name for a in adapters]}
                 for listing in listings:
+                    # Issue #119 — score cached listings on the way out so
+                    # the badge appears even on cache hits.
+                    breakdown = _match_score(listing, req.query)
+                    scored = listing.model_copy(
+                        update={
+                            "match_score": breakdown.total,
+                            "match_explanation": _match_explain(breakdown, req.query),
+                        }
+                    )
                     yield {
                         "event": "listing",
-                        "data": listing.model_dump(mode="json"),
+                        "data": scored.model_dump(mode="json"),
                     }
                 yield {
                     "event": "complete",
@@ -349,6 +360,15 @@ async def stream_search(
             except Exception as exc:
                 log.info("stream.dedup_unhandled_error", error=str(exc))
             saved = await coord_repo.upsert(listing)
+            # Issue #119 — attach Match Score before yielding so the
+            # client can render the badge as listings stream in.
+            breakdown = _match_score(saved, req.query)
+            saved = saved.model_copy(
+                update={
+                    "match_score": breakdown.total,
+                    "match_explanation": _match_explain(breakdown, req.query),
+                }
+            )
             # Per-listing commit so a slow source doesn't hold the
             # SQLite write lock for the whole request (#109).
             try:

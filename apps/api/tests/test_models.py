@@ -68,6 +68,8 @@ def test_search_response_contract():
 
 def test_sort_order_values():
     assert {s.value for s in SortOrder} == {
+        # Issue #119 — best-match-first; default when the query has constraints.
+        "match_desc",
         "newest",
         "price_asc",
         "price_desc",

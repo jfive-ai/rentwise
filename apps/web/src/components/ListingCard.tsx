@@ -37,10 +37,18 @@ export function ListingCard({ listing, actions, onAction, alternates }: Props) {
         <View style={[styles.badge, { backgroundColor: t.surface }]}>
           <Text style={{ color: t.textMuted, fontSize: 11 }}>{listing.source}</Text>
         </View>
+        {listing.match_score != null && (
+          <MatchBadge score={listing.match_score} explanation={listing.match_explanation ?? null} />
+        )}
       </View>
 
       <View style={styles.body}>
         <Text style={[styles.title, { color: t.text }]} numberOfLines={2}>{listing.title}</Text>
+        {listing.match_explanation ? (
+          <Text style={{ color: t.textMuted, fontSize: 11 }} numberOfLines={1}>
+            ✨ {listing.match_explanation}
+          </Text>
+        ) : null}
         <View style={styles.metaRow}>
           <Text style={[styles.price, { color: t.text }]}>{formatPrice(listing.price_cad)}</Text>
           {listing.bedrooms != null && <Text style={{ color: t.textMuted }}>{listing.bedrooms} bd</Text>}
@@ -98,6 +106,29 @@ export function ListingCard({ listing, actions, onAction, alternates }: Props) {
   );
 }
 
+/**
+ * Issue #119 — small Match Score pill rendered in the photo overlay.
+ * Color is bucketed (green ≥80, amber 60-79, grey <60) so the score
+ * reads at a glance. Explanation appears below the score in small grey.
+ */
+function MatchBadge({ score, explanation }: { score: number; explanation: string | null }) {
+  const t = useTheme();
+  const bg =
+    score >= 80 ? "#16a34a" : score >= 60 ? "#d97706" : "#6b7280";
+  return (
+    <View
+      style={[
+        styles.matchBadge,
+        { backgroundColor: bg },
+      ]}
+      accessibilityLabel={`Match score ${score} out of 100${explanation ? `: ${explanation}` : ""}`}
+    >
+      <Text style={{ color: "#fff", fontWeight: "700", fontSize: 13 }}>{score}</Text>
+      <Text style={{ color: "#fff", fontWeight: "500", fontSize: 10, marginLeft: 4, opacity: 0.85 }}>match</Text>
+    </View>
+  );
+}
+
 function ActionBtn({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
   const t = useTheme();
   return (
@@ -116,6 +147,16 @@ const styles = StyleSheet.create({
   card: { borderWidth: 1, borderRadius: 12, overflow: "hidden", flexBasis: 320, flexGrow: 1 },
   photo: { aspectRatio: 16 / 9, alignItems: "center", justifyContent: "center" },
   badge: { position: "absolute", left: 8, top: 8, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 999 },
+  matchBadge: {
+    position: "absolute",
+    right: 8,
+    top: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 999,
+    flexDirection: "row",
+    alignItems: "center",
+  },
   body: { padding: 12, gap: 6 },
   title: { fontSize: 15, fontWeight: "600" },
   metaRow: { flexDirection: "row", flexWrap: "wrap", gap: 12 },
