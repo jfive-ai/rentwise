@@ -14,6 +14,7 @@ import { ModeToggle } from "@/src/components/ModeToggle";
 import { NLSearchBar } from "@/src/components/NLSearchBar";
 import { ParsedQueryChips } from "@/src/components/ParsedQueryChips";
 import { ResultsToolbar, type ViewMode } from "@/src/components/ResultsToolbar";
+import { CompareDrawer } from "@/src/components/CompareDrawer";
 import { ListingCard } from "@/src/components/ListingCard";
 import { ListingTable } from "@/src/components/ListingTable";
 import { MapView } from "@/src/components/MapView";
@@ -86,6 +87,9 @@ export function SearchScreen({ apiBaseUrl }: Props) {
   // its own state so the highlight is responsive without forcing the
   // parent to re-render the whole grid; click commits to selection.
   const [selectedListingId, setSelectedListingId] = useState<string | null>(null);
+  // Issue #121 — compare-set: 2-4 listings ticked via per-card checkbox.
+  const [compareIds, setCompareIds] = useState<Set<string>>(() => new Set());
+  const [compareOpen, setCompareOpen] = useState(false);
   const [overlays, setOverlays] = useState<{ catchments: boolean; skytrain: boolean }>({
     catchments: false,
     skytrain: false,
@@ -173,6 +177,11 @@ export function SearchScreen({ apiBaseUrl }: Props) {
         setUnsupported([]);
         setSourceHealth({});
         setOffset(0);
+        // Codex P2 on PR #129: prune compare-set when starting a new search.
+        // Stale IDs from the previous result set would otherwise still count
+        // toward the toolbar threshold and the modal would open on a shorter
+        // filtered list.
+        setCompareIds(new Set());
 
         try {
           for await (const ev of client.searchStream(
@@ -435,6 +444,8 @@ export function SearchScreen({ apiBaseUrl }: Props) {
           onOpenSaved={() => setSavedDrawerOpen(true)}
           onSave={() => setSavePromptOpen(true)}
           canSave={status === "ok" && total > 0}
+          compareCount={compareIds.size}
+          onCompare={() => setCompareOpen(true)}
         />
 
         {savePromptOpen && (
@@ -483,6 +494,19 @@ export function SearchScreen({ apiBaseUrl }: Props) {
                 alternates={alternates}
                 actions={actions[primary.id] ?? {}}
                 onAction={(f, v) => { void handleAction(primary.id, f, v); }}
+                compareChecked={compareIds.has(primary.id)}
+                onCompareToggle={(checked) => {
+                  setCompareIds((prev) => {
+                    const next = new Set(prev);
+                    if (checked) {
+                      if (next.size >= 4) return prev; // max 4 listings to compare
+                      next.add(primary.id);
+                    } else {
+                      next.delete(primary.id);
+                    }
+                    return next;
+                  });
+                }}
               />
             ))}
           </View>
@@ -561,6 +585,11 @@ export function SearchScreen({ apiBaseUrl }: Props) {
           </Pressable>
         )}
       </ScrollView>
+      <CompareDrawer
+        visible={compareOpen}
+        listings={listings.filter((l) => compareIds.has(l.id))}
+        onClose={() => setCompareOpen(false)}
+      />
     </View>
   );
 }
